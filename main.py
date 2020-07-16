@@ -362,20 +362,22 @@ def main():
         if counter >= 10:
             # train on generated samples
             prior_sample = model_flow.prior.sample((one_hot_targets.size(0),))
-            xs, log_det_back = model_flow.backward(prior_sample)
-            predictions = F.log_softmax(xs[-1], dim=1)
-            # true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]] for t in targets])
-            superclass_predictions = torch.cat([predictions[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
-                                                for c in range(len(super_class_label))], dim=1).exp()
+            if len(prior_sample) > 0:
+                xs, log_det_back = model_flow.backward(prior_sample)
 
-            part1 = torch.stack([superclass_predictions ** all_labels[i] for i in range(all_labels.shape[0])])
-            part2 = torch.stack(
-                [(1 - superclass_predictions) ** (1 - all_labels[i]) for i in range(all_labels.shape[0])])
+                predictions = F.log_softmax(xs[-1], dim=1)
+                # true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]] for t in targets])
+                superclass_predictions = torch.cat([predictions[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
+                                                    for c in range(len(super_class_label))], dim=1).exp()
 
-            sloss = -torch.log(torch.sum(torch.prod(part1 * part2, dim=2), dim=0))
-            loss_bkwd = -(torch.mean(sloss) + log_det_back.mean())
+                part1 = torch.stack([superclass_predictions ** all_labels[i] for i in range(all_labels.shape[0])])
+                part2 = torch.stack(
+                    [(1 - superclass_predictions) ** (1 - all_labels[i]) for i in range(all_labels.shape[0])])
 
-            loss_flow += loss_bkwd
+                sloss = -torch.log(torch.sum(torch.prod(part1 * part2, dim=2), dim=0))
+                loss_bkwd = -(torch.mean(sloss) + log_det_back.mean())
+
+                loss_flow += loss_bkwd
 
         loss_flow.backward()
         optimizer_flow.step()
