@@ -14,10 +14,12 @@ base_call = (f"python main.py --dataset CIFAR100 --save {DATA_HOME}/logs/resnet_
              f"--depth 28 --width 2 --ngpu 1 --dataroot {DATA_HOME}/data --starter_counter 10 --cuda")
 
 repeats = 1
-sloss = [True, False]
+sloss = [True]
+sloss_weights = [1e-2, 1e-3, 1e-4]
 
-settings = [(sloss_, rep)
+settings = [(sloss_, sloss_weight, rep)
             for sloss_ in sloss
+            for sloss_weight in sloss_weights
             for rep in range(repeats)]
 
 nr_expts = len(settings)
@@ -29,12 +31,13 @@ print(f'Estimated time = {(nr_expts / nr_servers * avg_expt_time)/60} hrs')
 
 output_file = open("experiment.txt", "w")
 
-for (sloss_, rep) in settings:
+for (sloss_, sloss_weight, rep) in settings:
     # Note that we don't set a seed for rep - a seed is selected at random
     # and recorded in the output data by the python script
     expt_call = (
         f"{base_call} "
-        f"--sloss {sloss_}"
+        f"--sloss {sloss_} "
+        f"--sloss_weight {sloss_weight} "
     )
     print(expt_call, file=output_file)
 
