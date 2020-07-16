@@ -337,7 +337,7 @@ def main():
                 # calc likelihood of this prediction under constraints
                 _, nll_ypred = model_flow(labels_pred)
                 loss_nll_ypred = opt.unl_weight * torch.mean(nll_ypred)
-                loss_prediction = loss_nll_ypred
+                loss_prediction += loss_nll_ypred
 
             # train the flow to follow the logical specification
         return loss_prediction, y
