@@ -380,7 +380,7 @@ def main():
                     [(1 - superclass_predictions) ** (1 - all_labels[i]) for i in range(all_labels.shape[0])])
 
                 sloss = -torch.log(torch.sum(torch.prod(part1 * part2, dim=2), dim=0))
-                loss_bkwd = -((model_flow.prior.log_prob(prior_sample) - log_det_back - sloss).mean())
+                loss_bkwd = -((- log_det_back - sloss).mean())
 
                 # import pdb
                 # pdb.set_trace()
