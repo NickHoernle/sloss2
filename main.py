@@ -323,7 +323,7 @@ def main():
         # add the normalizing flows logic layer here
         if opt.sloss:
 
-            if counter >= 10:
+            if counter >= -1:
 
                 model_flow.eval()
 
@@ -411,7 +411,7 @@ def main():
         state['epoch'] = epoch
 
     def on_start_epoch(state):
-        
+
         classacc.reset()
         meter_loss.reset()
         timer_train.reset()
