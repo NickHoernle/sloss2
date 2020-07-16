@@ -328,6 +328,7 @@ def main():
                 model_flow.eval()
 
                 labels_pred = F.softmax(y, dim=1)
+                labels_pred =  torch.cat((labels_pred, torch.zeros((labels_pred.shape[0], 1)).to(device)), dim=1)
                 # calc likelihood of this prediction under constraints
                 _, nll_ypred = model_flow(labels_pred)
 
