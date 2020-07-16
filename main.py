@@ -384,7 +384,7 @@ def main():
         predictions = F.log_softmax(y, dim=1)
         superclass_predictions = torch.cat([predictions[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
                                             for c in range(len(super_class_label))], dim=1).exp()
-        true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]] for t in targets])
+        true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]] for t in targets]).to(device)
         constraint_accuracy += list(torch.argmax(superclass_predictions, dim=1) == true_super_class_label)
 
         return loss_prediction, y
@@ -411,7 +411,7 @@ def main():
         state['epoch'] = epoch
 
     def on_start_epoch(state):
-
+        
         classacc.reset()
         meter_loss.reset()
         timer_train.reset()
