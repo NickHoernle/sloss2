@@ -315,14 +315,15 @@ def main():
 
     def h(sample):
 
-        step_flow(sample)
-
         global counter
         global classes
         global superclass_labels, superclass_indexes
 
         inputs = cast(sample[0], opt.dtype)
         targets = cast(sample[1], 'long')
+
+        step_flow(sample)
+        
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
         loss_prediction = F.cross_entropy(y, targets)
 
