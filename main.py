@@ -311,6 +311,9 @@ def main():
         os.mkdir(opt.save)
 
     def h(sample):
+
+        step_flow(sample)
+
         global counter
         global classes
         global superclass_labels, superclass_indexes
@@ -323,52 +326,59 @@ def main():
         # add the normalizing flows logic layer here
         if opt.sloss:
 
-            if counter >= -1:
+            if counter >= 10:
 
                 model_flow.eval()
-
                 labels_pred = F.softmax(y, dim=1)
-                labels_pred =  torch.cat((labels_pred, torch.zeros((labels_pred.shape[0], 1)).to(device)), dim=1)
                 # calc likelihood of this prediction under constraints
                 _, nll_ypred = model_flow(labels_pred)
-
                 loss_nll_ypred = opt.unl_weight * torch.mean(nll_ypred)
-                loss_prediction += loss_nll_ypred
-
+                loss_prediction = loss_nll_ypred
 
             # train the flow to follow the logical specification
-            model_flow.train()
-            optimizer_flow.zero_grad()
-
-            # train on true samples
-            one_hot_targets = F.one_hot(torch.tensor(targets), num_classes).float()
-            one_hot_targets = one_hot_targets * 120 + (1 - one_hot_targets) * 1.1
-            dirichlet_targets = torch.stack([Dirichlet(i).sample() for i in one_hot_targets])
-            zs, nll_y = model_flow(dirichlet_targets)
-            loss_nll_y = torch.mean(nll_y)
-            loss_flow = loss_nll_y
-
-            if counter >= 10:
-                # train on generated samples
-                prior_sample = model_flow.prior.sample((one_hot_targets.size(0),))
-                xs, log_det_back = model_flow.backward(prior_sample)
-                predictions = F.log_softmax(xs[-1], dim=1)
-                # true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]] for t in targets])
-                superclass_predictions = torch.cat([predictions[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
-                                                    for c in range(len(super_class_label))], dim=1).exp()
-
-                part1 = torch.stack([superclass_predictions ** all_labels[i] for i in range(all_labels.shape[0])])
-                part2 = torch.stack([(1 - superclass_predictions) ** (1 - all_labels[i]) for i in range(all_labels.shape[0])])
-
-                sloss = -torch.log(torch.sum(torch.prod(part1 * part2, dim=2), dim=0))
-                loss_bkwd = -(torch.mean(sloss) + log_det_back.mean())
-
-                loss_flow += loss_bkwd
-
-            loss_flow.backward()
-            optimizer_flow.step()
-
         return loss_prediction, y
+
+
+    def step_flow(sample):
+
+        global counter
+        global classes
+        global superclass_labels, superclass_indexes
+
+        inputs = cast(sample[0], opt.dtype)
+        targets = cast(sample[1], 'long')
+
+        model_flow.train()
+        optimizer_flow.zero_grad()
+
+        # train on true samples
+        one_hot_targets = F.one_hot(torch.tensor(targets), num_classes).float()
+        one_hot_targets = one_hot_targets * 120 + (1 - one_hot_targets) * 1.1
+        dirichlet_targets = torch.stack([Dirichlet(i).sample() for i in one_hot_targets])
+        zs, nll_y = model_flow(dirichlet_targets)
+        loss_nll_y = torch.mean(nll_y)
+        loss_flow = loss_nll_y
+
+        if counter >= 10:
+            # train on generated samples
+            prior_sample = model_flow.prior.sample((one_hot_targets.size(0),))
+            xs, log_det_back = model_flow.backward(prior_sample)
+            predictions = F.log_softmax(xs[-1], dim=1)
+            # true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]] for t in targets])
+            superclass_predictions = torch.cat([predictions[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
+                                                for c in range(len(super_class_label))], dim=1).exp()
+
+            part1 = torch.stack([superclass_predictions ** all_labels[i] for i in range(all_labels.shape[0])])
+            part2 = torch.stack(
+                [(1 - superclass_predictions) ** (1 - all_labels[i]) for i in range(all_labels.shape[0])])
+
+            sloss = -torch.log(torch.sum(torch.prod(part1 * part2, dim=2), dim=0))
+            loss_bkwd = -(torch.mean(sloss) + log_det_back.mean())
+
+            loss_flow += loss_bkwd
+
+        loss_flow.backward()
+        optimizer_flow.step()
 
     def compute_loss_test(sample):
 
