@@ -212,6 +212,8 @@ parser.add_argument("--sloss", type=str2bool, nargs='?',
                         help="Activate sloss.")
 parser.add_argument("--unl_weight", type=float, default=0.1,
                     help="Weight for unlabelled regularizer loss")
+parser.add_argument("--sloss_weight", type=float, default=0.001,
+                    help="Weight for unlabelled regularizer loss")
 
 
 
@@ -362,6 +364,7 @@ def main():
         if counter >= 10:
             # train on generated samples
             prior_sample = model_flow.prior.sample((one_hot_targets.size(0),))
+
             if len(prior_sample) > 0:
                 xs, log_det_back = model_flow.backward(prior_sample)
 
@@ -377,7 +380,7 @@ def main():
                 sloss = -torch.log(torch.sum(torch.prod(part1 * part2, dim=2), dim=0))
                 loss_bkwd = -(torch.mean(sloss) + log_det_back.mean())
 
-                loss_flow += loss_bkwd
+                loss_flow += opt.sloss_weight*loss_bkwd
 
         loss_flow.backward()
         optimizer_flow.step()
