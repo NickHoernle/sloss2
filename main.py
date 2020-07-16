@@ -214,7 +214,8 @@ parser.add_argument("--unl_weight", type=float, default=0.1,
                     help="Weight for unlabelled regularizer loss")
 parser.add_argument("--sloss_weight", type=float, default=0.001,
                     help="Weight for unlabelled regularizer loss")
-
+parser.add_argument("--starter_counter", default=-1, type=int)
+# parser.add_argument("--starter_counter", default=10, type=int)
 
 
 def create_dataset(opt, train):
@@ -328,7 +329,7 @@ def main():
         # add the normalizing flows logic layer here
         if opt.sloss:
 
-            if counter >= 10:
+            if counter >= opt.starter_counter:
 
                 model_flow.eval()
                 labels_pred = F.softmax(y, dim=1)
@@ -361,7 +362,7 @@ def main():
         loss_nll_y = torch.mean(nll_y)
         loss_flow = loss_nll_y
 
-        if counter >= 10:
+        if counter >= opt.starter_counter:
             # train on generated samples
             prior_sample = model_flow.prior.sample((one_hot_targets.size(0),))
 
@@ -378,9 +379,12 @@ def main():
                     [(1 - superclass_predictions) ** (1 - all_labels[i]) for i in range(all_labels.shape[0])])
 
                 sloss = -torch.log(torch.sum(torch.prod(part1 * part2, dim=2), dim=0))
-                loss_bkwd = -(torch.mean(sloss) + log_det_back.mean())
+                loss_bkwd = -(torch.mean(sloss) - log_det_back.mean())
 
-                loss_flow += opt.sloss_weight*loss_bkwd
+                # import pdb
+                # pdb.set_trace()
+
+                loss_flow += opt.sloss_weight * loss_bkwd
 
         loss_flow.backward()
         optimizer_flow.step()
