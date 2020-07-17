@@ -377,11 +377,15 @@ def main():
                                                     for c in range(len(super_class_label))], dim=1).exp()
 
 
-                part1 = torch.stack([superclass_predictions ** all_labels[i] for i in range(all_labels.shape[0])])
-                part2 = torch.stack(
-                    [(1 - superclass_predictions) ** (1 - all_labels[i]) for i in range(all_labels.shape[0])])
+                # part1 = torch.stack([superclass_predictions ** all_labels[i] for i in range(all_labels.shape[0])])
+                # part2 = torch.stack(
+                #     [(1 - superclass_predictions) ** (1 - all_labels[i]) for i in range(all_labels.shape[0])])
 
-                sloss = 100*-torch.logsumexp(torch.sum(torch.log(part1) + torch.log(part2), dim=2), dim=0)
+
+                dl2_const_lower = torch.max(superclass_predictions - 0.05, torch.zeros_like(superclass_predictions))
+                dl2_const_upper = torch.max(0.95 - superclass_predictions, torch.zeros_like(superclass_predictions))
+
+                sloss = 100*(dl2_const_lower * dl2_const_upper).sum(dim=1)
 
                 # loss_bkwd = ((- log_det_back - neg_sloss).mean())
 
