@@ -375,20 +375,19 @@ def main():
                 superclass_predictions = torch.cat([predictions[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
                                                     for c in range(len(super_class_label))], dim=1).exp()
 
+
                 part1 = torch.stack([superclass_predictions ** all_labels[i] for i in range(all_labels.shape[0])])
                 part2 = torch.stack(
                     [(1 - superclass_predictions) ** (1 - all_labels[i]) for i in range(all_labels.shape[0])])
 
                 neg_sloss = torch.logsumexp(torch.sum(torch.log(part1) + torch.log(part2), dim=2), dim=0)
-                # import pdb
-                # pdb.set_trace()
 
-                loss_bkwd = ((- log_det_back - neg_sloss).mean())
+                # loss_bkwd = ((- log_det_back - neg_sloss).mean())
 
                 # import pdb
                 # pdb.set_trace()
 
-                loss_flow += opt.sloss_weight * loss_bkwd
+                loss_flow += opt.sloss_weight * -neg_sloss.mean()
 
         loss_flow.backward()
         optimizer_flow.step()
