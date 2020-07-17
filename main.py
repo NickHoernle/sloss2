@@ -30,6 +30,7 @@ from utils import cast, data_parallel, print_tensor_dict
 from torch.backends import cudnn
 from resnet import resnet
 from torch.distributions.dirichlet import Dirichlet
+from torch.nn.utils import clip_grad_norm_
 
 
 def str2bool(v):
@@ -387,6 +388,7 @@ def main():
                 loss_flow += opt.sloss_weight * (-log_det_back + sloss).mean()
 
         loss_flow.backward()
+        clip_grad_norm_(loss_flow.parameters(), 1.0)
         optimizer_flow.step()
 
     def compute_loss_test(sample):
