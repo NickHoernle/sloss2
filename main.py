@@ -379,11 +379,11 @@ def main():
                 part2 = torch.stack(
                     [(1 - superclass_predictions) ** (1 - all_labels[i]) for i in range(all_labels.shape[0])])
 
-                sloss = -torch.logsumexp(torch.sum(torch.log(part1) + torch.log(part2), dim=2), dim=0)
+                neg_sloss = torch.logsumexp(torch.sum(torch.log(part1) + torch.log(part2), dim=2), dim=0)
                 # import pdb
                 # pdb.set_trace()
 
-                loss_bkwd = ((log_det_back + sloss).mean())
+                loss_bkwd = ((log_det_back - neg_sloss).mean())
 
                 # import pdb
                 # pdb.set_trace()
