@@ -383,7 +383,7 @@ def main():
                 # import pdb
                 # pdb.set_trace()
 
-                loss_bkwd = ((log_det_back - neg_sloss).mean())
+                loss_bkwd = ((log_det_back + neg_sloss).mean())
 
                 # import pdb
                 # pdb.set_trace()
