@@ -264,7 +264,7 @@ def main():
     global classes
     global superclass_labels
     global superclass_indexes
-    global constraint_accuracy
+    global constraint_accuracy, super_class_accuracy
 
     constraint_accuracy, super_class_accuracy = [], []
 
