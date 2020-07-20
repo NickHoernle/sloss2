@@ -417,7 +417,7 @@ def main():
                                             for c in range(len(super_class_label))], dim=1).exp()
         true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]] for t in targets]).to(device)
         # constraint_accuracy += list(torch.argmax(superclass_predictions, dim=1) == true_super_class_label)
-        constraint_accuracy += list(((superclass_predictions < 0.05) | (superclass_predictions > 0.95)).all(dim=1).detach().numpy())
+        constraint_accuracy += list(((superclass_predictions < 0.05) | (superclass_predictions > 0.95)).all(dim=1))
 
         return loss_prediction, y
 
