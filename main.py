@@ -266,7 +266,7 @@ def main():
     global superclass_indexes
     global constraint_accuracy
 
-    constraint_accuracy = []
+    constraint_accuracy, super_class_accuracy = [], []
 
     classes = train_loader.dataset.classes
     superclass_labels = [super_class_label[superclass_mapping[c]] for c in classes]
@@ -389,12 +389,12 @@ def main():
                 dl2_const_lower = torch.max(superclass_predictions - 0.05, torch.zeros_like(superclass_predictions))
                 dl2_const_upper = torch.max(0.95 - superclass_predictions, torch.zeros_like(superclass_predictions))
 
-                sloss = 1000*(dl2_const_lower * dl2_const_upper).sum(dim=1)
+                sloss = 1e4*(dl2_const_lower * dl2_const_upper).sum(dim=1)
 
                 # loss_bkwd = ((- log_det_back - neg_sloss).mean())
                 # import pdb
                 # pdb.set_trace()
-                loss_flow += opt.sloss_weight * (-log_det_back + sloss).mean()
+                loss_flow += opt.sloss_weight * (+log_det_back + sloss).mean()
 
         loss_flow.backward()
         clip_grad_norm_(model_flow.parameters(), 1.0)
@@ -405,7 +405,7 @@ def main():
         global counter
         global classes
         global superclass_labels, superclass_indexes
-        global constraint_accuracy
+        global constraint_accuracy, super_class_accuracy
 
         inputs = cast(sample[0], opt.dtype)
         targets = cast(sample[1], 'long')
@@ -416,7 +416,7 @@ def main():
         superclass_predictions = torch.cat([predictions[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
                                             for c in range(len(super_class_label))], dim=1).exp()
         true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]] for t in targets]).to(device)
-        # constraint_accuracy += list(torch.argmax(superclass_predictions, dim=1) == true_super_class_label)
+        super_class_accuracy += list(torch.argmax(superclass_predictions, dim=1) == true_super_class_label)
         constraint_accuracy += list(((superclass_predictions < 0.05) | (superclass_predictions > 0.95)).all(dim=1))
 
         return loss_prediction, y
@@ -444,6 +444,9 @@ def main():
 
     def on_start_epoch(state):
 
+        # with torch.no_grad():
+        #     engine.test(compute_loss_test, test_loader)
+
         classacc.reset()
         meter_loss.reset()
         timer_train.reset()
@@ -455,7 +458,7 @@ def main():
             state['optimizer'] = create_optimizer(opt, lr * opt.lr_decay_ratio)
 
     def on_end_epoch(state):
-        global constraint_accuracy
+        global constraint_accuracy, super_class_accuracy
 
         train_loss = meter_loss.value()
         train_acc = classacc.value()
@@ -472,6 +475,9 @@ def main():
         constraint_accuracy_val = mean(constraint_accuracy)
         constraint_accuracy = []
 
+        super_class_accuracy_val = mean(super_class_accuracy)
+        super_class_accuracy = []
+
         print(log({
             "train_loss": train_loss[0],
             "train_acc": train_acc[0],
@@ -482,7 +488,8 @@ def main():
             "n_parameters": n_parameters,
             "train_time": train_time,
             "test_time": timer_test.value(),
-            "constraint_acc": constraint_accuracy_val
+            "constraint_acc": constraint_accuracy_val,
+            "super_class_acc": super_class_accuracy_val
         }, state))
         print('==> id: %s (%d/%d), test_acc: \33[91m%.2f\033[0m' %
               (opt.save, state['epoch'], opt.epochs, test_acc))
