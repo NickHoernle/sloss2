@@ -394,7 +394,7 @@ def main():
                 # loss_bkwd = ((- log_det_back - neg_sloss).mean())
                 # import pdb
                 # pdb.set_trace()
-                loss_flow += opt.sloss_weight * (+log_det_back + sloss).mean()
+                loss_flow += opt.sloss_weight * (log_det_back + sloss).mean()
 
         loss_flow.backward()
         clip_grad_norm_(model_flow.parameters(), 1.0)
