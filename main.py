@@ -235,6 +235,10 @@ def create_dataset(opt, train):
     return getattr(datasets, opt.dataset)(opt.dataroot, train=train, download=True, transform=transform)
 
 
+def mean(numbers):
+    return float(sum(numbers)) / max(len(numbers), 1)
+
+
 def main():
     # device = "cpu"
 
@@ -412,7 +416,8 @@ def main():
         superclass_predictions = torch.cat([predictions[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
                                             for c in range(len(super_class_label))], dim=1).exp()
         true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]] for t in targets]).to(device)
-        constraint_accuracy += list(torch.argmax(superclass_predictions, dim=1) == true_super_class_label)
+        # constraint_accuracy += list(torch.argmax(superclass_predictions, dim=1) == true_super_class_label)
+        constraint_accuracy += list(((superclass_predictions < 0.05) | (superclass_predictions > 0.95)).all(dim=1).detach().numpy())
 
         return loss_prediction, y
 
@@ -439,6 +444,11 @@ def main():
 
     def on_start_epoch(state):
 
+        with torch.no_grad():
+            engine.test(compute_loss_test, test_loader)
+
+        print(mean(constraint_accuracy))
+
         classacc.reset()
         meter_loss.reset()
         timer_train.reset()
@@ -463,9 +473,6 @@ def main():
             engine.test(compute_loss_test, test_loader)
 
         test_acc = classacc.value()[0]
-
-        def mean(numbers):
-            return float(sum(numbers)) / max(len(numbers), 1)
 
         constraint_accuracy_val = mean(constraint_accuracy)
         constraint_accuracy = []
