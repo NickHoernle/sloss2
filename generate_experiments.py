@@ -18,7 +18,7 @@ sloss = [True]
 sloss_weights = [1e1, 1, 1e-1, 1e-2, 1e-3]
 sloss2_weights = [1e1, 1, 1e-1]
 
-settings = [(sloss_, sloss_weight, rep)
+settings = [(sloss_, sloss_weight, sloss2_weight, rep)
             for sloss_ in sloss
             for sloss_weight in sloss_weights
             for sloss2_weight in sloss2_weights
