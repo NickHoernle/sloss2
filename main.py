@@ -389,12 +389,9 @@ def main():
                 dl2_const_lower = torch.max(superclass_predictions - 0.05, torch.zeros_like(superclass_predictions))
                 dl2_const_upper = torch.max(0.95 - superclass_predictions, torch.zeros_like(superclass_predictions))
 
-                sloss = 1e4*(dl2_const_lower * dl2_const_upper).sum(dim=1)
-
-                # loss_bkwd = ((- log_det_back - neg_sloss).mean())
-                # import pdb
-                # pdb.set_trace()
-                loss_flow += opt.sloss_weight * (log_det_back + sloss).mean()
+                rule_weight = 1e4
+                sloss = rule_weight*(dl2_const_lower * dl2_const_upper).sum(dim=1)
+                loss_flow += opt.sloss_weight * ((- log_det_back + sloss)/rule_weight).mean()
 
         loss_flow.backward()
         clip_grad_norm_(model_flow.parameters(), 1.0)
