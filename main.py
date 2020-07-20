@@ -444,11 +444,6 @@ def main():
 
     def on_start_epoch(state):
 
-        with torch.no_grad():
-            engine.test(compute_loss_test, test_loader)
-
-        print(mean(constraint_accuracy))
-
         classacc.reset()
         meter_loss.reset()
         timer_train.reset()
