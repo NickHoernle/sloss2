@@ -18,9 +18,10 @@ from torch.optim import SGD, Adam
 import torch.utils.data
 import torchvision.transforms as T
 import torchvision.datasets as datasets
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 import torch.nn.functional as F
 import torchnet as tnt
+import torch.utils.data as data
 from torchnet.engine import Engine
 from flows import Invertible1x1Conv, NormalizingFlowModel
 from spline_flows import NSF_CL
@@ -31,6 +32,7 @@ from torch.backends import cudnn
 from resnet import resnet
 from torch.distributions.dirichlet import Dirichlet
 from torch.nn.utils import clip_grad_norm_
+from logic import LogicNet, logic
 
 
 def str2bool(v):
@@ -184,7 +186,9 @@ parser.add_argument('--dataroot', default='.', type=str)
 parser.add_argument('--dtype', default='float', type=str)
 parser.add_argument('--groups', default=1, type=int)
 parser.add_argument('--nthread', default=4, type=int)
+parser.add_argument('--num_labelled', default=1000, type=int)
 parser.add_argument('--seed', default=1, type=int)
+parser.add_argument('--n_workers', default=4, type=int)
 
 # Training options
 parser.add_argument('--batch_size', default=128, type=int)
@@ -218,8 +222,35 @@ parser.add_argument("--sloss_weight", type=float, default=0.001,
 parser.add_argument("--starter_counter", default=-1, type=int)
 # parser.add_argument("--starter_counter", default=10, type=int)
 
+class Joint(data.Dataset):
+    def __init__(self, dataset1, dataset2):
+        self.dataset1 = dataset1
+        self.dataset2 = dataset2
+
+    def __getitem__(self, index):
+        return self.dataset1[index], self.dataset2[index]
+
+    def __len__(self):
+        return len(self.dataset1)
+
+def x_u_split(labels, num_labelled, num_classes):
+    label_per_class = num_labelled // num_classes
+    labels = np.array(labels)
+    labelled_idx = []
+    unlabelled_idx = []
+    for i in range(num_classes):
+        idx = np.where(labels == i)[0]
+        np.random.shuffle(idx)
+        labelled_idx.extend(idx[:label_per_class])
+        unlabelled_idx.extend(idx[label_per_class:])
+
+    return labelled_idx, unlabelled_idx
 
 def create_dataset(opt, train):
+
+    def _init_fn(worker_id):
+        np.random.seed(opt.seed)
+
     transform = T.Compose([
         T.ToTensor(),
         T.Normalize(np.array([125.3, 123.0, 113.9]) / 255.0,
@@ -232,12 +263,33 @@ def create_dataset(opt, train):
             T.RandomCrop(32),
             transform
         ])
+
+        train_dataset = getattr(datasets, opt.dataset)(opt.dataroot, train=train, download=True, transform=transform)
+        num_classes = 10 if opt.dataset == 'CIFAR10' else 100
+
+        num_labelled = opt.num_labelled
+        num_unlabelled = len(train_dataset) - num_labelled
+        td_targets = train_dataset.targets
+        labelled_idxs, unlabelled_idxs = x_u_split(td_targets, num_labelled, num_classes)
+        labelled_set, unlabelled_set = [Subset(train_dataset, labelled_idxs), Subset(train_dataset, unlabelled_idxs)]
+        labelled_set = data.ConcatDataset([labelled_set for i in range(num_unlabelled // num_labelled + 1)])
+        labelled_set, _ = data.random_split(labelled_set, [num_unlabelled, len(labelled_set)-num_unlabelled])
+        train_dataset = Joint(labelled_set, unlabelled_set)
+        train_loader = DataLoader(
+            train_dataset, opt.batch_size, shuffle=True,
+            num_workers=opt.nthread, pin_memory=torch.cuda.is_available()
+        )
+        return train_loader
     return getattr(datasets, opt.dataset)(opt.dataroot, train=train, download=True, transform=transform)
 
+def convert_to_one_hot(num_categories, labels, device):
+    labels = torch.unsqueeze(labels, 1)
+    one_hot = torch.FloatTensor(len(labels), num_categories).zero_().to(device)
+    one_hot.scatter_(1, labels, 1)
+    return one_hot
 
 def mean(numbers):
     return float(sum(numbers)) / max(len(numbers), 1)
-
 
 def main():
     # device = "cpu"
@@ -258,7 +310,7 @@ def main():
     global counter
     counter = 0
 
-    train_loader = create_iterator(True)
+    train_loader = create_dataset(opt, True)
     test_loader = create_iterator(False)
 
     global classes
@@ -268,26 +320,18 @@ def main():
 
     constraint_accuracy, super_class_accuracy = [], []
 
-    classes = train_loader.dataset.classes
-    superclass_labels = [super_class_label[superclass_mapping[c]] for c in classes]
-    superclass_indexes = {}
-    all_labels = torch.eye(len(super_class_label)).to(device)
+    # classes = train_loader.dataset.classes
+    # superclass_labels = [super_class_label[superclass_mapping[c]] for c in classes]
+    # superclass_indexes = {}
 
-    for cat in range(len(super_class_label)):
-        indices = [i for i, x in enumerate(superclass_labels) if x == cat]
-        superclass_indexes[cat] = indices
+    # for cat in range(len(super_class_label)):
+    #     indices = [i for i, x in enumerate(superclass_labels) if x == cat]
+    #     superclass_indexes[cat] = indices
 
     f, params = resnet(opt.depth, opt.width, num_classes)
 
-    num_flow_classes = num_classes
-    prior_y = MultivariateNormal(torch.zeros(num_flow_classes).to(device),
-                                 torch.eye(num_flow_classes).to(device))
-    num_flows = 3
-    flows = [NSF_CL(dim=num_flow_classes, K=8, B=3, hidden_dim=16, device=device) for _ in range(num_flows)]
-    convs = [Invertible1x1Conv(dim=num_flow_classes, device=device) for i in range(num_flows)]
-    flows = list(itertools.chain(*zip(convs, flows)))
-    model_flow = NormalizingFlowModel(prior_y, flows, num_flow_classes, device=device).to(device)
-    optimizer_flow = Adam(model_flow.parameters(), lr=1e-3, weight_decay=1e-5)
+    logic_net = LogicNet(num_classes)
+    logic_opt = SGD(logic_net.parameters(), opt.lr, momentum=0.9, weight_decay=opt.weight_decay)
 
     def create_optimizer(opt, lr):
         print('creating optimizer with lr = ', lr)
@@ -324,78 +368,77 @@ def main():
         global classes
         global superclass_labels, superclass_indexes
 
-        inputs = cast(sample[0], opt.dtype)
-        targets = cast(sample[1], 'long')
 
-        step_flow(sample)
+        l_sample = sample[0]
+        u_sample = sample[1]
+        inputs_l = cast(l_sample[0], opt.dtype)
+        targets_l = cast(l_sample[1], 'long')
+        inputs_u = cast(u_sample[0], opt.dtype)
 
-        y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
-        loss_prediction = F.cross_entropy(y, targets)
+        b_size = inputs_u.size(0)
+        label = torch.full((b_size,), 1, device=device)
+
+        logic_step(l_sample)
+        logic_step_predictions(sample)
+
+        y = data_parallel(f, inputs_l, params, sample[2], list(range(opt.ngpu))).float()
+        loss_prediction = F.cross_entropy(y, targets_l)
 
         # add the normalizing flows logic layer here
         if opt.sloss:
 
             if counter >= opt.starter_counter:
+                logic_net.eval()
+                predictions = F.softmax(y, dim=1)
+                logic_pred = logic_net(predictions).squeeze(dim=1)
+                loss_prediction += opt.sloss_weight*F.binary_cross_entropy(logic_pred, label)
+                # train the flow to follow the logical specification
 
-                model_flow.eval()
-                labels_pred = F.softmax(y, dim=1)
-                # calc likelihood of this prediction under constraints
-                _, nll_ypred = model_flow(labels_pred)
-                loss_nll_ypred = opt.unl_weight * torch.mean(nll_ypred)
-                loss_prediction += loss_nll_ypred
-
-            # train the flow to follow the logical specification
         return loss_prediction, y
 
-
-    def step_flow(sample):
+    def logic_step(sample):
 
         global counter
-        global classes
-        global superclass_labels, superclass_indexes
+        # global classes
+        # global superclass_labels, superclass_indexes
 
         inputs = cast(sample[0], opt.dtype)
         targets = cast(sample[1], 'long')
+        one_hot_targets = convert_to_one_hot(num_classes, targets, device)
 
-        model_flow.train()
-        optimizer_flow.zero_grad()
+        logic_net.train()
+        logic_opt.zero_grad()
 
-        # train on true samples
-        one_hot_targets = F.one_hot(torch.tensor(targets), num_classes).float()
-        one_hot_targets = one_hot_targets * 120 + (1 - one_hot_targets) * 1.1
-        dirichlet_targets = torch.stack([Dirichlet(i).sample() for i in one_hot_targets])
-        zs, nll_y = model_flow(dirichlet_targets)
-        loss_nll_y = torch.mean(nll_y)
-        loss_flow = loss_nll_y
+        true_res = logic(one_hot_targets)
+        pred_res = logic_net(one_hot_targets).squeeze(dim=1)
 
-        if counter >= opt.starter_counter:
-            # train on generated samples
-            prior_sample = model_flow.prior.sample((one_hot_targets.size(0),))
+        loss_logic = F.binary_cross_entropy(pred_res, true_res)
+        loss_logic.backward()
 
-            if len(prior_sample) > 0:
-                xs, log_det_back = model_flow.backward(prior_sample)
+        logic_opt.step()
 
-                predictions = F.log_softmax(xs[-1], dim=1)
-                # true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]] for t in targets])
-                superclass_predictions = torch.cat([predictions[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
-                                                    for c in range(len(super_class_label))], dim=1).exp()
+    def logic_step_predictions(sample):
 
+        global counter
+        # global classes
+        # global superclass_labels, superclass_indexes
 
-                # part1 = torch.stack([superclass_predictions ** all_labels[i] for i in range(all_labels.shape[0])])
-                # part2 = torch.stack(
-                #     [(1 - superclass_predictions) ** (1 - all_labels[i]) for i in range(all_labels.shape[0])])
+        u_sample = sample[1]
+        inputs = cast(u_sample[0], opt.dtype)
 
+        logic_net.train()
+        logic_opt.zero_grad()
 
-                dl2_const_lower = torch.max(superclass_predictions - 0.05, torch.zeros_like(superclass_predictions))
-                dl2_const_upper = torch.max(0.95 - superclass_predictions, torch.zeros_like(superclass_predictions))
+        y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
+        predictions = F.softmax(y, dim=1)
 
-                rule_weight = 1e4
-                sloss = rule_weight*(dl2_const_lower * dl2_const_upper).sum(dim=1)
-                loss_flow += opt.sloss_weight * ((- log_det_back + sloss)/rule_weight).mean()
+        true_res = logic(predictions)
+        pred_res = logic_net(predictions).squeeze(dim=1)
 
-        loss_flow.backward()
-        clip_grad_norm_(model_flow.parameters(), 1.0)
-        optimizer_flow.step()
+        loss_logic = F.binary_cross_entropy(pred_res, true_res)
+        loss_logic.backward()
+
+        logic_opt.step()
 
     def compute_loss_test(sample):
 
@@ -409,12 +452,12 @@ def main():
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
         loss_prediction = F.cross_entropy(y, targets)
 
-        predictions = F.log_softmax(y, dim=1)
-        superclass_predictions = torch.cat([predictions[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
-                                            for c in range(len(super_class_label))], dim=1).exp()
-        true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]] for t in targets]).to(device)
-        super_class_accuracy += list(torch.argmax(superclass_predictions, dim=1) == true_super_class_label)
-        constraint_accuracy += list(((superclass_predictions < 0.05) | (superclass_predictions > 0.95)).all(dim=1))
+        # predictions = F.log_softmax(y, dim=1)
+        # superclass_predictions = torch.cat([predictions[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
+        #                                     for c in range(len(super_class_label))], dim=1).exp()
+        # true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]] for t in targets]).to(device)
+        # super_class_accuracy += list(torch.argmax(superclass_predictions, dim=1) == true_super_class_label)
+        # constraint_accuracy += list(((superclass_predictions < 0.05) | (superclass_predictions > 0.95)).all(dim=1))
 
         return loss_prediction, y
 
@@ -431,7 +474,7 @@ def main():
 
     def on_forward(state):
         loss = float(state['loss'])
-        classacc.add(state['output'].data, state['sample'][1])
+        classacc.add(state['output'].data, state['sample'][0][1])
         meter_loss.add(loss)
         if state['train']:
             state['iterator'].set_postfix(loss=loss)
@@ -440,9 +483,6 @@ def main():
         state['epoch'] = epoch
 
     def on_start_epoch(state):
-
-        # with torch.no_grad():
-        #     engine.test(compute_loss_test, test_loader)
 
         classacc.reset()
         meter_loss.reset()
@@ -469,11 +509,11 @@ def main():
 
         test_acc = classacc.value()[0]
 
-        constraint_accuracy_val = mean(constraint_accuracy)
-        constraint_accuracy = []
-
-        super_class_accuracy_val = mean(super_class_accuracy)
-        super_class_accuracy = []
+        # constraint_accuracy_val = mean(constraint_accuracy)
+        # constraint_accuracy = []
+        #
+        # super_class_accuracy_val = mean(super_class_accuracy)
+        # super_class_accuracy = []
 
         print(log({
             "train_loss": train_loss[0],
@@ -485,8 +525,8 @@ def main():
             "n_parameters": n_parameters,
             "train_time": train_time,
             "test_time": timer_test.value(),
-            "constraint_acc": constraint_accuracy_val,
-            "super_class_acc": super_class_accuracy_val
+            # "constraint_acc": constraint_accuracy_val,
+            # "super_class_acc": super_class_accuracy_val
         }, state))
         print('==> id: %s (%d/%d), test_acc: \33[91m%.2f\033[0m' %
               (opt.save, state['epoch'], opt.epochs, test_acc))
