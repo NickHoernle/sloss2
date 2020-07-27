@@ -330,7 +330,7 @@ def main():
 
     f, params = resnet(opt.depth, opt.width, num_classes)
 
-    logic_net = LogicNet(num_classes)
+    logic_net = LogicNet(num_classes).to(device)
     logic_opt = SGD(logic_net.parameters(), opt.lr, momentum=0.9, weight_decay=opt.weight_decay)
 
     def create_optimizer(opt, lr):
