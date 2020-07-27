@@ -474,7 +474,7 @@ def main():
 
     def on_forward(state):
         loss = float(state['loss'])
-        if len(state['sample']) == 3:
+        if state["train"]:
             classacc.add(state['output'].data, state['sample'][0][1])
         else:
             classacc.add(state['output'].data, state['sample'][1])
