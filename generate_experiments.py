@@ -10,7 +10,7 @@ SCRATCH_DISK = '/disk/scratch'
 SCRATCH_HOME = f'{SCRATCH_DISK}/{USER}'
 
 DATA_HOME = f'{SCRATCH_HOME}/vaelib'
-base_call = (f"python main.py --dataset CIFAR100 --save {DATA_HOME}/logs/resnet_$RANDOM$RANDOM "
+base_call = (f"python main.py --dataset CIFAR10 --save {DATA_HOME}/logs/resnet_$RANDOM$RANDOM "
              f"--depth 28 --width 2 --ngpu 1 --dataroot {DATA_HOME}/data --starter_counter 10 --cuda")
 
 repeats = 1
