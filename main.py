@@ -186,7 +186,7 @@ parser.add_argument('--dataroot', default='.', type=str)
 parser.add_argument('--dtype', default='float', type=str)
 parser.add_argument('--groups', default=1, type=int)
 parser.add_argument('--nthread', default=4, type=int)
-parser.add_argument('--num_labelled', default=1000, type=int)
+parser.add_argument('--num_labelled', default=4000, type=int)
 parser.add_argument('--seed', default=1, type=int)
 parser.add_argument('--n_workers', default=4, type=int)
 
