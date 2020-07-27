@@ -474,7 +474,10 @@ def main():
 
     def on_forward(state):
         loss = float(state['loss'])
-        classacc.add(state['output'].data, state['sample'][0][1])
+        if len(state['sample']) == 3:
+            classacc.add(state['output'].data, state['sample'][0][1])
+        else:
+            classacc.add(state['output'].data, state['sample'][1])
         meter_loss.add(loss)
         if state['train']:
             state['iterator'].set_postfix(loss=loss)
