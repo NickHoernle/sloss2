@@ -15,8 +15,8 @@ base_call = (f"python main.py --dataset CIFAR10 --save {DATA_HOME}/logs/resnet_$
 
 repeats = 1
 sloss = [True]
-learning_rate = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5]
-sloss_weights = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5]
+learning_rate = [1,]
+sloss_weights = [1, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5]
 sloss2_weights = [1e-1]
 
 settings = [(lr, sloss_, sloss_weight, sloss2_weight, rep)
