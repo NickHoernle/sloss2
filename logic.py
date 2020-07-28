@@ -154,9 +154,8 @@ def cifar10_logic(predictions, **kwargs):
     return logic.float()
 
 def cifar100_logic(predictions, superclass_indexes):
-    log_predictions = torch.log(predictions)
-    superclass_predictions = torch.cat([log_predictions[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
-                                        for c in range(len(super_class_label))], dim=1).exp()
+    superclass_predictions = torch.cat([predictions[:, superclass_indexes[c]].sum(dim=1).unsqueeze(1)
+                                        for c in range(len(super_class_label))], dim=1)
 
     logic = ((superclass_predictions > 0.95) | (superclass_predictions < 0.05)).all(dim=1)
     return logic.float()
