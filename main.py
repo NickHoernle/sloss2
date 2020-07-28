@@ -32,6 +32,7 @@ from torch.backends import cudnn
 from resnet import resnet
 from torch.distributions.dirichlet import Dirichlet
 from torch.nn.utils import clip_grad_norm_
+from torch.optim.lr_scheduler import StepLR
 from logic import LogicNet, cifar10_logic, cifar100_logic, superclass_mapping, super_class_label
 
 
@@ -211,6 +212,7 @@ def main():
 
     logic_net = LogicNet(num_classes).to(device)
     logic_opt = SGD(logic_net.parameters(), opt.lr, momentum=0.9, weight_decay=opt.weight_decay)
+    logic_scheduler = StepLR(logic_opt, step_size=50, gamma=0.1)
 
     def create_optimizer(opt, lr):
         print('creating optimizer with lr = ', lr)
@@ -406,6 +408,8 @@ def main():
 
         super_class_accuracy_val = mean(super_class_accuracy)
         super_class_accuracy = []
+
+        logic_scheduler.step()
 
         print(log({
             "train_loss": train_loss[0],
