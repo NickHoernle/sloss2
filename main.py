@@ -32,7 +32,7 @@ from torch.backends import cudnn
 from resnet import resnet
 from torch.distributions.dirichlet import Dirichlet
 from torch.nn.utils import clip_grad_norm_
-from logic import LogicNet, logic
+from logic import LogicNet, cifar10_logic, cifar100_logic, superclass_mapping, super_class_label
 
 
 def str2bool(v):
@@ -44,135 +44,6 @@ def str2bool(v):
         return False
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
-
-
-
-superclass_mapping = {
-    'beaver': 'aquatic mammals',
-    'dolphin': 'aquatic mammals',
-    'otter': 'aquatic mammals',
-    'seal': 'aquatic mammals',
-    'whale': 'aquatic mammals',
-    'aquarium_fish': 'fish',
-    'flatfish': 'fish',
-    'ray': 'fish',
-    'shark': 'fish',
-    'trout': 'fish',
-    'orchid': 'flowers',
-    'poppy': 'flowers',
-    'rose': 'flowers',
-    'sunflower': 'flowers',
-    'tulip': 'flowers',
-    'bottle': 'food containers',
-    'bowl': 'food containers',
-    'can': 'food containers',
-    'cup': 'food containers',
-    'plate': 'food containers',
-    'apple': 'fruit and vegetables',
-    'mushroom': 'fruit and vegetables',
-    'orange': 'fruit and vegetables',
-    'pear': 'fruit and vegetables',
-    'sweet_pepper': 'fruit and vegetables',
-    'clock': 'household electrical devices',
-    'keyboard': 'household electrical devices',
-    'lamp': 'household electrical devices',
-    'telephone': 'household electrical devices',
-    'television': 'household electrical devices',
-    'bed': 'household furniture',
-    'chair': 'household furniture',
-    'couch': 'household furniture',
-    'table': 'household furniture',
-    'wardrobe': 'household furniture',
-    'bee':'insects',
-    'beetle':'insects',
-    'butterfly':'insects',
-    'caterpillar':'insects',
-    'cockroach':'insects',
-    'bear': 'large carnivores',
-    'leopard': 'large carnivores',
-    'lion': 'large carnivores',
-    'tiger': 'large carnivores',
-    'wolf': 'large carnivores',
-    'bridge': 'large man-made outdoor things',
-    'castle': 'large man-made outdoor things',
-    'house': 'large man-made outdoor things',
-    'road': 'large man-made outdoor things',
-    'skyscraper': 'large man-made outdoor things',
-    "cloud": "large natural outdoor scenes",
-    "forest": "large natural outdoor scenes",
-    "mountain": "large natural outdoor scenes",
-    "plain": "large natural outdoor scenes",
-    "sea": "large natural outdoor scenes",
-    "camel": "large omnivores and herbivores",
-    "cattle": "large omnivores and herbivores",
-    "chimpanzee": "large omnivores and herbivores",
-    "elephant": "large omnivores and herbivores",
-    "kangaroo": "large omnivores and herbivores",
-    "fox": "medium-sized mammals",
-    "porcupine": "medium-sized mammals",
-    "possum": "medium-sized mammals",
-    "raccoon": "medium-sized mammals",
-    "skunk": "medium-sized mammals",
-    "crab": "non-insect invertebrates",
-    "lobster": "non-insect invertebrates",
-    "snail": "non-insect invertebrates",
-    "spider": "non-insect invertebrates",
-    "worm": "non-insect invertebrates",
-    "baby": "people",
-    "boy": "people",
-    "girl": "people",
-    "man": "people",
-    "woman": "people",
-    "crocodile" : "reptiles",
-    "dinosaur" : "reptiles",
-    "lizard" : "reptiles",
-    "snake" : "reptiles",
-    "turtle": "reptiles",
-    "hamster": "small mammals",
-    "mouse": "small mammals",
-    "rabbit": "small mammals",
-    "shrew": "small mammals",
-    "squirrel": "small mammals",
-    "maple_tree" :"trees",
-    "oak_tree" :"trees",
-    "palm_tree" :"trees",
-    "pine_tree" :"trees",
-    "willow_tree" :"trees",
-    "bicycle": "vehicles 1",
-    "bus": "vehicles 1",
-    "motorcycle": "vehicles 1",
-    "pickup_truck": "vehicles 1",
-    "train": "vehicles 1",
-    "lawn_mower": "vehicles 2",
-    "rocket": "vehicles 2",
-    "streetcar": "vehicles 2",
-    "tank": "vehicles 2",
-    "tractor": "vehicles 2"
-}
-
-super_class_label = {
-    'aquatic mammals': 0,
-    'fish': 1,
-    'flowers': 2,
-    'food containers': 3,
-    'fruit and vegetables': 4,
-    'household electrical devices': 5,
-    'household furniture': 6,
-    'insects': 7,
-    'large carnivores': 8,
-    'large man-made outdoor things': 9,
-    'large natural outdoor scenes': 10,
-    'large omnivores and herbivores': 11,
-    'medium-sized mammals': 12,
-    'non-insect invertebrates': 13,
-    'people': 14,
-    'reptiles': 15,
-    'small mammals': 16,
-    'trees': 17,
-    'vehicles 1': 18,
-    'vehicles 2': 19
-}
-
 
 cudnn.benchmark = True
 
@@ -289,6 +160,8 @@ def convert_to_one_hot(num_categories, labels, device):
     return one_hot
 
 def mean(numbers):
+    if len(numbers) == 0:
+        return float(0)
     return float(sum(numbers)) / max(len(numbers), 1)
 
 def main():
@@ -319,14 +192,20 @@ def main():
     global constraint_accuracy, super_class_accuracy
 
     constraint_accuracy, super_class_accuracy = [], []
+    superclass_indexes = {}
 
-    # classes = train_loader.dataset.classes
-    # superclass_labels = [super_class_label[superclass_mapping[c]] for c in classes]
-    # superclass_indexes = {}
+    if opt.dataset == "CIFAR100":
 
-    # for cat in range(len(super_class_label)):
-    #     indices = [i for i, x in enumerate(superclass_labels) if x == cat]
-    #     superclass_indexes[cat] = indices
+        classes = test_loader.dataset.classes
+        superclass_labels = [super_class_label[superclass_mapping[c]] for c in classes]
+
+        for cat in range(len(super_class_label)):
+            indices = [i for i, x in enumerate(superclass_labels) if x == cat]
+            superclass_indexes[cat] = indices
+
+        logic = cifar100_logic
+    else:
+        logic = cifar10_logic
 
     f, params = resnet(opt.depth, opt.width, num_classes)
 
@@ -399,8 +278,8 @@ def main():
     def logic_step(sample):
 
         global counter
-        # global classes
-        # global superclass_labels, superclass_indexes
+        global classes
+        global superclass_labels, superclass_indexes
 
         inputs = cast(sample[0], opt.dtype)
         targets = cast(sample[1], 'long')
@@ -409,7 +288,11 @@ def main():
         logic_net.train()
         logic_opt.zero_grad()
 
-        true_res = logic(one_hot_targets)
+        common_params = {
+            "superclass_indexes": superclass_indexes,
+        }
+
+        true_res = logic(one_hot_targets, **common_params)
         pred_res = logic_net(one_hot_targets).squeeze(dim=1)
 
         loss_logic = F.binary_cross_entropy(pred_res, true_res)
@@ -420,8 +303,8 @@ def main():
     def logic_step_predictions(sample):
 
         global counter
-        # global classes
-        # global superclass_labels, superclass_indexes
+        global classes
+        global superclass_labels, superclass_indexes
 
         u_sample = sample[1]
         inputs = cast(u_sample[0], opt.dtype)
@@ -432,7 +315,7 @@ def main():
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
         predictions = F.softmax(y, dim=1)
 
-        true_res = logic(predictions)
+        true_res = logic(predictions, superclass_indexes=superclass_indexes)
         pred_res = logic_net(predictions).squeeze(dim=1)
 
         loss_logic = F.binary_cross_entropy(pred_res, true_res)
@@ -450,14 +333,17 @@ def main():
         inputs = cast(sample[0], opt.dtype)
         targets = cast(sample[1], 'long')
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
+        predictions = F.softmax(y, dim=1)
         loss_prediction = F.cross_entropy(y, targets)
 
-        # predictions = F.log_softmax(y, dim=1)
-        # superclass_predictions = torch.cat([predictions[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
-        #                                     for c in range(len(super_class_label))], dim=1).exp()
-        # true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]] for t in targets]).to(device)
-        # super_class_accuracy += list(torch.argmax(superclass_predictions, dim=1) == true_super_class_label)
-        # constraint_accuracy += list(((superclass_predictions < 0.05) | (superclass_predictions > 0.95)).all(dim=1))
+        logic_accuracy = logic(predictions, superclass_indexes=superclass_indexes)
+        constraint_accuracy += list(logic_accuracy)
+        if opt.dataset == "CIFAR100":
+            true_super_class_label = torch.tensor(
+                [super_class_label[superclass_mapping[classes[t]]] for t in targets]).to(device)
+            superclass_predictions = torch.cat([predictions[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
+                                                for c in range(len(super_class_label))], dim=1).exp()
+            super_class_accuracy += list(torch.argmax(superclass_predictions, dim=1) == true_super_class_label)
 
         return loss_prediction, y
 
@@ -487,6 +373,9 @@ def main():
 
     def on_start_epoch(state):
 
+        # with torch.no_grad():
+        #     engine.test(compute_loss_test, test_loader)
+
         classacc.reset()
         meter_loss.reset()
         timer_train.reset()
@@ -512,11 +401,11 @@ def main():
 
         test_acc = classacc.value()[0]
 
-        # constraint_accuracy_val = mean(constraint_accuracy)
-        # constraint_accuracy = []
-        #
-        # super_class_accuracy_val = mean(super_class_accuracy)
-        # super_class_accuracy = []
+        constraint_accuracy_val = mean(constraint_accuracy)
+        constraint_accuracy = []
+
+        super_class_accuracy_val = mean(super_class_accuracy)
+        super_class_accuracy = []
 
         print(log({
             "train_loss": train_loss[0],
@@ -528,11 +417,11 @@ def main():
             "n_parameters": n_parameters,
             "train_time": train_time,
             "test_time": timer_test.value(),
-            # "constraint_acc": constraint_accuracy_val,
-            # "super_class_acc": super_class_accuracy_val
+            "constraint_acc": constraint_accuracy_val,
+            "super_class_acc": super_class_accuracy_val
         }, state))
-        print('==> id: %s (%d/%d), test_acc: \33[91m%.2f\033[0m' %
-              (opt.save, state['epoch'], opt.epochs, test_acc))
+        print('==> id: %s (%d/%d), test_acc: \33[91m%.2f\033[0m, constraint_acc: \33[91m%.2f\033[0m' %
+              (opt.save, state['epoch'], opt.epochs, test_acc, constraint_accuracy_val))
 
         global counter
         counter += 1
