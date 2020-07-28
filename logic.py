@@ -21,5 +21,5 @@ class LogicNet(nn.Module):
 
 
 def logic(predictions):
-    logic = ((predictions > 0.95) | (predictions < 0.05)).all(dim=1)
+    logic = ((predictions > 0.99) | (predictions < 0.01)).all(dim=1)
     return logic.float()

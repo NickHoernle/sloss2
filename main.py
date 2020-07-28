@@ -193,7 +193,7 @@ parser.add_argument('--n_workers', default=4, type=int)
 # Training options
 parser.add_argument('--batch_size', default=128, type=int)
 parser.add_argument('--lr', default=0.1, type=float)
-parser.add_argument('--epochs', default=200, type=int, metavar='N',
+parser.add_argument('--epochs', default=400, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--weight_decay', default=0.0005, type=float)
 parser.add_argument('--epoch_step', default='[60,120,160]', type=str,
