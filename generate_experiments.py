@@ -10,23 +10,25 @@ SCRATCH_DISK = '/disk/scratch'
 SCRATCH_HOME = f'{SCRATCH_DISK}/{USER}'
 
 DATA_HOME = f'{SCRATCH_HOME}/vaelib'
-base_call = (f"python main.py --dataset CIFAR10 --save {DATA_HOME}/logs/resnet_$RANDOM$RANDOM "
+base_call = (f"python main.py --save {DATA_HOME}/logs/resnet_$RANDOM$RANDOM "
              f"--depth 28 --width 2 --ngpu 1 --dataroot {DATA_HOME}/data "
              f"--starter_counter 10 --num_labelled 4000 --cuda")
 
 repeats = 1
 sloss = [True]
-learning_rate = [.75, .25, .01]
+dataset = ["CIFAR10", "CIFAR100"]
+learning_rate = [1, 0.5]
 sloss_weights = [1e-1, 1e-2, 1e-3]
 lr_decay_ratio = [.1, .2]
 sloss2_weights = [1e-1]
 
-settings = [(lr, sloss_, sloss_weight, sloss2_weight, lr_decay_ratio_, rep)
+settings = [(lr, sloss_, sloss_weight, sloss2_weight, lr_decay_ratio_, dataset_, rep)
             for lr in learning_rate
             for sloss_ in sloss
             for sloss_weight in sloss_weights
             for sloss2_weight in sloss2_weights
             for lr_decay_ratio_ in lr_decay_ratio
+            for dataset_ in dataset
             for rep in range(repeats)]
 
 nr_expts = len(settings)
@@ -38,7 +40,7 @@ print(f'Estimated time = {(nr_expts / nr_servers * avg_expt_time)/60} hrs')
 
 output_file = open("experiment.txt", "w")
 
-for (lr, sloss_, sloss_weight, sloss2_weight, lr_decay_ratio_, rep) in settings:
+for (lr, sloss_, sloss_weight, sloss2_weight, lr_decay_ratio_, dataset_, rep) in settings:
     # Note that we don't set a seed for rep - a seed is selected at random
     # and recorded in the output data by the python script
     expt_call = (
@@ -48,6 +50,7 @@ for (lr, sloss_, sloss_weight, sloss2_weight, lr_decay_ratio_, rep) in settings:
         f"--sloss_weight {sloss_weight} "
         f"--unl_weight {sloss2_weight} "
         f"--lr_decay_ratio {lr_decay_ratio_} "
+        f"--dataset {dataset_} "
     )
     print(expt_call, file=output_file)
 
