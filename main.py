@@ -315,7 +315,7 @@ def main():
         logic_opt.zero_grad()
 
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
-        predictions = y - torch.logsumexp(y, dim=1)
+        predictions = y - torch.logsumexp(y, dim=1).unsqueeze(1)
 
         true_res = logic(predictions, superclass_indexes=superclass_indexes)
         pred_res = logic_net(predictions).squeeze(dim=1)
