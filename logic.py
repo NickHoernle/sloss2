@@ -149,7 +149,8 @@ class LogicNet(nn.Module):
         return self.net(x)
 
 
-def cifar10_logic(predictions, **kwargs):
+def cifar10_logic(log_predictions, **kwargs):
+    predictions = log_predictions.exp()
     logic = ((predictions > 0.99) | (predictions < 0.01)).all(dim=1)
     return logic.float()
 

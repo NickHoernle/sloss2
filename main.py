@@ -259,7 +259,7 @@ def main():
         b_size = inputs_u.size(0)
         label = torch.full((b_size,), 1, device=device)
 
-        logic_step(l_sample)
+        # logic_step(l_sample)
         logic_step_predictions(sample)
 
         y = data_parallel(f, inputs_l, params, sample[2], list(range(opt.ngpu))).float()
@@ -315,7 +315,7 @@ def main():
         logic_opt.zero_grad()
 
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
-        predictions = F.softmax(y, dim=1)
+        predictions = y - torch.logsumexp(y, dim=1)
 
         true_res = logic(predictions, superclass_indexes=superclass_indexes)
         pred_res = logic_net(predictions).squeeze(dim=1)

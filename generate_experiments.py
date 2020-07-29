@@ -16,10 +16,11 @@ base_call = (f"python main.py --save {DATA_HOME}/logs/resnet_$RANDOM$RANDOM "
 
 repeats = 1
 sloss = [True]
-dataset = ["CIFAR10", "CIFAR100"]
-learning_rate = [1, 0.5]
+# dataset = ["CIFAR10", "CIFAR100"]
+dataset = ["CIFAR10"]
+learning_rate = [0.5, 0.1]
 sloss_weights = [1e-1, 1e-2, 1e-3]
-lr_decay_ratio = [.1, .2]
+lr_decay_ratio = [.1, .2, .5]
 sloss2_weights = [1e-1]
 
 settings = [(lr, sloss_, sloss_weight, sloss2_weight, lr_decay_ratio_, dataset_, rep)
