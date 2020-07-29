@@ -335,15 +335,15 @@ def main():
         inputs = cast(sample[0], opt.dtype)
         targets = cast(sample[1], 'long')
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
-        predictions = F.softmax(y, dim=1)
+        log_predictions = y - torch.logsumexp(y, dim=1).unsqueeze(1)
         loss_prediction = F.cross_entropy(y, targets)
 
-        logic_accuracy = logic(predictions, superclass_indexes=superclass_indexes)
+        logic_accuracy = logic(log_predictions, superclass_indexes=superclass_indexes)
         constraint_accuracy += list(logic_accuracy)
         if opt.dataset == "CIFAR100":
             true_super_class_label = torch.tensor(
                 [super_class_label[superclass_mapping[classes[t]]] for t in targets]).to(device)
-            superclass_predictions = torch.cat([predictions[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
+            superclass_predictions = torch.cat([log_predictions[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
                                                 for c in range(len(super_class_label))], dim=1).exp()
             super_class_accuracy += list(torch.argmax(superclass_predictions, dim=1) == true_super_class_label)
 
