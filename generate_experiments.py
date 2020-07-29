@@ -19,7 +19,7 @@ sloss = [True]
 # dataset = ["CIFAR10", "CIFAR100"]
 dataset = ["CIFAR10"]
 learning_rate = [0.5, 0.1]
-sloss_weights = [1e-1, 1e-2, 1e-3]
+sloss_weights = [10, 1, 1e-1]
 lr_decay_ratio = [.1, .2, .5]
 sloss2_weights = [1e-1]
 

@@ -151,12 +151,12 @@ class LogicNet(nn.Module):
 
 def cifar10_logic(log_predictions, **kwargs):
     predictions = log_predictions.exp()
-    logic = ((predictions > 0.99) | (predictions < 0.01)).all(dim=1)
+    logic = (predictions > 0.95).any(dim=1)
     return logic.float()
 
 def cifar100_logic(predictions, superclass_indexes):
     superclass_predictions = torch.cat([predictions[:, superclass_indexes[c]].sum(dim=1).unsqueeze(1)
                                         for c in range(len(super_class_label))], dim=1)
 
-    logic = ((superclass_predictions > 0.95) | (superclass_predictions < 0.05)).all(dim=1)
+    logic = (superclass_predictions > 0.95).any(dim=1)
     return logic.float()

@@ -89,7 +89,7 @@ parser.add_argument("--sloss", type=str2bool, nargs='?',
                         help="Activate sloss.")
 parser.add_argument("--unl_weight", type=float, default=0.1,
                     help="Weight for unlabelled regularizer loss")
-parser.add_argument("--sloss_weight", type=float, default=0.001,
+parser.add_argument("--sloss_weight", type=float, default=1,
                     help="Weight for unlabelled regularizer loss")
 parser.add_argument("--starter_counter", default=-1, type=int)
 # parser.add_argument("--starter_counter", default=10, type=int)
@@ -272,7 +272,10 @@ def main():
                 logic_net.eval()
                 predictions = F.softmax(y, dim=1)
                 logic_pred = logic_net(predictions).squeeze(dim=1)
-                loss_prediction += opt.sloss_weight*F.binary_cross_entropy(logic_pred, label)
+                logic_loss = opt.sloss_weight*F.binary_cross_entropy(logic_pred, label)
+                import pdb
+                pdb.set_trace()
+                loss_prediction += logic_loss
                 # train the flow to follow the logical specification
 
         return loss_prediction, y
