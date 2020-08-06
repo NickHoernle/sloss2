@@ -346,8 +346,8 @@ def main():
 
         test_acc = classacc.value()[0]
 
-        constraint_accuracy_val = mean(constraint_accuracy)
-        constraint_accuracy = []
+        # constraint_accuracy_val = mean(constraint_accuracy)
+        # constraint_accuracy = []
 
         super_class_accuracy_val = mean(super_class_accuracy)
         super_class_accuracy = []
@@ -362,11 +362,10 @@ def main():
             "n_parameters": n_parameters,
             "train_time": train_time,
             "test_time": timer_test.value(),
-            "constraint_acc": constraint_accuracy_val,
             "super_class_acc": super_class_accuracy_val
         }, state))
-        print('==> id: %s (%d/%d), test_acc: \33[91m%.2f\033[0m, constraint_acc: \33[91m%.2f\033[0m' %
-              (opt.save, state['epoch'], opt.epochs, test_acc, constraint_accuracy_val))
+        print('==> id: %s (%d/%d), test_acc: \33[91m%.2f\033[0m, sc_acc: \33[91m%.2f\033[0m' %
+              (opt.save, state['epoch'], opt.epochs, test_acc, super_class_accuracy_val))
 
         global counter
         counter += 1
