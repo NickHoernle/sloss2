@@ -232,6 +232,7 @@ def main():
     def create_optimizer(opt, lr):
         print('creating optimizer with lr = ', lr)
         return SGD([v for v in params.values() if v.requires_grad], lr, momentum=0.9, weight_decay=opt.weight_decay)
+        # return Adam([v for v in params.values() if v.requires_grad], lr)
 
     optimizer = create_optimizer(opt, opt.lr)
 
