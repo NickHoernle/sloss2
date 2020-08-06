@@ -187,7 +187,7 @@ def main():
     device = "cuda:0" if opt.cuda else "cpu"
     print('parsed options:', vars(opt))
     epoch_step = json.loads(opt.epoch_step)
-    num_classes = 9 if opt.dataset == 'CIFAR10' else 23
+    num_classes = 9 if opt.dataset == 'CIFAR10' else 99
 
     torch.manual_seed(opt.seed)
     os.environ['CUDA_VISIBLE_DEVICES'] = opt.gpu_id
