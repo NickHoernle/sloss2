@@ -317,9 +317,9 @@ def main():
         state['epoch'] = epoch
 
     def on_start_epoch(state):
-
-        with torch.no_grad():
-            engine.test(compute_loss_test, test_loader)
+        #
+        # with torch.no_grad():
+        #     engine.test(compute_loss_test, test_loader)
 
         classacc.reset()
         meter_loss.reset()

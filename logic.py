@@ -185,8 +185,8 @@ def cifar100_logic(variables, device):
     weight2_fc = torch.log(1 - torch.exp(fc_log_prob).unsqueeze(1) *
                            lower_triang_fc.unsqueeze(0).repeat(fc_log_prob.shape[0], 1, 1))
 
-    log_WMC_sc = (weight_sc.sum(dim=2) + weight2_sc.sum(dim=2)).repeat(1, 5)
-    log_WMC_fc = (weight_fc.sum(dim=2) + weight2_fc.sum(dim=2)).view(-1, 1).repeat(1, 20).view(-1, 100)
+    log_WMC_sc = (weight_sc.sum(dim=2) + weight2_sc.sum(dim=2)).view(-1, 1).repeat(1, 5).view(-1, 100)
+    log_WMC_fc = (weight_fc.sum(dim=2) + weight2_fc.sum(dim=2)).repeat(1, 20)
     log_WMC = log_WMC_sc + log_WMC_fc
 
     return log_WMC
