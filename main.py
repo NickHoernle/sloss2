@@ -265,6 +265,7 @@ def main():
         inputs = cast(sample[0], opt.dtype)
         targets = cast(sample[1], 'long')
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
+
         log_predictions = logic(y)
 
         if opt.dataset == "CIFAR100":

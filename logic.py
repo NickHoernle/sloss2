@@ -150,12 +150,17 @@ def cifar10_logic(variables, device):
     assignments = torch.eye(10).to(device)
     lower_triang = torch.tril(torch.ones_like(assignments)) - assignments
 
-    log_probabilities = F.logsigmoid(variables)
-    log_probabilities = torch.cat((log_probabilities, torch.zeros_like(log_probabilities[:, 0]).unsqueeze(1)), dim=1)
+    probabilities = F.sigmoid(variables)
 
-    weight = log_probabilities.unsqueeze(1) * assignments.unsqueeze(0).repeat(log_probabilities.shape[0], 1, 1)
-    weight2 = torch.log(1 - torch.exp(log_probabilities).unsqueeze(1)*
-                        lower_triang.unsqueeze(0).repeat(log_probabilities.shape[0], 1, 1) + 1e-10)
+    log_probabilities = torch.log(probabilities)
+    log_1_min_prob = torch.log(1-probabilities)
+
+    log_prob = torch.cat((log_probabilities, torch.zeros_like(log_probabilities[:, 0]).unsqueeze(1)), dim=1)
+    log_1_min_prob = torch.cat((log_1_min_prob, torch.zeros_like(log_1_min_prob[:, 0]).unsqueeze(1)), dim=1)
+
+    weight = log_prob.unsqueeze(1) * assignments.unsqueeze(0).repeat(log_prob.shape[0], 1, 1)
+    weight2 = log_1_min_prob.unsqueeze(1) * lower_triang.unsqueeze(0).repeat(log_1_min_prob.shape[0], 1, 1)
+
     log_WMC = (weight.sum(dim=2) + weight2.sum(dim=2))
 
     return log_WMC
@@ -169,24 +174,31 @@ def cifar100_logic(variables, device):
     lower_triang_sc = torch.tril(torch.ones_like(sc_assign)) - sc_assign
     lower_triang_fc = torch.tril(torch.ones_like(fc_assign)) - fc_assign
 
-    log_probabilities = F.logsigmoid(variables)
+    probabilities = F.sigmoid(variables)
 
-    sc_predictions = log_probabilities[:, :19]
-    fc_predictions = log_probabilities[:, 19:].view(log_probabilities.shape[0], -1, 4)
+    log_probabilities = torch.log(probabilities)
+    log_1_min_prob = torch.log(1 - probabilities)
 
-    sc_log_prob = torch.cat((sc_predictions, torch.zeros_like(sc_predictions[:, 0]).unsqueeze(1)), dim=1)
-    fc_log_prob = torch.cat((fc_predictions, torch.zeros_like(fc_predictions[:, :, 0]).unsqueeze(2)), dim=2)
+    sc_pred = log_probabilities[:, :19]
+    fc_pred = log_probabilities[:, 19:].view(log_probabilities.shape[0], -1, 4)
+
+    sc_1min_pred = log_1_min_prob[:, :19]
+    fc_1min_pred = log_1_min_prob[:, 19:].view(log_1_min_prob.shape[0], -1, 4)
+
+    sc_log_prob = torch.cat((sc_pred, torch.zeros_like(sc_pred[:, 0]).unsqueeze(1)), dim=1)
+    fc_log_prob = torch.cat((fc_pred, torch.zeros_like(fc_pred[:, :, 0]).unsqueeze(2)), dim=2)
+
+    sc_log_1min_prob = torch.cat((sc_1min_pred, torch.zeros_like(sc_1min_pred[:, 0]).unsqueeze(1)), dim=1)
+    fc_log_1min_prob = torch.cat((fc_1min_pred, torch.zeros_like(fc_1min_pred[:, :, 0]).unsqueeze(2)), dim=2)
 
     weight_sc = sc_log_prob.unsqueeze(1) * sc_assign.unsqueeze(0).repeat(sc_log_prob.shape[0], 1, 1)
-    weight2_sc = torch.log(1 - torch.exp(sc_log_prob).unsqueeze(1) *
-                           lower_triang_sc.unsqueeze(0).repeat(sc_log_prob.shape[0], 1, 1) + 1e-10)
+    weight2_sc = sc_log_1min_prob.unsqueeze(1) * lower_triang_sc.unsqueeze(0).repeat(sc_log_1min_prob.shape[0], 1, 1)
 
     weight_fc = fc_log_prob.unsqueeze(2) * fc_assign.view(1,1,5,5).repeat(fc_log_prob.shape[0], 1, 1, 1)
-    weight2_fc = torch.log(1 - torch.exp(fc_log_prob).unsqueeze(2) *
-                           lower_triang_fc.unsqueeze(0).repeat(fc_log_prob.shape[0], 1, 1, 1) + 1e-10)
+    weight2_fc = fc_log_1min_prob.unsqueeze(2) * lower_triang_fc.unsqueeze(0).repeat(fc_log_1min_prob.shape[0], 1, 1, 1)
 
     log_WMC_sc = (weight_sc.sum(dim=2) + weight2_sc.sum(dim=2)).view(-1, 1).repeat(1, 5).view(-1, 100)
-    log_WMC_fc = (weight_fc.sum(dim=3) + weight2_fc.sum(dim=3)).view(-1,100)
+    log_WMC_fc = (weight_fc.sum(dim=3) + weight2_fc.sum(dim=3)).view(-1, 100)
 
     log_WMC = log_WMC_sc + log_WMC_fc
 
