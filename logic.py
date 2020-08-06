@@ -154,8 +154,7 @@ def cifar10_logic(variables, device):
     log_probabilities = torch.cat((log_probabilities, torch.zeros_like(log_probabilities[:, 0]).unsqueeze(1)), dim=1)
 
     weight = log_probabilities.unsqueeze(1) * assignments.unsqueeze(0).repeat(log_probabilities.shape[0], 1, 1)
-    weight2 = torch.log(1 - torch.exp(log_probabilities)
-                        .unsqueeze(1) * lower_triang.unsqueeze(0).repeat(log_probabilities.shape[0], 1, 1))
+    weight2 = torch.log(1 - torch.exp(log_probabilities).unsqueeze(1)*lower_triang.unsqueeze(0).repeat(log_probabilities.shape[0], 1, 1))
     log_WMC = (weight.sum(dim=2) + weight2.sum(dim=2))
 
     return log_WMC
