@@ -176,8 +176,8 @@ def cifar100_logic(variables, device):
 
     probabilities = F.sigmoid(variables)
 
-    log_probabilities = torch.log(probabilities)
-    log_1_min_prob = torch.log(1 - probabilities)
+    log_probabilities = torch.log(probabilities + 1e-5)
+    log_1_min_prob = torch.log(1 - probabilities + 1e-5)
 
     sc_pred = log_probabilities[:, :19]
     fc_pred = log_probabilities[:, 19:].view(log_probabilities.shape[0], -1, 4)
