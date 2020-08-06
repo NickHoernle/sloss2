@@ -33,7 +33,7 @@ from resnet import resnet
 from torch.distributions.dirichlet import Dirichlet
 from torch.nn.utils import clip_grad_norm_
 from torch.optim.lr_scheduler import StepLR
-from logic import LogicNet, cifar10_logic, cifar100_logic, superclass_mapping, super_class_label
+from logic import cifar10_logic, cifar100_logic, superclass_mapping, super_class_label, fc_mapping
 
 
 def str2bool(v):
@@ -119,10 +119,6 @@ def x_u_split(labels, num_labelled, num_classes):
     return labelled_idx, unlabelled_idx
 
 def create_dataset(opt, train):
-
-    def _init_fn(worker_id):
-        np.random.seed(opt.seed)
-
     transform = T.Compose([
         T.ToTensor(),
         T.Normalize(np.array([125.3, 123.0, 113.9]) / 255.0,
@@ -135,24 +131,43 @@ def create_dataset(opt, train):
             T.RandomCrop(32),
             transform
         ])
-
-        train_dataset = getattr(datasets, opt.dataset)(opt.dataroot, train=train, download=True, transform=transform)
-        num_classes = 10 if opt.dataset == 'CIFAR10' else 100
-
-        num_labelled = opt.num_labelled
-        num_unlabelled = len(train_dataset) - num_labelled
-        td_targets = train_dataset.targets
-        labelled_idxs, unlabelled_idxs = x_u_split(td_targets, num_labelled, num_classes)
-        labelled_set, unlabelled_set = [Subset(train_dataset, labelled_idxs), Subset(train_dataset, unlabelled_idxs)]
-        labelled_set = data.ConcatDataset([labelled_set for i in range(num_unlabelled // num_labelled + 1)])
-        labelled_set, _ = data.random_split(labelled_set, [num_unlabelled, len(labelled_set)-num_unlabelled])
-        train_dataset = Joint(labelled_set, unlabelled_set)
-        train_loader = DataLoader(
-            train_dataset, opt.batch_size, shuffle=True,
-            num_workers=opt.nthread, pin_memory=torch.cuda.is_available()
-        )
-        return train_loader
     return getattr(datasets, opt.dataset)(opt.dataroot, train=train, download=True, transform=transform)
+
+# def create_dataset(opt, train):
+#
+#     def _init_fn(worker_id):
+#         np.random.seed(opt.seed)
+#
+#     transform = T.Compose([
+#         T.ToTensor(),
+#         T.Normalize(np.array([125.3, 123.0, 113.9]) / 255.0,
+#                     np.array([63.0, 62.1, 66.7]) / 255.0),
+#     ])
+#     if train:
+#         transform = T.Compose([
+#             T.Pad(4, padding_mode='reflect'),
+#             T.RandomHorizontalFlip(),
+#             T.RandomCrop(32),
+#             transform
+#         ])
+#
+#         train_dataset = getattr(datasets, opt.dataset)(opt.dataroot, train=train, download=True, transform=transform)
+#         num_classes = 10 if opt.dataset == 'CIFAR10' else 100
+#
+#         num_labelled = opt.num_labelled
+#         num_unlabelled = len(train_dataset) - num_labelled
+#         td_targets = train_dataset.targets
+#         labelled_idxs, unlabelled_idxs = x_u_split(td_targets, num_labelled, num_classes)
+#         labelled_set, unlabelled_set = [Subset(train_dataset, labelled_idxs), Subset(train_dataset, unlabelled_idxs)]
+#         labelled_set = data.ConcatDataset([labelled_set for i in range(num_unlabelled // num_labelled + 1)])
+#         labelled_set, _ = data.random_split(labelled_set, [num_unlabelled, len(labelled_set)-num_unlabelled])
+#         train_dataset = Joint(labelled_set, unlabelled_set)
+#         train_loader = DataLoader(
+#             train_dataset, opt.batch_size, shuffle=True,
+#             num_workers=opt.nthread, pin_memory=torch.cuda.is_available()
+#         )
+#         return train_loader
+#     return getattr(datasets, opt.dataset)(opt.dataroot, train=train, download=True, transform=transform)
 
 def convert_to_one_hot(num_categories, labels, device):
     labels = torch.unsqueeze(labels, 1)
@@ -172,7 +187,7 @@ def main():
     device = "cuda:0" if opt.cuda else "cpu"
     print('parsed options:', vars(opt))
     epoch_step = json.loads(opt.epoch_step)
-    num_classes = 10 if opt.dataset == 'CIFAR10' else 100
+    num_classes = 9 if opt.dataset == 'CIFAR10' else 23
 
     torch.manual_seed(opt.seed)
     os.environ['CUDA_VISIBLE_DEVICES'] = opt.gpu_id
@@ -181,39 +196,39 @@ def main():
         return DataLoader(create_dataset(opt, mode), opt.batch_size, shuffle=mode,
                           num_workers=opt.nthread, pin_memory=torch.cuda.is_available())
 
-    global counter
+    global counter, super_class_accuracy
+    super_class_accuracy = []
     counter = 0
 
-    train_loader = create_dataset(opt, True)
+    train_loader = create_iterator(True)
     test_loader = create_iterator(False)
 
     global classes
-    global superclass_labels
-    global superclass_indexes
-    global constraint_accuracy, super_class_accuracy
+    global sc_mapping, superclass_indexes
 
     constraint_accuracy, super_class_accuracy = [], []
     superclass_indexes = {}
 
     if opt.dataset == "CIFAR100":
 
-        classes = test_loader.dataset.classes
+        classes = np.array(test_loader.dataset.classes)
+
+        sc_labels = np.array([super_class_label[superclass_mapping[c]] for c in classes])
+        fc_labels = np.array([fc_mapping[c] for c in classes])
+
+        sc_mapping = np.array([sc*5+fc for i, (sc, fc) in enumerate(zip(sc_labels, fc_labels))])
+
         superclass_labels = [super_class_label[superclass_mapping[c]] for c in classes]
 
         for cat in range(len(super_class_label)):
             indices = [i for i, x in enumerate(superclass_labels) if x == cat]
             superclass_indexes[cat] = indices
 
-        logic = cifar100_logic
+        logic = lambda x: cifar100_logic(x, device)
     else:
-        logic = cifar10_logic
+        logic =  lambda x: cifar10_logic(x, device)
 
     f, params = resnet(opt.depth, opt.width, num_classes)
-
-    logic_net = LogicNet(num_classes).to(device)
-    logic_opt = SGD(logic_net.parameters(), opt.lr, momentum=0.9, weight_decay=opt.weight_decay)
-    logic_scheduler = StepLR(logic_opt, step_size=50, gamma=0.1)
-
     def create_optimizer(opt, lr):
         print('creating optimizer with lr = ', lr)
         return SGD([v for v in params.values() if v.requires_grad], lr, momentum=0.9, weight_decay=opt.weight_decay)
@@ -244,113 +259,41 @@ def main():
         os.mkdir(opt.save)
 
     def h(sample):
-
-        global counter
-        global classes
-        global superclass_labels, superclass_indexes
-
-
-        l_sample = sample[0]
-        u_sample = sample[1]
-        inputs_l = cast(l_sample[0], opt.dtype)
-        targets_l = cast(l_sample[1], 'long')
-        inputs_u = cast(u_sample[0], opt.dtype)
-
-        b_size = inputs_u.size(0)
-        label = torch.full((b_size,), 1, device=device)
-
-        # logic_step(l_sample)
-        logic_step_predictions(sample)
-
-        y = data_parallel(f, inputs_l, params, sample[2], list(range(opt.ngpu))).float()
-        loss_prediction = F.cross_entropy(y, targets_l)
-
-        # add the normalizing flows logic layer here
-        if opt.sloss:
-
-            if counter >= opt.starter_counter:
-                logic_net.eval()
-                predictions = F.softmax(y, dim=1)
-                logic_pred = logic_net(predictions).squeeze(dim=1)
-                logic_loss = opt.sloss_weight*F.binary_cross_entropy(logic_pred, label)
-                import pdb
-                pdb.set_trace()
-                loss_prediction += logic_loss
-                # train the flow to follow the logical specification
-
-        return loss_prediction, y
-
-    def logic_step(sample):
-
-        global counter
-        global classes
-        global superclass_labels, superclass_indexes
+        global sc_mapping
 
         inputs = cast(sample[0], opt.dtype)
         targets = cast(sample[1], 'long')
-        one_hot_targets = convert_to_one_hot(num_classes, targets, device)
-
-        logic_net.train()
-        logic_opt.zero_grad()
-
-        common_params = {
-            "superclass_indexes": superclass_indexes,
-        }
-
-        true_res = logic(one_hot_targets, **common_params)
-        pred_res = logic_net(one_hot_targets).squeeze(dim=1)
-
-        loss_logic = F.binary_cross_entropy(pred_res, true_res)
-        loss_logic.backward()
-
-        logic_opt.step()
-
-    def logic_step_predictions(sample):
-
-        global counter
-        global classes
-        global superclass_labels, superclass_indexes
-
-        u_sample = sample[1]
-        inputs = cast(u_sample[0], opt.dtype)
-
-        logic_net.train()
-        logic_opt.zero_grad()
-
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
-        predictions = y - torch.logsumexp(y, dim=1).unsqueeze(1)
+        log_predictions = logic(y)
 
-        true_res = logic(predictions, superclass_indexes=superclass_indexes)
-        pred_res = logic_net(predictions).squeeze(dim=1)
+        if opt.dataset == "CIFAR100":
+            return F.nll_loss(log_predictions[:, sc_mapping], targets), log_predictions
 
-        loss_logic = F.binary_cross_entropy(pred_res, true_res)
-        loss_logic.backward()
-
-        logic_opt.step()
+        return F.nll_loss(log_predictions, targets), log_predictions
 
     def compute_loss_test(sample):
 
         global counter
-        global classes
-        global superclass_labels, superclass_indexes
-        global constraint_accuracy, super_class_accuracy
+        global classes, super_class_accuracy
+        global sc_mapping, superclass_indexes
 
         inputs = cast(sample[0], opt.dtype)
         targets = cast(sample[1], 'long')
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
-        log_predictions = y - torch.logsumexp(y, dim=1).unsqueeze(1)
-        loss_prediction = F.cross_entropy(y, targets)
+        log_predictions = logic(y)
 
-        logic_accuracy = logic(log_predictions, superclass_indexes=superclass_indexes)
-        constraint_accuracy += list(logic_accuracy)
         if opt.dataset == "CIFAR100":
+            sup_class_pred = log_predictions[:, sc_mapping]
             true_super_class_label = torch.tensor(
                 [super_class_label[superclass_mapping[classes[t]]] for t in targets]).to(device)
             superclass_predictions = torch.cat([log_predictions[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
                                                 for c in range(len(super_class_label))], dim=1).exp()
+
             super_class_accuracy += list(torch.argmax(superclass_predictions, dim=1) == true_super_class_label)
 
-        return loss_prediction, y
+            return F.nll_loss(log_predictions[:, sc_mapping], targets), log_predictions
+
+        return F.nll_loss(log_predictions, targets), y
 
     def log(t, state):
         torch.save(dict(params=params, epoch=t['epoch'], optimizer=state['optimizer'].state_dict()),
@@ -365,10 +308,7 @@ def main():
 
     def on_forward(state):
         loss = float(state['loss'])
-        if state["train"]:
-            classacc.add(state['output'].data, state['sample'][0][1])
-        else:
-            classacc.add(state['output'].data, state['sample'][1])
+        classacc.add(state['output'].data, state['sample'][1])
         meter_loss.add(loss)
         if state['train']:
             state['iterator'].set_postfix(loss=loss)
@@ -378,8 +318,8 @@ def main():
 
     def on_start_epoch(state):
 
-        # with torch.no_grad():
-        #     engine.test(compute_loss_test, test_loader)
+        with torch.no_grad():
+            engine.test(compute_loss_test, test_loader)
 
         classacc.reset()
         meter_loss.reset()
@@ -411,8 +351,6 @@ def main():
 
         super_class_accuracy_val = mean(super_class_accuracy)
         super_class_accuracy = []
-
-        logic_scheduler.step()
 
         print(log({
             "train_loss": train_loss[0],

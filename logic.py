@@ -129,34 +129,64 @@ super_class_label = {
     'vehicles 2': 19
 }
 
+fc_mapping = {}
 
-class LogicNet(nn.Module):
+sc_prev = ""
+count = 0
 
-    def __init__(self, num_categories):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(num_categories, 100),
-            nn.ReLU(True),
-            nn.Linear(100, 100),
-            nn.ReLU(True),
-            nn.Linear(100, 100),
-            nn.ReLU(True),
-            nn.Linear(100, 1),
-            nn.Sigmoid(),
-        )
+for fc, sc in sorted(superclass_mapping.items(), key=lambda x: x[1]):
 
-    def forward(self, x):
-        return self.net(x)
+    fc_mapping[fc] = count
+    count += 1
+
+    if sc != sc_prev:
+        if count > 1:
+            count = 0
+        sc_prev = sc
 
 
-def cifar10_logic(log_predictions, **kwargs):
-    predictions = log_predictions.exp()
-    logic = (predictions > 0.95).any(dim=1)
-    return logic.float()
+def cifar10_logic(variables, device):
+    # we are dealing with one-hot assigments
+    assignments = torch.eye(10).to(device)
+    lower_triang = torch.tril(torch.ones_like(assignments)) - assignments
 
-def cifar100_logic(predictions, superclass_indexes):
-    superclass_predictions = torch.cat([predictions[:, superclass_indexes[c]].sum(dim=1).unsqueeze(1)
-                                        for c in range(len(super_class_label))], dim=1)
+    log_probabilities = F.logsigmoid(variables)
+    log_probabilities = torch.cat((log_probabilities, torch.zeros_like(log_probabilities[:, 0]).unsqueeze(1)), dim=1)
 
-    logic = (superclass_predictions > 0.95).any(dim=1)
-    return logic.float()
+    weight = log_probabilities.unsqueeze(1) * assignments.unsqueeze(0).repeat(log_probabilities.shape[0], 1, 1)
+    weight2 = torch.log(1 - torch.exp(log_probabilities)
+                        .unsqueeze(1) * lower_triang.unsqueeze(0).repeat(log_probabilities.shape[0], 1, 1))
+    log_WMC = (weight.sum(dim=2) + weight2.sum(dim=2))
+
+    return log_WMC
+
+
+def cifar100_logic(variables, device):
+    # we are dealing with one-hot assigments
+    sc_assign = torch.eye(20).to(device)
+    fc_assign = torch.eye(5).to(device)
+
+    lower_triang_sc = torch.tril(torch.ones_like(sc_assign)) - sc_assign
+    lower_triang_fc = torch.tril(torch.ones_like(fc_assign)) - fc_assign
+
+    log_probabilities = F.logsigmoid(variables)
+
+    sc_predictions = log_probabilities[:, :19]
+    fc_predictions = log_probabilities[:, 19:]
+
+    sc_log_prob = torch.cat((sc_predictions, torch.zeros_like(sc_predictions[:, 0]).unsqueeze(1)), dim=1)
+    fc_log_prob = torch.cat((fc_predictions, torch.zeros_like(fc_predictions[:, 0]).unsqueeze(1)), dim=1)
+
+    weight_sc = sc_log_prob.unsqueeze(1) * sc_assign.unsqueeze(0).repeat(sc_log_prob.shape[0], 1, 1)
+    weight2_sc = torch.log(1 - torch.exp(sc_log_prob).unsqueeze(1) *
+                           lower_triang_sc.unsqueeze(0).repeat(sc_log_prob.shape[0], 1, 1))
+
+    weight_fc = fc_log_prob.unsqueeze(1) * fc_assign.unsqueeze(0).repeat(fc_log_prob.shape[0], 1, 1)
+    weight2_fc = torch.log(1 - torch.exp(fc_log_prob).unsqueeze(1) *
+                           lower_triang_fc.unsqueeze(0).repeat(fc_log_prob.shape[0], 1, 1))
+
+    log_WMC_sc = (weight_sc.sum(dim=2) + weight2_sc.sum(dim=2)).repeat(1, 5)
+    log_WMC_fc = (weight_fc.sum(dim=2) + weight2_fc.sum(dim=2)).view(-1, 1).repeat(1, 20).view(-1, 100)
+    log_WMC = log_WMC_sc + log_WMC_fc
+
+    return log_WMC
