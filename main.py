@@ -94,6 +94,7 @@ parser.add_argument("--sloss_weight", type=float, default=1,
 parser.add_argument("--starter_counter", default=-1, type=int)
 # parser.add_argument("--starter_counter", default=10, type=int)
 
+
 class Joint(data.Dataset):
     def __init__(self, dataset1, dataset2):
         self.dataset1 = dataset1
@@ -104,6 +105,7 @@ class Joint(data.Dataset):
 
     def __len__(self):
         return len(self.dataset1)
+
 
 def x_u_split(labels, num_labelled, num_classes):
     label_per_class = num_labelled // num_classes
@@ -117,6 +119,7 @@ def x_u_split(labels, num_labelled, num_classes):
         unlabelled_idx.extend(idx[label_per_class:])
 
     return labelled_idx, unlabelled_idx
+
 
 def create_dataset(opt, train):
     transform = T.Compose([
@@ -133,41 +136,6 @@ def create_dataset(opt, train):
         ])
     return getattr(datasets, opt.dataset)(opt.dataroot, train=train, download=True, transform=transform)
 
-# def create_dataset(opt, train):
-#
-#     def _init_fn(worker_id):
-#         np.random.seed(opt.seed)
-#
-#     transform = T.Compose([
-#         T.ToTensor(),
-#         T.Normalize(np.array([125.3, 123.0, 113.9]) / 255.0,
-#                     np.array([63.0, 62.1, 66.7]) / 255.0),
-#     ])
-#     if train:
-#         transform = T.Compose([
-#             T.Pad(4, padding_mode='reflect'),
-#             T.RandomHorizontalFlip(),
-#             T.RandomCrop(32),
-#             transform
-#         ])
-#
-#         train_dataset = getattr(datasets, opt.dataset)(opt.dataroot, train=train, download=True, transform=transform)
-#         num_classes = 10 if opt.dataset == 'CIFAR10' else 100
-#
-#         num_labelled = opt.num_labelled
-#         num_unlabelled = len(train_dataset) - num_labelled
-#         td_targets = train_dataset.targets
-#         labelled_idxs, unlabelled_idxs = x_u_split(td_targets, num_labelled, num_classes)
-#         labelled_set, unlabelled_set = [Subset(train_dataset, labelled_idxs), Subset(train_dataset, unlabelled_idxs)]
-#         labelled_set = data.ConcatDataset([labelled_set for i in range(num_unlabelled // num_labelled + 1)])
-#         labelled_set, _ = data.random_split(labelled_set, [num_unlabelled, len(labelled_set)-num_unlabelled])
-#         train_dataset = Joint(labelled_set, unlabelled_set)
-#         train_loader = DataLoader(
-#             train_dataset, opt.batch_size, shuffle=True,
-#             num_workers=opt.nthread, pin_memory=torch.cuda.is_available()
-#         )
-#         return train_loader
-#     return getattr(datasets, opt.dataset)(opt.dataroot, train=train, download=True, transform=transform)
 
 def convert_to_one_hot(num_categories, labels, device):
     labels = torch.unsqueeze(labels, 1)
@@ -175,10 +143,12 @@ def convert_to_one_hot(num_categories, labels, device):
     one_hot.scatter_(1, labels, 1)
     return one_hot
 
+
 def mean(numbers):
     if len(numbers) == 0:
         return float(0)
     return float(sum(numbers)) / max(len(numbers), 1)
+
 
 def main():
     # device = "cpu"
@@ -189,7 +159,7 @@ def main():
     epoch_step = json.loads(opt.epoch_step)
 
     if opt.sloss:
-        num_classes = 9 if opt.dataset == 'CIFAR10' else 99
+        num_classes = 9 if opt.dataset == 'CIFAR10' else 23
     else:
         num_classes = 10 if opt.dataset == 'CIFAR10' else 100
 
@@ -305,6 +275,14 @@ def main():
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
 
         if not opt.sloss:
+            if opt.dataset == "CIFAR100":
+                true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]]
+                                                       for t in targets]).to(device)
+                superclass_predictions = torch.cat([y[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
+                                                    for c in range(len(super_class_label))], dim=1).exp()
+
+                super_class_accuracy += list(torch.argmax(superclass_predictions, dim=1) == true_super_class_label)
+
             return F.cross_entropy(y, targets), y
 
         log_predictions = logic(y)
@@ -344,7 +322,7 @@ def main():
         state['epoch'] = epoch
 
     def on_start_epoch(state):
-        #
+
         # with torch.no_grad():
         #     engine.test(compute_loss_test, test_loader)
 
