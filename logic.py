@@ -204,4 +204,7 @@ def cifar100_logic(variables, device):
     log_WMC_sc = (weight_sc.sum(dim=2) + weight2_sc.sum(dim=2))
     log_WMC_fc = (weight_fc.sum(dim=3) + weight2_fc.sum(dim=3))
 
-    return log_WMC_sc, log_WMC_fc
+    log_WMC_sc_p = log_WMC_sc.view(-1, 1).repeat(1, 5).view(-1, 100)
+    log_WMC_fc_p = log_WMC_fc.view(-1, 100)
+
+    return log_WMC_sc, log_WMC_fc, (log_WMC_sc_p+log_WMC_fc_p)

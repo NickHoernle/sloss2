@@ -278,7 +278,7 @@ def main():
 
         if opt.dataset == "CIFAR100":
 
-            sc_log_pred, fc_log_pred = log_predictions
+            sc_log_pred, fc_log_pred, all_pred = log_predictions
 
             true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]]
                                                    for t in targets]).to(device)
@@ -290,7 +290,7 @@ def main():
             sc_nll = F.nll_loss(sc_log_pred, true_super_class_label)
             fc_nll = F.nll_loss(fc_log_pred_label, true_fine_class_label)
 
-            return sc_nll + fc_nll, log_predictions[:, sc_mapping]
+            return sc_nll + fc_nll, all_pred[:, sc_mapping]
 
         return F.nll_loss(log_predictions, targets), log_predictions
 
@@ -310,15 +310,17 @@ def main():
         log_predictions = logic(y)
 
         if opt.dataset == "CIFAR100":
-            sup_class_pred = log_predictions[:, sc_mapping]
+
+            sc_log_pred, fc_log_pred, all_pred = log_predictions
+
             true_super_class_label = torch.tensor(
                 [super_class_label[superclass_mapping[classes[t]]] for t in targets]).to(device)
-            superclass_predictions = torch.cat([sup_class_pred[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
+            superclass_predictions = torch.cat([sc_log_pred[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
                                                 for c in range(len(super_class_label))], dim=1).exp()
 
             super_class_accuracy += list(torch.argmax(superclass_predictions, dim=1) == true_super_class_label)
 
-            return F.nll_loss(log_predictions[:, sc_mapping], targets), log_predictions[:, sc_mapping]
+            return F.nll_loss(all_pred[:, sc_mapping], targets), all_pred[:, sc_mapping]
 
         return F.nll_loss(log_predictions, targets), log_predictions
 
