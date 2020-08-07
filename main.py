@@ -315,10 +315,8 @@ def main():
 
             true_super_class_label = torch.tensor(
                 [super_class_label[superclass_mapping[classes[t]]] for t in targets]).to(device)
-            superclass_predictions = torch.cat([sc_log_pred[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
-                                                for c in range(len(super_class_label))], dim=1).exp()
 
-            super_class_accuracy += list(torch.argmax(superclass_predictions, dim=1) == true_super_class_label)
+            super_class_accuracy += list(torch.argmax(sc_log_pred, dim=1) == true_super_class_label)
 
             return F.nll_loss(all_pred[:, sc_mapping], targets), all_pred[:, sc_mapping]
 
