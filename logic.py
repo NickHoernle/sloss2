@@ -135,14 +135,14 @@ sc_prev = ""
 count = 0
 
 for fc, sc in sorted(superclass_mapping.items(), key=lambda x: x[1]):
-
-    fc_mapping[fc] = count
-    count += 1
-
-    if sc != sc_prev:
-        if count > 1:
-            count = 0
+    if sc == sc_prev:
+        fc_mapping[fc] = count
+        count += 1
+    else:
+        count = 0
         sc_prev = sc
+        fc_mapping[fc] = count
+        count += 1
 
 
 def log_sigmoid(x):
