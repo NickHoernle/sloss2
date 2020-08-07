@@ -180,10 +180,8 @@ def cifar100_logic(variables, device):
     lower_triang_sc = torch.tril(torch.ones_like(sc_assign)) - sc_assign
     lower_triang_fc = torch.tril(torch.ones_like(fc_assign)) - fc_assign
 
-    probabilities = F.sigmoid(variables)
-
-    log_probabilities = torch.log(probabilities + 1e-5)
-    log_1_min_prob = torch.log(1 - probabilities + 1e-5)
+    log_probabilities = F.logsigmoid(variables)
+    log_1_min_prob = F.logsigmoid(-variables)
 
     sc_pred = log_probabilities[:, :19]
     fc_pred = log_probabilities[:, 19:].view(log_probabilities.shape[0], -1, 4)
