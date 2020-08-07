@@ -145,15 +145,21 @@ for fc, sc in sorted(superclass_mapping.items(), key=lambda x: x[1]):
         sc_prev = sc
 
 
+def log_sigmoid(x):
+    return x - torch.log1p(x)
+
+
+def log_sigmoid(x):
+    return x - torch.log1p(x)
+
+
 def cifar10_logic(variables, device):
     # we are dealing with one-hot assigments
     assignments = torch.eye(10).to(device)
     lower_triang = torch.tril(torch.ones_like(assignments)) - assignments
 
-    probabilities = F.sigmoid(variables)
-
-    log_probabilities = torch.log(probabilities)
-    log_1_min_prob = torch.log(1-probabilities)
+    log_probabilities = F.logsigmoid(variables)
+    log_1_min_prob = F.logsigmoid(-variables)
 
     log_prob = torch.cat((log_probabilities, torch.zeros_like(log_probabilities[:, 0]).unsqueeze(1)), dim=1)
     log_1_min_prob = torch.cat((log_1_min_prob, torch.zeros_like(log_1_min_prob[:, 0]).unsqueeze(1)), dim=1)
