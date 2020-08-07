@@ -307,7 +307,7 @@ def main():
 
             return F.nll_loss(log_predictions[:, sc_mapping], targets), log_predictions[:, sc_mapping]
 
-        return F.nll_loss(log_predictions, targets), y
+        return F.nll_loss(log_predictions, targets), log_predictions
 
     def log(t, state):
         torch.save(dict(params=params, epoch=t['epoch'], optimizer=state['optimizer'].state_dict()),
