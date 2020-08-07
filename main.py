@@ -68,7 +68,7 @@ parser.add_argument('--lr', default=0.1, type=float)
 parser.add_argument('--epochs', default=400, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--weight_decay', default=0.0005, type=float)
-parser.add_argument('--epoch_step', default='[2, 50, 100, 150]', type=str,
+parser.add_argument('--epoch_step', default='[5, 50, 100, 150]', type=str,
                     help='json list with epochs to drop lr on')
 parser.add_argument('--lr_decay_ratio', default=0.2, type=float)
 parser.add_argument('--resume', default='', type=str)
@@ -277,7 +277,20 @@ def main():
         log_predictions = logic(y)
 
         if opt.dataset == "CIFAR100":
-            return F.nll_loss(log_predictions[:, sc_mapping], targets), log_predictions[:, sc_mapping]
+
+            sc_log_pred, fc_log_pred = log_predictions
+
+            true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]]
+                                                   for t in targets]).to(device)
+            true_fine_class_label = torch.tensor([fc_mapping[classes[t]]
+                                                   for t in targets]).to(device)
+
+            fc_log_pred_label = fc_log_pred[np.arange(len(true_super_class_label)), true_super_class_label, :]
+
+            sc_nll = F.nll_loss(sc_log_pred, true_super_class_label)
+            fc_nll = F.nll_loss(fc_log_pred_label, true_fine_class_label)
+
+            return sc_nll + fc_nll, log_predictions[:, sc_mapping]
 
         return F.nll_loss(log_predictions, targets), log_predictions
 

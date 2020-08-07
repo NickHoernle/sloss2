@@ -201,9 +201,7 @@ def cifar100_logic(variables, device):
     weight_fc = fc_log_prob.unsqueeze(2) * fc_assign.view(1,1,5,5).repeat(fc_log_prob.shape[0], 1, 1, 1)
     weight2_fc = fc_log_1min_prob.unsqueeze(2) * lower_triang_fc.unsqueeze(0).repeat(fc_log_1min_prob.shape[0], 1, 1, 1)
 
-    log_WMC_sc = (weight_sc.sum(dim=2) + weight2_sc.sum(dim=2)).view(-1, 1).repeat(1, 5).view(-1, 100)
-    log_WMC_fc = (weight_fc.sum(dim=3) + weight2_fc.sum(dim=3)).view(-1, 100)
+    log_WMC_sc = (weight_sc.sum(dim=2) + weight2_sc.sum(dim=2))
+    log_WMC_fc = (weight_fc.sum(dim=3) + weight2_fc.sum(dim=3))
 
-    log_WMC = log_WMC_sc + log_WMC_fc
-
-    return log_WMC
+    return log_WMC_sc, log_WMC_fc
