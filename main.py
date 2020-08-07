@@ -191,7 +191,7 @@ def main():
     if opt.sloss:
         num_classes = 9 if opt.dataset == 'CIFAR10' else 99
     else:
-        num_classes = 9 if opt.dataset == 'CIFAR10' else 99
+        num_classes = 10 if opt.dataset == 'CIFAR10' else 100
 
     torch.manual_seed(opt.seed)
     os.environ['CUDA_VISIBLE_DEVICES'] = opt.gpu_id
