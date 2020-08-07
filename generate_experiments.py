@@ -15,11 +15,13 @@ base_call = (f"python main.py --save {DATA_HOME}/logs/resnet_$RANDOM$RANDOM "
              f"--starter_counter 10 --num_labelled 4000 --cuda")
 
 repeats = 1
-sloss = [True]
-# dataset = ["CIFAR10", "CIFAR100"]
+
+sloss = [True, False]
+dataset = ["CIFAR10", "CIFAR100"]
 dataset = ["CIFAR10"]
-learning_rate = [1, 1e-1, 5e-2, 1e-2, 5e-3]
-lr_decay_ratio = [.999, .99, .9]
+
+learning_rate = [1e-1, 5e-2, 1e-2, 5e-3, 1e-3]
+lr_decay_ratio = [.1]
 
 settings = [(lr, sloss_, lr_decay_ratio_, dataset_, rep)
             for lr in learning_rate

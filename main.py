@@ -68,7 +68,7 @@ parser.add_argument('--lr', default=0.1, type=float)
 parser.add_argument('--epochs', default=400, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--weight_decay', default=0.0005, type=float)
-parser.add_argument('--epoch_step', default='[60,120,160]', type=str,
+parser.add_argument('--epoch_step', default='[50,100,150,250]', type=str,
                     help='json list with epochs to drop lr on')
 parser.add_argument('--lr_decay_ratio', default=0.2, type=float)
 parser.add_argument('--resume', default='', type=str)
@@ -187,7 +187,11 @@ def main():
     device = "cuda:0" if opt.cuda else "cpu"
     print('parsed options:', vars(opt))
     epoch_step = json.loads(opt.epoch_step)
-    num_classes = 9 if opt.dataset == 'CIFAR10' else 99
+
+    if opt.sloss:
+        num_classes = 9 if opt.dataset == 'CIFAR10' else 99
+    else:
+        num_classes = 9 if opt.dataset == 'CIFAR10' else 99
 
     torch.manual_seed(opt.seed)
     os.environ['CUDA_VISIBLE_DEVICES'] = opt.gpu_id
@@ -229,6 +233,7 @@ def main():
         logic =  lambda x: cifar10_logic(x, device)
 
     f, params = resnet(opt.depth, opt.width, num_classes)
+
     def create_optimizer(opt, lr):
         print('creating optimizer with lr = ', lr)
         return SGD([v for v in params.values() if v.requires_grad], lr, momentum=0.9, weight_decay=opt.weight_decay)
@@ -266,6 +271,9 @@ def main():
         targets = cast(sample[1], 'long')
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
 
+        if not opt.sloss:
+            return F.cross_entropy(y, targets), y
+
         log_predictions = logic(y)
 
         if opt.dataset == "CIFAR100":
@@ -282,6 +290,10 @@ def main():
         inputs = cast(sample[0], opt.dtype)
         targets = cast(sample[1], 'long')
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
+
+        if not opt.sloss:
+            return F.cross_entropy(y, targets), y
+
         log_predictions = logic(y)
 
         if opt.dataset == "CIFAR100":
