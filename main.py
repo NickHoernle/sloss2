@@ -159,7 +159,7 @@ def main():
     epoch_step = json.loads(opt.epoch_step)
 
     if opt.sloss:
-        num_classes = 9 if opt.dataset == 'CIFAR10' else 23
+        num_classes = 9 if opt.dataset == 'CIFAR10' else 99
     else:
         num_classes = 10 if opt.dataset == 'CIFAR10' else 100
 
@@ -255,10 +255,10 @@ def main():
             true_fine_class_label = torch.tensor([fc_mapping[classes[t]]
                                                    for t in targets]).to(device)
 
-            # fc_pred_labels = fc_log_pred[np.arange(len(true_super_class_label)), true_super_class_label, :]
+            fc_pred_labels = fc_log_pred[np.arange(len(true_super_class_label)), true_super_class_label, :]
 
             sc_nll = F.nll_loss(sc_log_pred, true_super_class_label)
-            fc_nll = F.nll_loss(sc_log_pred, true_fine_class_label)
+            fc_nll = F.nll_loss(fc_pred_labels, true_fine_class_label)
 
             return sc_nll + fc_nll, all_pred[:, sc_mapping]
 
