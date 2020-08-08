@@ -184,36 +184,36 @@ def cifar100_logic(variables, device):
     log_1_min_prob = F.logsigmoid(-variables)
 
     sc_pred = log_probabilities[:, :19]
-    # fc_pred = log_probabilities[:, 19:]
-    fc_pred = log_probabilities[:, 19:].view(log_probabilities.shape[0], -1, 4)
+    fc_pred = log_probabilities[:, 19:]
+    # fc_pred = log_probabilities[:, 19:].view(log_probabilities.shape[0], -1, 4)
 
     sc_1min_pred = log_1_min_prob[:, :19]
-    # fc_1min_pred = log_1_min_prob[:, 19:]
-    fc_1min_pred = log_1_min_prob[:, 19:].view(log_1_min_prob.shape[0], -1, 4)
+    fc_1min_pred = log_1_min_prob[:, 19:]
+    # fc_1min_pred = log_1_min_prob[:, 19:].view(log_1_min_prob.shape[0], -1, 4)
 
     sc_log_prob = torch.cat((sc_pred, torch.zeros_like(sc_pred[:, 0]).unsqueeze(1)), dim=1)
-    # fc_log_prob = torch.cat((fc_pred, torch.zeros_like(fc_pred[:, 0]).unsqueeze(1)), dim=1)
-    fc_log_prob = torch.cat((fc_pred, torch.zeros_like(fc_pred[:, :, 0]).unsqueeze(2)), dim=2)
+    fc_log_prob = torch.cat((fc_pred, torch.zeros_like(fc_pred[:, 0]).unsqueeze(1)), dim=1)
+    # fc_log_prob = torch.cat((fc_pred, torch.zeros_like(fc_pred[:, :, 0]).unsqueeze(2)), dim=2)
 
     sc_log_1min_prob = torch.cat((sc_1min_pred, torch.zeros_like(sc_1min_pred[:, 0]).unsqueeze(1)), dim=1)
-    # fc_log_1min_prob = torch.cat((fc_1min_pred, torch.zeros_like(fc_1min_pred[:, 0]).unsqueeze(1)), dim=1)
-    fc_log_1min_prob = torch.cat((fc_1min_pred, torch.zeros_like(fc_1min_pred[:, :, 0]).unsqueeze(2)), dim=2)
+    fc_log_1min_prob = torch.cat((fc_1min_pred, torch.zeros_like(fc_1min_pred[:, 0]).unsqueeze(1)), dim=1)
+    # fc_log_1min_prob = torch.cat((fc_1min_pred, torch.zeros_like(fc_1min_pred[:, :, 0]).unsqueeze(2)), dim=2)
 
     weight_sc = sc_log_prob.unsqueeze(1) * sc_assign.unsqueeze(0).repeat(sc_log_prob.shape[0], 1, 1)
     weight2_sc = sc_log_1min_prob.unsqueeze(1) * lower_triang_sc.unsqueeze(0).repeat(sc_log_1min_prob.shape[0], 1, 1)
 
-    # weight_fc = fc_log_prob.unsqueeze(1) * fc_assign.unsqueeze(0).repeat(fc_log_prob.shape[0], 1, 1)
-    # weight2_fc = fc_log_1min_prob.unsqueeze(1) * lower_triang_fc.unsqueeze(0).repeat(fc_log_1min_prob.shape[0], 1, 1)
+    weight_fc = fc_log_prob.unsqueeze(1) * fc_assign.unsqueeze(0).repeat(fc_log_prob.shape[0], 1, 1)
+    weight2_fc = fc_log_1min_prob.unsqueeze(1) * lower_triang_fc.unsqueeze(0).repeat(fc_log_1min_prob.shape[0], 1, 1)
 
-    weight_fc = fc_log_prob.unsqueeze(2) * fc_assign.view(1,1,5,5).repeat(fc_log_prob.shape[0], 1, 1, 1)
-    weight2_fc = fc_log_1min_prob.unsqueeze(2) * lower_triang_fc.unsqueeze(0).repeat(fc_log_1min_prob.shape[0], 1, 1, 1)
+    # weight_fc = fc_log_prob.unsqueeze(2) * fc_assign.view(1,1,5,5).repeat(fc_log_prob.shape[0], 1, 1, 1)
+    # weight2_fc = fc_log_1min_prob.unsqueeze(2) * lower_triang_fc.unsqueeze(0).repeat(fc_log_1min_prob.shape[0], 1, 1, 1)
 
     log_WMC_sc = (weight_sc.sum(dim=2) + weight2_sc.sum(dim=2))
-    # log_WMC_fc = (weight_fc.sum(dim=2) + weight2_fc.sum(dim=2))
-    log_WMC_fc = (weight_fc.sum(dim=3) + weight2_fc.sum(dim=3))
+    log_WMC_fc = (weight_fc.sum(dim=2) + weight2_fc.sum(dim=2))
+    # log_WMC_fc = (weight_fc.sum(dim=3) + weight2_fc.sum(dim=3))
 
     log_WMC_sc_p = log_WMC_sc.view(-1, 1).repeat(1, 5).view(-1, 100)
-    # log_WMC_fc_p = log_WMC_fc.repeat(1, 20)
-    log_WMC_fc_p = log_WMC_fc.view(-1, 100)
+    log_WMC_fc_p = log_WMC_fc.repeat(1, 20)
+    # log_WMC_fc_p = log_WMC_fc.view(-1, 100)
 
     return log_WMC_sc, log_WMC_fc, (log_WMC_sc_p+log_WMC_fc_p)

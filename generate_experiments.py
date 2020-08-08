@@ -16,8 +16,8 @@ base_call = (f"python main.py --save {DATA_HOME}/logs/resnet_$RANDOM$RANDOM "
 
 repeats = 1
 
-sloss = [True, False]
-dataset = ["CIFAR10", "CIFAR100"]
+sloss = [True]
+dataset = ["CIFAR100"]
 learning_rate = [5e-1, 2e-1, 1e-1, 5e-2]
 lr_decay_ratio = [.1]
 
