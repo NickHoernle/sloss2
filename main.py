@@ -246,7 +246,7 @@ def main():
 
         logic_net.train()
         true_logic = logic(y.detach())
-        pred = logic_net(y)
+        pred = logic_net(y.detach())
         logic_loss = F.binary_cross_entropy(pred, true_logic)
         logic_loss.backward()
         logic_opt.step()
