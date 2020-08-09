@@ -174,8 +174,10 @@ def main():
     train_loader = create_iterator(True)
     test_loader = create_iterator(False)
 
-    global classes
+    global classes, counter
     global sc_mapping, superclass_indexes
+
+    counter = 0
 
     constraint_accuracy, super_class_accuracy = [], []
     superclass_indexes = {}
@@ -237,7 +239,7 @@ def main():
         os.mkdir(opt.save)
 
     def h(sample):
-        global sc_mapping
+        global sc_mapping, counter
 
         inputs = cast(sample[0], opt.dtype)
         targets = cast(sample[1], 'long')
@@ -251,13 +253,17 @@ def main():
         logic_loss.backward()
         logic_opt.step()
 
-        logic_net.eval()
-        y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
-        logic_pred = logic_net(y)
-        label = torch.full((inputs.shape[0],), 1).to(device)
-        logic_loss = F.binary_cross_entropy(logic_pred, label)
+        if counter >= 10:
 
-        return F.cross_entropy(y, targets) + logic_loss, y
+            logic_net.eval()
+            y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
+            logic_pred = logic_net(y)
+            label = torch.full((inputs.shape[0],), 1).to(device)
+            logic_loss = F.binary_cross_entropy(logic_pred, label)
+
+            return F.cross_entropy(y, targets) + logic_loss, y
+
+        return F.cross_entropy(y, targets), y
 
 
         # if opt.dataset == "CIFAR100":
@@ -348,7 +354,9 @@ def main():
             state['optimizer'] = create_optimizer(opt, lr * opt.lr_decay_ratio)
 
     def on_end_epoch(state):
-        global constraint_accuracy, super_class_accuracy
+        global constraint_accuracy, super_class_accuracy, counter
+
+        counter += 1
 
         train_loss = meter_loss.value()
         train_acc = classacc.value()
