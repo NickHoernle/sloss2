@@ -245,8 +245,9 @@ def main():
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
 
         logic_net.train()
-        true_logic = logic(y.detach())
-        pred = logic_net(y.detach())
+        log_probs = torch.log_softmax(y.detach(), dim=1)
+        true_logic = logic(log_probs)
+        pred = logic_net(log_probs)
         logic_loss = F.binary_cross_entropy(pred, true_logic)
         logic_loss.backward()
         logic_opt.step()
@@ -255,7 +256,8 @@ def main():
 
             logic_net.eval()
             y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
-            logic_pred = logic_net(y)
+            log_probs = torch.log_softmax(y, dim=1)
+            logic_pred = logic_net(log_probs)
             label = torch.full((inputs.shape[0],), 1).to(device)
             logic_loss = F.binary_cross_entropy(logic_pred, label)
 

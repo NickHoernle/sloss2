@@ -174,7 +174,8 @@ def log_sigmoid(x):
 
 
 def cifar10_logic(variables, device):
-    return ((variables > 0.95) | (variables < 0.05)).all(dim=1).float()
+    probs = variables.exp()
+    return ((probs > 0.95) | (probs < 0.05)).all(dim=1).float()
     # we are dealing with one-hot assigments
     # assignments = torch.eye(10).to(device)
     # lower_triang = torch.tril(torch.ones_like(assignments)) - assignments
