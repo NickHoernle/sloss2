@@ -202,6 +202,7 @@ def main():
         logic_net = LogicNet(10)
         logic =  lambda x: cifar10_logic(x, device)
 
+    logic_net.to(device)
     f, params = resnet(opt.depth, opt.width, num_classes)
     logic_opt = Adam(logic_net.parameters(), 1e-3)
 
