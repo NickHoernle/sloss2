@@ -174,10 +174,8 @@ def main():
     train_loader = create_iterator(True)
     test_loader = create_iterator(False)
 
-    global classes, counter
+    global classes
     global sc_mapping, superclass_indexes
-
-    counter = 0
 
     constraint_accuracy, super_class_accuracy = [], []
     superclass_indexes = {}
@@ -354,9 +352,7 @@ def main():
             state['optimizer'] = create_optimizer(opt, lr * opt.lr_decay_ratio)
 
     def on_end_epoch(state):
-        global constraint_accuracy, super_class_accuracy, counter
-
-        counter += 1
+        global constraint_accuracy, super_class_accuracy
 
         train_loss = meter_loss.value()
         train_acc = classacc.value()
