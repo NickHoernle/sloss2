@@ -33,7 +33,7 @@ from resnet import resnet
 from torch.distributions.dirichlet import Dirichlet
 from torch.nn.utils import clip_grad_norm_
 from torch.optim.lr_scheduler import StepLR
-from logic import cifar10_logic, cifar100_logic, superclass_mapping, super_class_label, fc_mapping
+from logic import cifar10_logic, cifar100_logic, superclass_mapping, super_class_label, fc_mapping, LogicNet
 
 
 def str2bool(v):
@@ -158,10 +158,7 @@ def main():
     print('parsed options:', vars(opt))
     epoch_step = json.loads(opt.epoch_step)
 
-    if opt.sloss:
-        num_classes = 9 if opt.dataset == 'CIFAR10' else 23
-    else:
-        num_classes = 10 if opt.dataset == 'CIFAR10' else 100
+    num_classes = 10 if opt.dataset == 'CIFAR10' else 100
 
     torch.manual_seed(opt.seed)
     os.environ['CUDA_VISIBLE_DEVICES'] = opt.gpu_id
@@ -198,11 +195,15 @@ def main():
             indices = [i for i, x in enumerate(superclass_labels) if x == cat]
             superclass_indexes[cat] = indices
 
+        logic_net = LogicNet(100)
+
         logic = lambda x: cifar100_logic(x, device)
     else:
+        logic_net = LogicNet(10)
         logic =  lambda x: cifar10_logic(x, device)
 
     f, params = resnet(opt.depth, opt.width, num_classes)
+    logic_opt = Adam(logic_net.parameters(), 1e-3)
 
     def create_optimizer(opt, lr):
         print('creating optimizer with lr = ', lr)
@@ -239,30 +240,40 @@ def main():
 
         inputs = cast(sample[0], opt.dtype)
         targets = cast(sample[1], 'long')
+
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
 
-        if not opt.sloss:
-            return F.cross_entropy(y, targets), y
+        logic_net.train()
+        true_logic = logic(y.detach())
+        pred = logic_net(y)
+        logic_loss = F.binary_cross_entropy(pred, true_logic)
+        logic_loss.backward()
+        logic_opt.step()
 
-        log_predictions = logic(y)
+        logic_net.eval()
+        y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
+        logic_pred = logic_net(y)
+        label = torch.full((inputs.shape[0],), 1).to(device)
+        logic_loss = F.binary_cross_entropy(logic_pred, label)
 
-        if opt.dataset == "CIFAR100":
+        return F.cross_entropy(y, targets) + logic_loss, y
 
-            sc_log_pred, fc_log_pred, all_pred = log_predictions
 
-            true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]]
-                                                   for t in targets]).to(device)
-            true_fine_class_label = torch.tensor([fc_mapping[classes[t]]
-                                                   for t in targets]).to(device)
-
-            # fc_pred_labels = fc_log_pred[np.arange(len(true_super_class_label)), true_super_class_label, :]
-
-            sc_nll = F.nll_loss(sc_log_pred, true_super_class_label)
-            fc_nll = F.nll_loss(fc_log_pred, true_fine_class_label)
-
-            return sc_nll + fc_nll, all_pred[:, sc_mapping]
-
-        return F.nll_loss(log_predictions, targets), log_predictions
+        # if opt.dataset == "CIFAR100":
+        #
+        #     sc_log_pred, fc_log_pred, all_pred = log_predictions
+        #
+        #     true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]]
+        #                                            for t in targets]).to(device)
+        #     true_fine_class_label = torch.tensor([fc_mapping[classes[t]]
+        #                                            for t in targets]).to(device)
+        #
+        #     # fc_pred_labels = fc_log_pred[np.arange(len(true_super_class_label)), true_super_class_label, :]
+        #
+        #     sc_nll = F.nll_loss(sc_log_pred, true_super_class_label)
+        #     fc_nll = F.nll_loss(fc_log_pred, true_fine_class_label)
+        #
+        #     return sc_nll + fc_nll, all_pred[:, sc_mapping]
 
     def compute_loss_test(sample):
 
@@ -274,31 +285,30 @@ def main():
         targets = cast(sample[1], 'long')
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
 
-        if not opt.sloss:
-            if opt.dataset == "CIFAR100":
-                true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]]
-                                                       for t in targets]).to(device)
-                superclass_predictions = torch.cat([y[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
-                                                    for c in range(len(super_class_label))], dim=1).exp()
-
-                super_class_accuracy += list(torch.argmax(superclass_predictions, dim=1) == true_super_class_label)
-
-            return F.cross_entropy(y, targets), y
-
-        log_predictions = logic(y)
-
         if opt.dataset == "CIFAR100":
+            true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]]
+                                                   for t in targets]).to(device)
+            superclass_predictions = torch.cat([y[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
+                                                for c in range(len(super_class_label))], dim=1).exp()
 
-            sc_log_pred, fc_log_pred, all_pred = log_predictions
+            super_class_accuracy += list(torch.argmax(superclass_predictions, dim=1) == true_super_class_label)
 
-            true_super_class_label = torch.tensor(
-                [super_class_label[superclass_mapping[classes[t]]] for t in targets]).to(device)
+        return F.cross_entropy(y, targets), y
 
-            super_class_accuracy += list(torch.argmax(sc_log_pred, dim=1) == true_super_class_label)
-
-            return F.nll_loss(all_pred[:, sc_mapping], targets), all_pred[:, sc_mapping]
-
-        return F.nll_loss(log_predictions, targets), log_predictions
+        # log_predictions = logic(y)
+        #
+        # if opt.dataset == "CIFAR100":
+        #
+        #     sc_log_pred, fc_log_pred, all_pred = log_predictions
+        #
+        #     true_super_class_label = torch.tensor(
+        #         [super_class_label[superclass_mapping[classes[t]]] for t in targets]).to(device)
+        #
+        #     super_class_accuracy += list(torch.argmax(sc_log_pred, dim=1) == true_super_class_label)
+        #
+        #     return F.nll_loss(all_pred[:, sc_mapping], targets), all_pred[:, sc_mapping]
+        #
+        # return F.nll_loss(log_predictions, targets), log_predictions
 
     def log(t, state):
         torch.save(dict(params=params, epoch=t['epoch'], optimizer=state['optimizer'].state_dict()),

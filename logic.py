@@ -134,6 +134,26 @@ fc_mapping = {}
 sc_prev = ""
 count = 0
 
+class LogicNet(nn.Module):
+
+    def __init__(self, num_dim):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(num_dim, 500),
+            nn.ReLU(True),
+            nn.Linear(500, 1000),
+            nn.ReLU(True),
+            nn.Linear(1000, 1000),
+            nn.ReLU(True),
+            nn.Linear(1000, 25),
+            nn.ReLU(True),
+            nn.Linear(25, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
 for fc, sc in sorted(superclass_mapping.items(), key=lambda x: x[1]):
     if sc == sc_prev:
         fc_mapping[fc] = count
@@ -154,22 +174,23 @@ def log_sigmoid(x):
 
 
 def cifar10_logic(variables, device):
+    return ((variables > 0.95) | (variables < 0.05)).all(dim=1).float()
     # we are dealing with one-hot assigments
-    assignments = torch.eye(10).to(device)
-    lower_triang = torch.tril(torch.ones_like(assignments)) - assignments
-
-    log_probabilities = F.logsigmoid(variables)
-    log_1_min_prob = F.logsigmoid(-variables)
-
-    log_prob = torch.cat((log_probabilities, torch.zeros_like(log_probabilities[:, 0]).unsqueeze(1)), dim=1)
-    log_1_min_prob = torch.cat((log_1_min_prob, torch.zeros_like(log_1_min_prob[:, 0]).unsqueeze(1)), dim=1)
-
-    weight = log_prob.unsqueeze(1) * assignments.unsqueeze(0).repeat(log_prob.shape[0], 1, 1)
-    weight2 = log_1_min_prob.unsqueeze(1) * lower_triang.unsqueeze(0).repeat(log_1_min_prob.shape[0], 1, 1)
-
-    log_WMC = (weight.sum(dim=2) + weight2.sum(dim=2))
-
-    return log_WMC
+    # assignments = torch.eye(10).to(device)
+    # lower_triang = torch.tril(torch.ones_like(assignments)) - assignments
+    #
+    # log_probabilities = F.logsigmoid(variables)
+    # log_1_min_prob = F.logsigmoid(-variables)
+    #
+    # log_prob = torch.cat((log_probabilities, torch.zeros_like(log_probabilities[:, 0]).unsqueeze(1)), dim=1)
+    # log_1_min_prob = torch.cat((log_1_min_prob, torch.zeros_like(log_1_min_prob[:, 0]).unsqueeze(1)), dim=1)
+    #
+    # weight = log_prob.unsqueeze(1) * assignments.unsqueeze(0).repeat(log_prob.shape[0], 1, 1)
+    # weight2 = log_1_min_prob.unsqueeze(1) * lower_triang.unsqueeze(0).repeat(log_1_min_prob.shape[0], 1, 1)
+    #
+    # log_WMC = (weight.sum(dim=2) + weight2.sum(dim=2))
+    #
+    # return log_WMC
 
 
 def cifar100_logic(variables, device):
