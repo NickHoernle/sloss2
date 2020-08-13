@@ -190,7 +190,7 @@ def log_sigmoid(x):
 
 
 def cifar10_logic(variables, device):
-    probs = variables.exp()
+    probs = torch.softmax(variables, dim=1)
     return ((probs > 0.95) | (probs < 0.05)).all(dim=1).float()
     # we are dealing with one-hot assigments
     # assignments = torch.eye(10).to(device)
