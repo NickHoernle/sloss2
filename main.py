@@ -228,10 +228,10 @@ def main():
 
     def create_encoder_opt(opt, lr):
         params_ = [v for v in params.values() if v.requires_grad]
-        return SGD(params_, lr*1e-1, momentum=0.9, weight_decay=opt.weight_decay)
+        return SGD(params_, lr, momentum=0.9, weight_decay=opt.weight_decay)
 
     def create_decoder_opt(opt, lr):
-        return SGD(decoder_net.parameters(), lr*1e-1, momentum=0.9, weight_decay=opt.weight_decay)
+        return SGD(decoder_net.parameters(), lr, momentum=0.9, weight_decay=opt.weight_decay)
 
     def create_logic_opt(opt, lr):
         return SGD(logic_net.parameters(), lr, momentum=0.9, weight_decay=opt.weight_decay)
@@ -291,7 +291,7 @@ def main():
             label = torch.full((inputs.size(0),), 0, device=device)
             opt_enc.zero_grad()
             pred_logic = logic_net(predictions).squeeze()
-            loss = F.binary_cross_entropy(pred_logic, label) + KLD
+            loss = F.binary_cross_entropy(pred_logic, label)
             loss.backward()
             opt_enc.step()
 
