@@ -33,7 +33,15 @@ from resnet import resnet
 from torch.distributions.dirichlet import Dirichlet
 from torch.nn.utils import clip_grad_norm_
 from torch.optim.lr_scheduler import StepLR
-from logic import cifar10_logic, cifar100_logic, superclass_mapping, super_class_label, fc_mapping, LogicNet
+from logic import (
+    cifar10_logic,
+    cifar100_logic,
+    superclass_mapping,
+    super_class_label,
+    fc_mapping,
+    LogicNet,
+    Decoder
+)
 
 
 def str2bool(v):
@@ -150,6 +158,13 @@ def mean(numbers):
     return float(sum(numbers)) / max(len(numbers), 1)
 
 
+def resample(y, hidden_dim=50):
+    mu, logvar = y[:, :hidden_dim], y[:, hidden_dim:]
+    std = torch.exp(0.5 * logvar)
+    eps = torch.randn_like(std)
+    return (mu, logvar, mu + eps*std)
+
+
 def main():
     # device = "cpu"
 
@@ -158,6 +173,7 @@ def main():
     print('parsed options:', vars(opt))
     epoch_step = json.loads(opt.epoch_step)
 
+    hidden_dim = 50
     num_classes = 10 if opt.dataset == 'CIFAR10' else 100
 
     torch.manual_seed(opt.seed)
@@ -195,20 +211,21 @@ def main():
             indices = [i for i, x in enumerate(superclass_labels) if x == cat]
             superclass_indexes[cat] = indices
 
-        logic_net = LogicNet(100)
-
         logic = lambda x: cifar100_logic(x, device)
     else:
         logic_net = LogicNet(10)
         logic =  lambda x: cifar10_logic(x, device)
 
-    logic_net.to(device)
-    f, params = resnet(opt.depth, opt.width, num_classes)
+    logic_net = LogicNet(num_dim=num_classes).to(device)
+    decoder_net = Decoder(hidden_dim=hidden_dim, num_dim=num_classes).to(device)
+
+    f, params = resnet(opt.depth, opt.width, hidden_dim*2)
     logic_opt = Adam(logic_net.parameters(), 1e-3)
 
     def create_optimizer(opt, lr):
         print('creating optimizer with lr = ', lr)
-        return SGD([v for v in params.values() if v.requires_grad], lr, momentum=0.9, weight_decay=opt.weight_decay)
+        params_ = [v for v in params.values() if v.requires_grad] + list(decoder_net.parameters())
+        return SGD(params_, lr, momentum=0.9, weight_decay=opt.weight_decay)
         # return Adam([v for v in params.values() if v.requires_grad], lr)
 
     optimizer = create_optimizer(opt, opt.lr)
@@ -243,27 +260,31 @@ def main():
         targets = cast(sample[1], 'long')
 
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
+        (mu, logvar, z) = resample(y)
+        predictions = decoder_net(z)
 
-        logic_net.train()
-        log_probs = torch.log_softmax(y.detach(), dim=1)
-        true_logic = logic(log_probs)
-        pred = logic_net(log_probs)
-        logic_loss = F.binary_cross_entropy(pred, true_logic.unsqueeze(1))
-        logic_loss.backward()
-        logic_opt.step()
+        KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
 
-        if counter >= -1:
+        # logic_net.train()
+        # log_probs = torch.log_softmax(y.detach(), dim=1)
+        # true_logic = logic(log_probs)
+        # pred = logic_net(log_probs)
+        # logic_loss = F.binary_cross_entropy(pred, true_logic.unsqueeze(1))
+        # logic_loss.backward()
+        # logic_opt.step()
+        #
+        # if counter >= -1:
+        #
+        #     logic_net.eval()
+        #     y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
+        #     log_probs = torch.log_softmax(y, dim=1)
+        #     logic_pred = logic_net(log_probs)
+        #     label = torch.full((inputs.shape[0],), 1).to(device)
+        #     logic_loss = F.binary_cross_entropy(logic_pred, label.unsqueeze(1))
+        #
+        #     return F.cross_entropy(y, targets) + logic_loss, y
 
-            logic_net.eval()
-            y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
-            log_probs = torch.log_softmax(y, dim=1)
-            logic_pred = logic_net(log_probs)
-            label = torch.full((inputs.shape[0],), 1).to(device)
-            logic_loss = F.binary_cross_entropy(logic_pred, label.unsqueeze(1))
-
-            return F.cross_entropy(y, targets) + logic_loss, y
-
-        return F.cross_entropy(y, targets), y
+        return F.cross_entropy(predictions, targets) + KLD, z
 
 
         # if opt.dataset == "CIFAR100":

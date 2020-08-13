@@ -134,6 +134,22 @@ fc_mapping = {}
 sc_prev = ""
 count = 0
 
+
+class Decoder(nn.Module):
+    def __init__(self, hidden_dim, num_dim):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(hidden_dim, 500),
+            nn.ReLU(True),
+            nn.Linear(500, 100),
+            nn.ReLU(True),
+            nn.Linear(100, num_dim)
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+
 class LogicNet(nn.Module):
 
     def __init__(self, num_dim):
