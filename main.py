@@ -237,7 +237,7 @@ def main():
         return SGD(logic_net.parameters(), lr, momentum=0.9, weight_decay=opt.weight_decay)
 
     def create_optimisers(opt, lr):
-        return create_encoder_opt(opt, lr), create_decoder_opt(opt, lr), create_logic_opt(opt, lr)
+        return create_encoder_opt(opt, lr*1e-2), create_decoder_opt(opt, lr), create_logic_opt(opt, lr)
 
     opt_enc, opt_dec, opt_logic = create_optimisers(opt, opt.lr)
     optimizer = create_optimizer(opt, opt.lr)
