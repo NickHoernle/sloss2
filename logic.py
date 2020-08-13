@@ -143,7 +143,8 @@ class Decoder(nn.Module):
             nn.ReLU(True),
             nn.Linear(500, 100),
             nn.ReLU(True),
-            nn.Linear(100, num_dim)
+            nn.Linear(100, num_dim),
+            nn.LogSoftmax(dim=1)
         )
 
     def forward(self, x):
@@ -190,7 +191,7 @@ def log_sigmoid(x):
 
 
 def cifar10_logic(variables, device):
-    probs = torch.softmax(variables, dim=1)
+    probs = torch.exp(variables)
     return ((probs > 0.95) | (probs < 0.05)).all(dim=1).float()
     # we are dealing with one-hot assigments
     # assignments = torch.eye(10).to(device)

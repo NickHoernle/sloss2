@@ -214,14 +214,12 @@ def main():
 
         logic = lambda x: cifar100_logic(x, device)
     else:
-        logic_net = LogicNet(10)
-        logic =  lambda x: cifar10_logic(x, device)
+        logic = lambda x: cifar10_logic(x, device)
 
     logic_net = LogicNet(num_dim=num_classes).to(device)
     decoder_net = Decoder(hidden_dim=hidden_dim, num_dim=num_classes).to(device)
 
     f, params = resnet(opt.depth, opt.width, hidden_dim*2)
-    logic_opt = Adam(logic_net.parameters(), 1e-3)
 
     def create_optimizer(opt, lr):
         print('creating optimizer with lr = ', lr)
@@ -288,29 +286,30 @@ def main():
         opt_logic.step()
         logic_net.eval()
 
-        # update the encoder to break the logic
-        label = torch.full((inputs.size(0),), 0, device=device)
-        opt_enc.zero_grad()
-        pred_logic = logic_net(predictions).squeeze()
-        loss = F.binary_cross_entropy(pred_logic, label) + KLD
-        loss.backward()
-        opt_enc.step()
+        if counter > 10:
+            # update the encoder to break the logic
+            label = torch.full((inputs.size(0),), 0, device=device)
+            opt_enc.zero_grad()
+            pred_logic = logic_net(predictions).squeeze()
+            loss = F.binary_cross_entropy(pred_logic, label) + KLD
+            loss.backward()
+            opt_enc.step()
 
-        # update the decoder to beat the logic
-        label.fill_(1)
-        opt_dec.zero_grad()
-        (mu, logvar, z) = resample(y.detach())
-        predictions = decoder_net(z)
-        pred_logic = logic_net(predictions).squeeze()
-        loss = F.binary_cross_entropy(pred_logic, label)
-        loss.backward()
-        opt_dec.step()
+            # update the decoder to beat the logic
+            label.fill_(1)
+            opt_dec.zero_grad()
+            (mu, logvar, z) = resample(y.detach())
+            predictions = decoder_net(z)
+            pred_logic = logic_net(predictions).squeeze()
+            loss = F.binary_cross_entropy(pred_logic, label)
+            loss.backward()
+            opt_dec.step()
 
-        # finally update to make good predictions
-        y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
-        (mu, logvar, z) = resample(y)
-        predictions = decoder_net(z)
-        KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+            # finally update to make good predictions
+            y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
+            (mu, logvar, z) = resample(y)
+            predictions = decoder_net(z)
+            KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
 
         return F.cross_entropy(predictions, targets) + KLD, z
 
@@ -431,7 +430,7 @@ def main():
             "test_time": timer_test.value(),
             "logic_accuracy": constraint_accuracy_val
         }, state))
-        print('==> id: %s (%d/%d), test_acc: \33[91m%.2f\033[0m, sc_acc: \33[91m%.2f\033[0m' %
+        print('==> id: %s (%d/%d), test_acc: \33[91m%.2f\033[0m, const_acc: \33[91m%.2f\033[0m' %
               (opt.save, state['epoch'], opt.epochs, test_acc, constraint_accuracy_val))
 
         global counter
