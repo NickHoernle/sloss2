@@ -183,7 +183,8 @@ def main():
         return DataLoader(create_dataset(opt, mode), opt.batch_size, shuffle=mode,
                           num_workers=opt.nthread, pin_memory=torch.cuda.is_available())
 
-    global counter, super_class_accuracy
+    global counter, super_class_accuracy, logic_accuracy
+    logic_accuracy = []
     super_class_accuracy = []
     counter = 0
 
@@ -275,27 +276,41 @@ def main():
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
         (mu, logvar, z) = resample(y)
         predictions = decoder_net(z)
-
         KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
 
-        # logic_net.train()
-        # log_probs = torch.log_softmax(y.detach(), dim=1)
-        # true_logic = logic(log_probs)
-        # pred = logic_net(log_probs)
-        # logic_loss = F.binary_cross_entropy(pred, true_logic.unsqueeze(1))
-        # logic_loss.backward()
-        # logic_opt.step()
-        #
-        # if counter >= -1:
-        #
-        #     logic_net.eval()
-        #     y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
-        #     log_probs = torch.log_softmax(y, dim=1)
-        #     logic_pred = logic_net(log_probs)
-        #     label = torch.full((inputs.shape[0],), 1).to(device)
-        #     logic_loss = F.binary_cross_entropy(logic_pred, label.unsqueeze(1))
-        #
-        #     return F.cross_entropy(y, targets) + logic_loss, y
+        # update the logic net
+        logic_net.train()
+        opt_logic.zero_grad()
+        true_logic = logic(predictions.detach())
+        pred_logic = logic_net(predictions.detach()).squeeze()
+        logic_loss = F.binary_cross_entropy(pred_logic, true_logic)
+        logic_loss.backward()
+        opt_logic.step()
+        logic_net.eval()
+
+        # update the encoder to break the logic
+        label = torch.full((inputs.size(0),), 0, device=device)
+        opt_enc.zero_grad()
+        pred_logic = logic_net(predictions).squeeze()
+        loss = F.binary_cross_entropy(pred_logic, label) + KLD
+        loss.backward()
+        opt_enc.step()
+
+        # update the decoder to beat the logic
+        label.fill_(1)
+        opt_dec.zero_grad()
+        (mu, logvar, z) = resample(y.detach())
+        predictions = decoder_net(z)
+        pred_logic = logic_net(predictions).squeeze()
+        loss = F.binary_cross_entropy(pred_logic, label)
+        loss.backward()
+        opt_dec.step()
+
+        # finally update to make good predictions
+        y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
+        (mu, logvar, z) = resample(y)
+        predictions = decoder_net(z)
+        KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
 
         return F.cross_entropy(predictions, targets) + KLD, z
 
@@ -318,7 +333,7 @@ def main():
 
     def compute_loss_test(sample):
 
-        global counter
+        global counter, logic_accuracy
         global classes, super_class_accuracy
         global sc_mapping, superclass_indexes
 
@@ -327,6 +342,8 @@ def main():
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
         (mu, logvar, z) = resample(y)
         predictions = decoder_net(z)
+
+        logic_accuracy += list(logic(predictions))
 
         return F.cross_entropy(predictions, targets), predictions
 
@@ -382,7 +399,7 @@ def main():
             state['optimizer'] = create_optimizer(opt, lr * opt.lr_decay_ratio)
 
     def on_end_epoch(state):
-        global constraint_accuracy, super_class_accuracy
+        global constraint_accuracy, super_class_accuracy, logic_accuracy
 
         train_loss = meter_loss.value()
         train_acc = classacc.value()
@@ -396,11 +413,11 @@ def main():
 
         test_acc = classacc.value()[0]
 
-        # constraint_accuracy_val = mean(constraint_accuracy)
-        # constraint_accuracy = []
+        constraint_accuracy_val = mean(logic_accuracy)
+        logic_accuracy = []
 
-        super_class_accuracy_val = mean(super_class_accuracy)
-        super_class_accuracy = []
+        # super_class_accuracy_val = mean(super_class_accuracy)
+        # super_class_accuracy = []
 
         print(log({
             "train_loss": train_loss[0],
@@ -412,10 +429,10 @@ def main():
             "n_parameters": n_parameters,
             "train_time": train_time,
             "test_time": timer_test.value(),
-            "super_class_acc": super_class_accuracy_val
+            "logic_accuracy": constraint_accuracy_val
         }, state))
         print('==> id: %s (%d/%d), test_acc: \33[91m%.2f\033[0m, sc_acc: \33[91m%.2f\033[0m' %
-              (opt.save, state['epoch'], opt.epochs, test_acc, super_class_accuracy_val))
+              (opt.save, state['epoch'], opt.epochs, test_acc, constraint_accuracy_val))
 
         global counter
         counter += 1
