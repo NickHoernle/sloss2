@@ -287,23 +287,24 @@ def main():
         opt_logic.step()
         logic_net.eval()
 
-        # update the encoder to break the logic
-        label = torch.full((inputs.size(0),), 0, device=device)
-        opt_enc.zero_grad()
-        pred_logic = logic_net(predictions).squeeze()
-        loss = F.binary_cross_entropy(pred_logic, label) + KLD
-        loss.backward()
-        opt_enc.step()
+        if epoch > 10:
+            # update the encoder to break the logic
+            label = torch.full((inputs.size(0),), 0, device=device)
+            opt_enc.zero_grad()
+            pred_logic = logic_net(predictions).squeeze()
+            loss = F.binary_cross_entropy(pred_logic, label) + KLD
+            loss.backward()
+            opt_enc.step()
 
-        # update the decoder to beat the logic
-        decoder_net.train()
-        label.fill_(1)
-        opt_dec.zero_grad()
-        predictions = decoder_net(z.detach())
-        pred_logic = logic_net(predictions).squeeze()
-        loss = F.binary_cross_entropy(pred_logic, label)
-        loss.backward()
-        opt_dec.step()
+            # update the decoder to beat the logic
+            decoder_net.train()
+            label.fill_(1)
+            opt_dec.zero_grad()
+            predictions = decoder_net(z.detach())
+            pred_logic = logic_net(predictions).squeeze()
+            loss = F.binary_cross_entropy(pred_logic, label)
+            loss.backward()
+            opt_dec.step()
 
         # finally update to make good predictions
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
