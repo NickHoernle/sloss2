@@ -396,6 +396,7 @@ def main():
         if epoch in epoch_step:
             lr = state['optimizer'].param_groups[0]['lr']
             state['optimizer'] = create_optimizer(opt, lr * opt.lr_decay_ratio)
+            opt_enc, opt_dec, opt_logic = create_optimisers(opt, lr * opt.lr_decay_ratio)
 
     def on_end_epoch(state):
         global constraint_accuracy, super_class_accuracy, logic_accuracy
