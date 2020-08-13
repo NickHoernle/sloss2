@@ -271,6 +271,7 @@ def main():
         inputs = cast(sample[0], opt.dtype)
         targets = cast(sample[1], 'long')
 
+        decoder_net.eval()
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
         (mu, logvar, z) = resample(y)
         predictions = decoder_net(z)
@@ -286,30 +287,29 @@ def main():
         opt_logic.step()
         logic_net.eval()
 
-        if counter > 10:
-            # update the encoder to break the logic
-            label = torch.full((inputs.size(0),), 0, device=device)
-            opt_enc.zero_grad()
-            pred_logic = logic_net(predictions).squeeze()
-            loss = F.binary_cross_entropy(pred_logic, label)
-            loss.backward()
-            opt_enc.step()
+        # update the encoder to break the logic
+        label = torch.full((inputs.size(0),), 0, device=device)
+        opt_enc.zero_grad()
+        pred_logic = logic_net(predictions).squeeze()
+        loss = F.binary_cross_entropy(pred_logic, label) + KLD
+        loss.backward()
+        opt_enc.step()
 
-            # update the decoder to beat the logic
-            label.fill_(1)
-            opt_dec.zero_grad()
-            (mu, logvar, z) = resample(y.detach())
-            predictions = decoder_net(z)
-            pred_logic = logic_net(predictions).squeeze()
-            loss = F.binary_cross_entropy(pred_logic, label)
-            loss.backward()
-            opt_dec.step()
+        # update the decoder to beat the logic
+        decoder_net.train()
+        label.fill_(1)
+        opt_dec.zero_grad()
+        predictions = decoder_net(z.detach())
+        pred_logic = logic_net(predictions).squeeze()
+        loss = F.binary_cross_entropy(pred_logic, label)
+        loss.backward()
+        opt_dec.step()
 
-            # finally update to make good predictions
-            y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
-            (mu, logvar, z) = resample(y)
-            predictions = decoder_net(z)
-            KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+        # finally update to make good predictions
+        y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
+        (mu, logvar, z) = resample(y)
+        predictions = decoder_net(z)
+        KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
 
         return F.nll_loss(predictions, targets) + KLD, z
 
