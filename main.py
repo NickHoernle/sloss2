@@ -228,10 +228,10 @@ def main():
 
     def create_encoder_opt(opt, lr):
         params_ = [v for v in params.values() if v.requires_grad]
-        return SGD(params_, lr, momentum=0.9, weight_decay=opt.weight_decay)
+        return SGD(params_, lr*1e-1, momentum=0.9, weight_decay=opt.weight_decay)
 
     def create_decoder_opt(opt, lr):
-        return SGD(decoder_net.parameters(), lr, momentum=0.9, weight_decay=opt.weight_decay)
+        return SGD(decoder_net.parameters(), lr*1e-1, momentum=0.9, weight_decay=opt.weight_decay)
 
     def create_logic_opt(opt, lr):
         return SGD(logic_net.parameters(), lr, momentum=0.9, weight_decay=opt.weight_decay)
@@ -311,7 +311,7 @@ def main():
             predictions = decoder_net(z)
             KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
 
-        return F.cross_entropy(predictions, targets) + KLD, z
+        return F.nll_loss(predictions, targets) + KLD, z
 
 
         # if opt.dataset == "CIFAR100":
@@ -344,7 +344,7 @@ def main():
 
         logic_accuracy += list(logic(predictions))
 
-        return F.cross_entropy(predictions, targets), predictions
+        return F.nll_loss(predictions, targets), predictions
 
         # log_predictions = logic(y)
         #
