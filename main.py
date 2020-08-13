@@ -226,8 +226,21 @@ def main():
         print('creating optimizer with lr = ', lr)
         params_ = [v for v in params.values() if v.requires_grad] + list(decoder_net.parameters())
         return SGD(params_, lr, momentum=0.9, weight_decay=opt.weight_decay)
-        # return Adam([v for v in params.values() if v.requires_grad], lr)
 
+    def create_encoder_opt(opt, lr):
+        params_ = [v for v in params.values() if v.requires_grad]
+        return SGD(params_, lr, momentum=0.9, weight_decay=opt.weight_decay)
+
+    def create_decoder_opt(opt, lr):
+        return SGD(decoder_net.parameters(), lr, momentum=0.9, weight_decay=opt.weight_decay)
+
+    def create_logic_opt(opt, lr):
+        return SGD(logic_net.parameters(), lr, momentum=0.9, weight_decay=opt.weight_decay)
+
+    def create_optimisers(opt, lr):
+        return create_encoder_opt(opt, lr), create_decoder_opt(opt, lr), create_logic_opt(opt, lr)
+
+    opt_enc, opt_dec, opt_logic = create_optimisers(opt, opt.lr)
     optimizer = create_optimizer(opt, opt.lr)
 
     epoch = 0
@@ -312,16 +325,10 @@ def main():
         inputs = cast(sample[0], opt.dtype)
         targets = cast(sample[1], 'long')
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
+        (mu, logvar, z) = resample(y)
+        predictions = decoder_net(z)
 
-        if opt.dataset == "CIFAR100":
-            true_super_class_label = torch.tensor([super_class_label[superclass_mapping[classes[t]]]
-                                                   for t in targets]).to(device)
-            superclass_predictions = torch.cat([y[:, superclass_indexes[c]].logsumexp(dim=1).unsqueeze(1)
-                                                for c in range(len(super_class_label))], dim=1).exp()
-
-            super_class_accuracy += list(torch.argmax(superclass_predictions, dim=1) == true_super_class_label)
-
-        return F.cross_entropy(y, targets), y
+        return F.cross_entropy(predictions, targets), predictions
 
         # log_predictions = logic(y)
         #
