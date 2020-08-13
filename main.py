@@ -306,6 +306,7 @@ def main():
             loss.backward()
             opt_dec.step()
 
+        decoder_net.train()
         # finally update to make good predictions
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
         (mu, logvar, z) = resample(y)
