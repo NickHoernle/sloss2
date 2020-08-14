@@ -231,10 +231,10 @@ def main():
         return SGD(params_, lr, momentum=0.9, weight_decay=opt.weight_decay)
 
     def create_decoder_opt(opt, lr):
-        return SGD(decoder_net.parameters(), lr, momentum=0.9, weight_decay=opt.weight_decay)
+        return SGD(decoder_net.parameters(), lr, momentum=0.1, weight_decay=opt.weight_decay)
 
     def create_logic_opt(opt, lr):
-        return SGD(logic_net.parameters(), lr, momentum=0.9, weight_decay=opt.weight_decay)
+        return SGD(logic_net.parameters(), lr, momentum=0.1, weight_decay=opt.weight_decay)
 
     def create_optimisers(opt, lr):
         return create_encoder_opt(opt, lr*1e-1), \
@@ -282,16 +282,16 @@ def main():
         # update the logic net
         logic_net.train()
         opt_logic.zero_grad()
-        true_logic = logic(predictions.detach())
-        pred_logic = logic_net(predictions.detach()).squeeze()
+        true_logic = logic(predictions.exp().detach())
+        pred_logic = logic_net(predictions.exp().detach()).squeeze()
         logic_loss = F.binary_cross_entropy(pred_logic, true_logic)
         logic_loss.backward()
         opt_logic.step()
         logic_net.eval()
 
-        if epoch > 10:
+        if epoch > 10 and opt.sloss:
             # update the encoder to break the logic
-            label = torch.full((200,), 0, device=device)
+            label = torch.full((500,), 0, device=device)
             # opt_enc.zero_grad()
             # pred_logic = logic_net(predictions).squeeze()
             # loss = F.binary_cross_entropy(pred_logic, label) + KLD
@@ -302,10 +302,10 @@ def main():
             decoder_net.train()
             label.fill_(1)
             opt_dec.zero_grad()
-            z = torch.randn((200, hidden_dim))
+            z = torch.randn((500, hidden_dim))
             predictions = decoder_net(z.detach())
-            pred_logic = logic_net(predictions).squeeze()
-            true_labels = logic(predictions)
+            pred_logic = logic_net(predictions.exp()).squeeze()
+            true_labels = logic(predictions.exp())
             if (1-true_labels).sum() > 0:
                 loss = torch.mean(F.binary_cross_entropy(pred_logic, label, reduction="none")[true_labels == 0])
                 loss.backward()
