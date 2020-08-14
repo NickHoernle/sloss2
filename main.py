@@ -291,7 +291,7 @@ def main():
 
         if epoch > 10:
             # update the encoder to break the logic
-            label = torch.full((inputs.size(0),), 0, device=device)
+            label = torch.full((200,), 0, device=device)
             # opt_enc.zero_grad()
             # pred_logic = logic_net(predictions).squeeze()
             # loss = F.binary_cross_entropy(pred_logic, label) + KLD
@@ -302,7 +302,7 @@ def main():
             decoder_net.train()
             label.fill_(1)
             opt_dec.zero_grad()
-            z = torch.randn(200)
+            z = torch.randn((200, hidden_dim))
             predictions = decoder_net(z.detach())
             pred_logic = logic_net(predictions).squeeze()
             true_labels = logic(predictions)
