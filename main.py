@@ -237,9 +237,9 @@ def main():
         return SGD(logic_net.parameters(), lr, momentum=0.9, weight_decay=opt.weight_decay)
 
     def create_optimisers(opt, lr):
-        return create_encoder_opt(opt, lr*1e-2), \
-               create_decoder_opt(opt, lr*1e-2), \
-               create_logic_opt(opt, lr*1e-2)
+        return create_encoder_opt(opt, lr*1e-1), \
+               create_decoder_opt(opt, lr*1e-1), \
+               create_logic_opt(opt, lr*1e-1)
 
     opt_enc, opt_dec, opt_logic = create_optimisers(opt, opt.lr)
     optimizer = create_optimizer(opt, opt.lr)
@@ -292,21 +292,24 @@ def main():
         if epoch > 10:
             # update the encoder to break the logic
             label = torch.full((inputs.size(0),), 0, device=device)
-            opt_enc.zero_grad()
-            pred_logic = logic_net(predictions).squeeze()
-            loss = F.binary_cross_entropy(pred_logic, label) + KLD
-            loss.backward()
-            opt_enc.step()
+            # opt_enc.zero_grad()
+            # pred_logic = logic_net(predictions).squeeze()
+            # loss = F.binary_cross_entropy(pred_logic, label) + KLD
+            # loss.backward()
+            # opt_enc.step()
 
             # update the decoder to beat the logic
             decoder_net.train()
             label.fill_(1)
             opt_dec.zero_grad()
+            z = torch.randn(200)
             predictions = decoder_net(z.detach())
             pred_logic = logic_net(predictions).squeeze()
-            loss = F.binary_cross_entropy(pred_logic, label)
-            loss.backward()
-            opt_dec.step()
+            true_labels = logic(predictions)
+            if (1-true_labels).sum() > 0:
+                loss = torch.mean(F.binary_cross_entropy(pred_logic, label, reduction="none")[true_labels == 0])
+                loss.backward()
+                opt_dec.step()
 
         decoder_net.train()
         # finally update to make good predictions
