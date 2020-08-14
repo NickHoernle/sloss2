@@ -349,7 +349,7 @@ def main():
         (mu, logvar, z) = resample(y)
         predictions = decoder_net(z)
 
-        logic_accuracy += list(logic(predictions))
+        logic_accuracy += list(logic(predictions.exp()))
 
         return F.nll_loss(predictions, targets), predictions
 
