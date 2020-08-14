@@ -173,7 +173,7 @@ def main():
     print('parsed options:', vars(opt))
     epoch_step = json.loads(opt.epoch_step)
 
-    hidden_dim = 50
+    hidden_dim = 10
     num_classes = 10 if opt.dataset == 'CIFAR10' else 100
 
     torch.manual_seed(opt.seed)
@@ -237,11 +237,15 @@ def main():
         return SGD(logic_net.parameters(), lr, momentum=0.1, weight_decay=opt.weight_decay)
 
     def create_optimisers(opt, lr):
-        return create_encoder_opt(opt, lr*1e-1), \
-               create_decoder_opt(opt, lr*1e-1), \
-               create_logic_opt(opt, lr*1e-1)
+        return create_encoder_opt(opt, lr), \
+               create_decoder_opt(opt, lr), \
+               create_logic_opt(opt, lr)
 
     opt_enc, opt_dec, opt_logic = create_optimisers(opt, opt.lr)
+    sch_enc = torch.optim.lr_scheduler.ExponentialLR(opt_enc, gamma=.99)
+    sch_dec= torch.optim.lr_scheduler.ExponentialLR(opt_dec, gamma=.99)
+    sch_log = torch.optim.lr_scheduler.ExponentialLR(opt_logic, gamma=.99)
+
     optimizer = create_optimizer(opt, opt.lr)
 
     epoch = 0
@@ -403,7 +407,6 @@ def main():
         if epoch in epoch_step:
             lr = state['optimizer'].param_groups[0]['lr']
             state['optimizer'] = create_optimizer(opt, lr * opt.lr_decay_ratio)
-            opt_enc, opt_dec, opt_logic = create_optimisers(opt, lr * opt.lr_decay_ratio)
 
     def on_end_epoch(state):
         global constraint_accuracy, super_class_accuracy, logic_accuracy
@@ -423,6 +426,9 @@ def main():
         constraint_accuracy_val = mean(logic_accuracy)
         logic_accuracy = []
 
+        sch_enc.step()
+        sch_dec.step()
+        sch_log.step()
         # super_class_accuracy_val = mean(super_class_accuracy)
         # super_class_accuracy = []
 
