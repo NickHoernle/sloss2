@@ -279,7 +279,7 @@ def main():
 
         decoder_net.eval()
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
-        (mu, logvar, z) = resample(y)
+        (mu, logvar, z) = resample(y, hidden_dim=hidden_dim)
         predictions = decoder_net(z)
         KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
 
@@ -318,7 +318,7 @@ def main():
         decoder_net.train()
         # finally update to make good predictions
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
-        (mu, logvar, z) = resample(y)
+        (mu, logvar, z) = resample(y, hidden_dim=hidden_dim)
         predictions = decoder_net(z)
         KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
 
@@ -350,7 +350,7 @@ def main():
         inputs = cast(sample[0], opt.dtype)
         targets = cast(sample[1], 'long')
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
-        (mu, logvar, z) = resample(y)
+        (mu, logvar, z) = resample(y, hidden_dim=hidden_dim)
         predictions = decoder_net(z)
 
         logic_accuracy += list(logic(predictions.exp()))
