@@ -345,15 +345,16 @@ def main():
                 logic_net.eval()
                 y_u = data_parallel(f, inputs_u, params, sample[2], list(range(opt.ngpu))).float()
                 samps = torch.softmax(y_u, dim=1)
-                pred = logic(samps)
+
+                pred = logic_net(samps)
                 true = logic(samps).unsqueeze(1).float()
 
                 true_label = torch.ones_like(pred)
                 idxs = (true.squeeze(1) == 0)
 
-                if idxs.sum() != 0:
+                if idxs.sum() > 1:
                     target_loss = F.binary_cross_entropy(pred, true_label, reduction="none")[idxs]
-                    loss += target_loss.sum()
+                    loss += target_loss.mean()
 
         return loss, y_l
 
