@@ -354,7 +354,7 @@ def main():
 
                 if idxs.sum() > 1:
                     target_loss = F.binary_cross_entropy(pred, true_label, reduction="none")[idxs]
-                    loss += target_loss.mean()
+                    loss += 0.01*target_loss.mean()
 
         return loss, y_l
 
