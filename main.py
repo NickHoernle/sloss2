@@ -23,6 +23,11 @@ import torch.nn.functional as F
 import torchnet as tnt
 import torch.utils.data as data
 from torchnet.engine import Engine
+
+from pathlib import Path
+import torch
+from torchvision import transforms, datasets
+
 from flows import Invertible1x1Conv, NormalizingFlowModel
 from spline_flows import NSF_CL
 from torch.distributions import MultivariateNormal
@@ -40,7 +45,9 @@ from logic import (
     super_class_label,
     fc_mapping,
     LogicNet,
-    Decoder
+    Decoder,
+    simplex_transform,
+    inverse_simplex_transform,
 )
 
 
@@ -165,6 +172,29 @@ def resample(y, hidden_dim=50):
     return (mu, logvar, mu + eps*std)
 
 
+def get_CIFAR10(augment, dataroot, download):
+    image_shape = (32, 32, 3)
+    num_classes = 10
+    normalize = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    test_transform = transforms.Compose([transforms.ToTensor(), normalize])
+    if augment:
+        transformations = [transforms.RandomCrop(size=32, padding=int(32 * 0.125), padding_mode='reflect'),
+                           transforms.RandomHorizontalFlip()]
+    else:
+        transformations = []
+    transformations.extend([transforms.ToTensor(), normalize])
+    train_transform = transforms.Compose(transformations)
+
+    train_dataset = datasets.CIFAR10(dataroot, train=True,
+                                     transform=train_transform,
+                                     download=download)
+
+    test_dataset = datasets.CIFAR10(dataroot, train=False,
+                                    transform=test_transform,
+                                    download=download)
+    return image_shape, num_classes, train_dataset, test_dataset
+
+
 def main():
     # device = "cpu"
 
@@ -173,7 +203,6 @@ def main():
     print('parsed options:', vars(opt))
     epoch_step = json.loads(opt.epoch_step)
 
-    hidden_dim = 10
     num_classes = 10 if opt.dataset == 'CIFAR10' else 100
 
     torch.manual_seed(opt.seed)
@@ -188,63 +217,74 @@ def main():
     super_class_accuracy = []
     counter = 0
 
-    train_loader = create_iterator(True)
-    test_loader = create_iterator(False)
+    image_shape, num_classes, train_dataset, test_dataset = get_CIFAR10(True, opt.dataroot, True)
 
+    def _init_fn(*args, **kwargs):
+        np.random.seed(opt.seed)
+
+    num_labelled = opt.num_labelled
+    num_unlabelled = len(train_dataset) - num_labelled
+
+    td_targets = train_dataset.targets
+    labelled_idxs, unlabelled_idxs = x_u_split(td_targets, num_labelled, num_classes)
+    labelled_set, unlabelled_set = [Subset(train_dataset, labelled_idxs),
+                                    Subset(train_dataset, unlabelled_idxs)]
+
+    labelled_set = data.ConcatDataset([labelled_set for i in range(num_unlabelled // num_labelled + 1)])
+    labelled_set, _ = data.random_split(labelled_set, [num_unlabelled, len(labelled_set) - num_unlabelled])
+
+    train_dataset = Joint(labelled_set, unlabelled_set)
+
+    train_loader = data.DataLoader(
+        train_dataset,
+        batch_size=opt.batch_size,
+        shuffle=True,
+        num_workers=opt.n_workers,
+        worker_init_fn=_init_fn
+    )
+
+    test_loader = data.DataLoader(
+        test_dataset,
+        batch_size=opt.batch_size,
+        shuffle=False,
+        num_workers=opt.n_workers,
+        worker_init_fn=_init_fn
+    )
+
+    if opt.dataset == "CIFAR10":
+        logic = cifar10_logic
+    else:
+        logic = cifar100_logic
     global classes
     global sc_mapping, superclass_indexes
 
     constraint_accuracy, super_class_accuracy = [], []
     superclass_indexes = {}
 
-    if opt.dataset == "CIFAR100":
+    f, params = resnet(opt.depth, opt.width, num_classes)
 
-        classes = np.array(test_loader.dataset.classes)
+    if opt.sloss:
+        # don't model on the simplex
+        # num_flow_classes = num_classes-1
+        #
+        # prior_y = MultivariateNormal(torch.zeros(num_flow_classes).to(device),
+        #                              torch.eye(num_flow_classes).to(device))
+        # num_flows = 5
+        #
+        # flows = [NSF_CL(dim=num_flow_classes, K=8, B=3, hidden_dim=16) for _ in range(num_flows)]
+        # convs = [Invertible1x1Conv(dim=num_flow_classes, device=device) for i in range(num_flows)]
+        # flows = list(itertools.chain(*zip(convs, flows)))
+        #
+        # model_y = NormalizingFlowModel(prior_y, flows, num_flow_classes, device=device).to(device)
+        # optimizer_y = Adam(model_y.parameters(), lr=1e-3, weight_decay=1e-5)
 
-        sc_labels = np.array([super_class_label[superclass_mapping[c]] for c in classes])
-        fc_labels = np.array([fc_mapping[c] for c in classes])
+        logic_net = LogicNet(num_dim=num_classes)
+        logic_net.to(device)
+        optimizer_logic = Adam(logic_net.parameters(), lr=1e-3, weight_decay=1e-5)
 
-        sc_mapping = np.array([sc*5+fc for i, (sc, fc) in enumerate(zip(sc_labels, fc_labels))])
-
-        superclass_labels = [super_class_label[superclass_mapping[c]] for c in classes]
-
-        for cat in range(len(super_class_label)):
-            indices = [i for i, x in enumerate(superclass_labels) if x == cat]
-            superclass_indexes[cat] = indices
-
-        logic = lambda x: cifar100_logic(x, device)
-    else:
-        logic = lambda x: cifar10_logic(x, device)
-
-    logic_net = LogicNet(num_dim=num_classes).to(device)
-    decoder_net = Decoder(hidden_dim=hidden_dim, num_dim=num_classes).to(device)
-
-    f, params = resnet(opt.depth, opt.width, hidden_dim*2)
-
-    def create_optimizer(opt, lr):
+    def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
-        params_ = [v for v in params.values() if v.requires_grad] + list(decoder_net.parameters())
-        return SGD(params_, lr, momentum=0.9, weight_decay=opt.weight_decay)
-
-    def create_encoder_opt(opt, lr):
-        params_ = [v for v in params.values() if v.requires_grad]
-        return SGD(params_, lr, momentum=0.9, weight_decay=opt.weight_decay)
-
-    def create_decoder_opt(opt, lr):
-        return SGD(decoder_net.parameters(), lr, momentum=0.1, weight_decay=opt.weight_decay)
-
-    def create_logic_opt(opt, lr):
-        return SGD(logic_net.parameters(), lr, momentum=0.1, weight_decay=opt.weight_decay)
-
-    def create_optimisers(opt, lr):
-        return create_encoder_opt(opt, lr), \
-               create_decoder_opt(opt, lr), \
-               create_logic_opt(opt, lr)
-
-    opt_enc, opt_dec, opt_logic = create_optimisers(opt, opt.lr)
-    sch_enc = torch.optim.lr_scheduler.ExponentialLR(opt_enc, gamma=.99)
-    sch_dec= torch.optim.lr_scheduler.ExponentialLR(opt_dec, gamma=.99)
-    sch_log = torch.optim.lr_scheduler.ExponentialLR(opt_logic, gamma=.99)
+        return SGD([v for v in params.values() if v.requires_grad], lr, momentum=0.9, weight_decay=args.weight_decay)
 
     optimizer = create_optimizer(opt, opt.lr)
 
@@ -274,55 +314,45 @@ def main():
     def h(sample):
         global sc_mapping, counter
 
-        inputs = cast(sample[0], opt.dtype)
-        targets = cast(sample[1], 'long')
+        l = sample[0]
+        u = sample[1]
+        inputs_l = cast(l[0], opt.dtype)
+        targets_l = cast(l[1], 'long')
+        inputs_u = cast(u[0], opt.dtype)
+        y_l = data_parallel(f, inputs_l, params, sample[2], list(range(opt.ngpu))).float()
 
-        decoder_net.eval()
-        y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
-        (mu, logvar, z) = resample(y, hidden_dim=hidden_dim)
-        predictions = decoder_net(z)
-        KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+        loss = F.cross_entropy(y_l, targets_l)
 
-        # update the logic net
-        logic_net.train()
-        opt_logic.zero_grad()
-        true_logic = logic(predictions.exp().detach())
-        pred_logic = logic_net(predictions.exp().detach()).squeeze()
-        logic_loss = F.binary_cross_entropy(pred_logic, true_logic)
-        logic_loss.backward()
-        opt_logic.step()
-        logic_net.eval()
+        if opt.sloss:
+            # train logic net
+            samps = torch.softmax(y_l, dim=1)
 
-        if epoch > 10 and opt.sloss:
-            # update the encoder to break the logic
-            label = torch.full((500,), 0, device=device)
-            # opt_enc.zero_grad()
-            # pred_logic = logic_net(predictions).squeeze()
-            # loss = F.binary_cross_entropy(pred_logic, label) + KLD
-            # loss.backward()
-            # opt_enc.step()
+            pred = logic_net(samps)
+            true = logic(samps).unsqueeze(1).float()
+            idxs = (true.squeeze(1) == 0)
+            target_loss = F.binary_cross_entropy(pred, true, reduction="none")
 
-            # update the decoder to beat the logic
-            decoder_net.train()
-            label.fill_(1)
-            opt_dec.zero_grad()
-            z = torch.randn((500, hidden_dim))
-            predictions = decoder_net(z.detach())
-            pred_logic = logic_net(predictions.exp()).squeeze()
-            true_labels = logic(predictions.exp())
-            if (1-true_labels).sum() > 0:
-                loss = torch.mean(F.binary_cross_entropy(pred_logic, label, reduction="none")[true_labels == 0])
-                loss.backward()
-                opt_dec.step()
+            # balance the number of even and non-even samples here??
+            loss = (target_loss[idxs].sum() + target_loss[~idxs].sum())
 
-        decoder_net.train()
-        # finally update to make good predictions
-        y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
-        (mu, logvar, z) = resample(y, hidden_dim=hidden_dim)
-        predictions = decoder_net(z)
-        KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+            optimizer_logic.zero_grad()
+            loss.backward()
+            optimizer_logic.step()
 
-        return F.nll_loss(predictions, targets) + KLD, z
+            if counter > 10:
+                y_u = data_parallel(f, inputs_u, params, sample[2], list(range(opt.ngpu))).float()
+                samps = torch.softmax(y_u, dim=1)
+                pred = logic(samps)
+                true = logic(samps).unsqueeze(1).float()
+
+                true_label = torch.ones_like(pred)
+                idxs = (true.squeeze(1) == 0)
+
+                if idxs.sum() != 0:
+                    target_loss = F.binary_cross_entropy(pred, true_label, reduction="none")[idxs]
+                    loss += target_loss.sum()
+
+        return loss, y_l
 
 
         # if opt.dataset == "CIFAR100":
@@ -350,12 +380,8 @@ def main():
         inputs = cast(sample[0], opt.dtype)
         targets = cast(sample[1], 'long')
         y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
-        (mu, logvar, z) = resample(y, hidden_dim=hidden_dim)
-        predictions = decoder_net(z)
 
-        logic_accuracy += list(logic(predictions.exp()))
-
-        return F.nll_loss(predictions, targets), predictions
+        return F.cross_entropy(y, targets), y
 
         # log_predictions = logic(y)
         #
@@ -385,7 +411,10 @@ def main():
 
     def on_forward(state):
         loss = float(state['loss'])
-        classacc.add(state['output'].data, state['sample'][1])
+        if not state['train']:
+            classacc.add(state['output'].data, state['sample'][1])
+        else:
+            classacc.add(state['output'].data, state['sample'][0][1])
         meter_loss.add(loss)
         if state['train']:
             state['iterator'].set_postfix(loss=loss)
@@ -426,9 +455,9 @@ def main():
         constraint_accuracy_val = mean(logic_accuracy)
         logic_accuracy = []
 
-        sch_enc.step()
-        sch_dec.step()
-        sch_log.step()
+        # sch_enc.step()
+        # sch_dec.step()
+        # sch_log.step()
         # super_class_accuracy_val = mean(super_class_accuracy)
         # super_class_accuracy = []
 

@@ -151,6 +151,46 @@ class Decoder(nn.Module):
         return self.net(x)
 
 
+def simplex_transform(y, device):
+    k = torch.arange(y.size(1)).float().to(device)
+    K = len(k) + 1
+
+    z = torch.sigmoid(y + torch.log(1 / (K - k)))
+
+    x = torch.cat((torch.zeros_like(y), torch.zeros_like(y[:, 0]).unsqueeze(1)), dim=1).to(device)
+
+    for i in range(K - 1):
+        x[:, i] = (1 - torch.sum(x[:, :i], dim=1)) * z[:, i]
+
+    x[:, -1] = (1 - torch.sum(x[:, :-1], dim=1))
+
+    return x
+
+
+def logit(x):
+    return torch.log(x) - torch.log1p(-x)
+
+
+def inverse_simplex_transform(x, device):
+    K = x.size(1)
+    k = torch.arange(K - 1).float().to(device)
+
+    if x.max() == 1:
+        # if one hot then change to be .99
+        factor = torch.tensor(np.random.uniform(99, 999, size=len(x))).unsqueeze(1).float().to(device)
+        x *= factor
+        idxs = (x == 0)
+        lower_factor = torch.tensor(np.random.uniform(0, 1, size=idxs.sum())).float().to(device)
+        x[idxs] = lower_factor
+        x /= x.sum(dim=1).unsqueeze(1)
+
+    z = torch.zeros_like(x[:, :-1])
+    for i in range(K - 1):
+        z[:, i] = x[:, i] / (1 - torch.sum(x[:, :i], dim=1))
+
+    return logit(z) + torch.log(K - k)
+
+
 class LogicNet(nn.Module):
 
     def __init__(self, num_dim):
@@ -158,11 +198,11 @@ class LogicNet(nn.Module):
         self.net = nn.Sequential(
             nn.Linear(num_dim, 500),
             nn.ReLU(True),
-            nn.Linear(500, 1000),
+            nn.Linear(500, 500),
             nn.ReLU(True),
-            nn.Linear(1000, 1000),
+            nn.Linear(500, 500),
             nn.ReLU(True),
-            nn.Linear(1000, 25),
+            nn.Linear(500, 25),
             nn.ReLU(True),
             nn.Linear(25, 1),
             nn.Sigmoid()
@@ -190,7 +230,7 @@ def log_sigmoid(x):
     return x - torch.log1p(x)
 
 
-def cifar10_logic(variables, device):
+def cifar10_logic(variables, **kwargs):
     probs = variables
     return ((probs > 0.95) | (probs < 0.05)).all(dim=1).float()
     # we are dealing with one-hot assigments
