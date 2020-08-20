@@ -83,7 +83,7 @@ parser.add_argument('--lr', default=0.1, type=float)
 parser.add_argument('--epochs', default=400, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--weight_decay', default=0.0005, type=float)
-parser.add_argument('--epoch_step', default='[5, 50, 100, 150]', type=str,
+parser.add_argument('--epoch_step', default='[10, 50, 100, 150, 200, 250]', type=str,
                     help='json list with epochs to drop lr on')
 parser.add_argument('--lr_decay_ratio', default=0.2, type=float)
 parser.add_argument('--resume', default='', type=str)
@@ -319,8 +319,8 @@ def main():
         inputs_l = cast(l[0], opt.dtype)
         targets_l = cast(l[1], 'long')
         inputs_u = cast(u[0], opt.dtype)
-        y_l = data_parallel(f, inputs_l, params, sample[2], list(range(opt.ngpu))).float()
 
+        y_l = data_parallel(f, inputs_l, params, sample[2], list(range(opt.ngpu))).float()
         loss = F.cross_entropy(y_l, targets_l)
 
         if opt.sloss:
@@ -331,6 +331,7 @@ def main():
 
             pred = logic_net(samps)
             true = logic(samps).unsqueeze(1).float()
+
             idxs = (true.squeeze(1) == 0)
             target_loss = F.binary_cross_entropy(pred, true, reduction="none")
 
@@ -354,7 +355,7 @@ def main():
 
                 if idxs.sum() > 1:
                     target_loss = F.binary_cross_entropy(pred, true_label, reduction="none")[idxs]
-                    loss += 0.01*target_loss.mean()
+                    loss += opt.unl_weight*target_loss.mean()
 
         return loss, y_l
 

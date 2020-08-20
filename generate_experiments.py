@@ -16,14 +16,16 @@ base_call = (f"python main.py --save {DATA_HOME}/logs/resnet_$RANDOM$RANDOM "
 
 repeats = 1
 
-sloss = [True, False]
+sloss = [True]
 dataset = ["CIFAR10"]
 learning_rate = [5e-1, 2e-1, 1e-1, 5e-2]
-lr_decay_ratio = [.1]
+unl_weight = [1e-1, 1e-2, 1e-3]
+lr_decay_ratio = [.2]
 
-settings = [(lr, sloss_, lr_decay_ratio_, dataset_, rep)
+settings = [(lr, sloss_, unl_, lr_decay_ratio_, dataset_, rep)
             for lr in learning_rate
             for sloss_ in sloss
+            for unl_ in unl_weight
             for lr_decay_ratio_ in lr_decay_ratio
             for dataset_ in dataset
             for rep in range(repeats)]
@@ -37,13 +39,14 @@ print(f'Estimated time = {(nr_expts / nr_servers * avg_expt_time)/60} hrs')
 
 output_file = open("experiment.txt", "w")
 
-for (lr, sloss_, lr_decay_ratio_, dataset_, rep) in settings:
+for (lr, sloss_, unl_, lr_decay_ratio_, dataset_, rep) in settings:
     # Note that we don't set a seed for rep - a seed is selected at random
     # and recorded in the output data by the python script
     expt_call = (
         f"{base_call} "
         f"--lr {lr} "
         f"--sloss {sloss_} "
+        f"--unl_weight {unl_} "
         f"--lr_decay_ratio {lr_decay_ratio_} "
         f"--dataset {dataset_} "
     )

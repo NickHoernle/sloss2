@@ -196,13 +196,13 @@ class LogicNet(nn.Module):
     def __init__(self, num_dim):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(num_dim, 500),
+            nn.Linear(num_dim, 50),
             nn.ReLU(True),
-            nn.Linear(500, 500),
+            nn.Linear(50, 100),
             nn.ReLU(True),
-            nn.Linear(500, 500),
+            nn.Linear(100, 100),
             nn.ReLU(True),
-            nn.Linear(500, 25),
+            nn.Linear(100, 25),
             nn.ReLU(True),
             nn.Linear(25, 1),
             nn.Sigmoid()
@@ -232,7 +232,7 @@ def log_sigmoid(x):
 
 def cifar10_logic(variables, **kwargs):
     probs = variables
-    return ((probs > 0.95) | (probs < 0.05)).all(dim=1).float()
+    return ((probs > 0.99) | (probs < 0.01)).all(dim=1).float()
     # we are dealing with one-hot assigments
     # assignments = torch.eye(10).to(device)
     # lower_triang = torch.tril(torch.ones_like(assignments)) - assignments
