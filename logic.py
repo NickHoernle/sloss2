@@ -197,13 +197,13 @@ class LogicNet(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(num_dim, 50),
-            nn.ReLU(True),
+            nn.Sigmoid(),
             nn.Linear(50, 100),
-            nn.ReLU(True),
+            nn.Sigmoid(),
             nn.Linear(100, 100),
-            nn.ReLU(True),
+            nn.Sigmoid(),
             nn.Linear(100, 25),
-            nn.ReLU(True),
+            nn.Sigmoid(),
             nn.Linear(25, 1),
             nn.Sigmoid()
         )

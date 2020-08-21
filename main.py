@@ -280,7 +280,8 @@ def main():
 
         logic_net = LogicNet(num_dim=num_classes)
         logic_net.to(device)
-        optimizer_logic = Adam(logic_net.parameters(), lr=1e-3, weight_decay=1e-5)
+        optimizer_logic = Adam(logic_net.parameters(), lr=1e-1, weight_decay=1e-5)
+        scheduler = StepLR(optimizer_logic, step_size=50, gamma=0.2)
 
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
@@ -459,6 +460,9 @@ def main():
 
         constraint_accuracy_val = mean(logic_accuracy)
         logic_accuracy = []
+
+        if opt.sloss:
+            scheduler.step()
 
         # sch_enc.step()
         # sch_dec.step()
