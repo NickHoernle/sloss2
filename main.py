@@ -323,40 +323,40 @@ def main():
 
         y_l = data_parallel(f, inputs_l, params, sample[2], list(range(opt.ngpu))).float()
         loss = F.cross_entropy(y_l, targets_l)
-
-        if opt.sloss:
-            # train logic net
-            samps = torch.softmax(y_l.detach(), dim=1)
-
-            logic_net.train()
-
-            pred = logic_net(samps)
-            true = logic(samps).unsqueeze(1).float()
-
-            idxs = (true.squeeze(1) == 0)
-            target_loss = F.binary_cross_entropy(pred, true, reduction="none")
-
-            # balance the number of even and non-even samples here??
-            loss_logic = (target_loss[idxs].sum() + target_loss[~idxs].sum())
-
-            optimizer_logic.zero_grad()
-            loss_logic.backward()
-            optimizer_logic.step()
-
-            if counter > 10:
-                logic_net.eval()
-                y_u = data_parallel(f, inputs_u, params, sample[2], list(range(opt.ngpu))).float()
-                samps = torch.softmax(y_u, dim=1)
-
-                pred = logic_net(samps)
-                true = logic(samps).unsqueeze(1).float()
-
-                true_label = torch.ones_like(pred)
-                idxs = (true.squeeze(1) == 0)
-
-                if idxs.sum() > 1:
-                    target_loss = F.binary_cross_entropy(pred, true_label, reduction="none")[idxs]
-                    loss += opt.unl_weight*target_loss.mean()
+        #
+        # if opt.sloss:
+        #     # train logic net
+        #     samps = torch.softmax(y_l.detach(), dim=1)
+        #
+        #     logic_net.train()
+        #
+        #     pred = logic_net(samps)
+        #     true = logic(samps).unsqueeze(1).float()
+        #
+        #     idxs = (true.squeeze(1) == 0)
+        #     target_loss = F.binary_cross_entropy(pred, true, reduction="none")
+        #
+        #     # balance the number of even and non-even samples here??
+        #     loss_logic = (target_loss[idxs].sum() + target_loss[~idxs].sum())
+        #
+        #     optimizer_logic.zero_grad()
+        #     loss_logic.backward()
+        #     optimizer_logic.step()
+        #
+        #     if counter > 10:
+        #         logic_net.eval()
+        #         y_u = data_parallel(f, inputs_u, params, sample[2], list(range(opt.ngpu))).float()
+        #         samps = torch.softmax(y_u, dim=1)
+        #
+        #         pred = logic_net(samps)
+        #         true = logic(samps).unsqueeze(1).float()
+        #
+        #         true_label = torch.ones_like(pred)
+        #         idxs = (true.squeeze(1) == 0)
+        #
+        #         if idxs.sum() > 1:
+        #             target_loss = F.binary_cross_entropy(pred, true_label, reduction="none")[idxs]
+        #             loss += opt.unl_weight*target_loss.mean()
 
         return loss, y_l
 
