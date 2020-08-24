@@ -399,7 +399,9 @@ def main():
 
         inputs = cast(sample[0], opt.dtype)
         targets = cast(sample[1], 'long')
-        y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
+        hidden_params = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
+        z, mu, logvar = resample(hidden_params, hidden_dim=hidden_dim)
+        y = decoder(z)
 
         return F.cross_entropy(y, targets), y
 
