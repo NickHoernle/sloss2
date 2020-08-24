@@ -139,12 +139,11 @@ class Decoder(nn.Module):
     def __init__(self, hidden_dim, num_dim):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(hidden_dim, 500),
+            nn.Linear(hidden_dim, 100),
             nn.ReLU(True),
-            nn.Linear(500, 100),
+            nn.Linear(100, 100),
             nn.ReLU(True),
-            nn.Linear(100, num_dim),
-            nn.LogSoftmax(dim=1)
+            nn.Linear(100, num_dim)
         )
 
     def forward(self, x):

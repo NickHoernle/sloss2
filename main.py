@@ -165,11 +165,13 @@ def mean(numbers):
     return float(sum(numbers)) / max(len(numbers), 1)
 
 
-def resample(y, hidden_dim=50):
-    mu, logvar = y[:, :hidden_dim], y[:, hidden_dim:]
+def resample(hidden_sample, hidden_dim=50):
+
+    mu, logvar = hidden_sample[:, :hidden_dim], hidden_sample[:, hidden_dim:]
     std = torch.exp(0.5 * logvar)
     eps = torch.randn_like(std)
-    return (mu, logvar, mu + eps*std)
+
+    return mu + eps*std, mu, logvar
 
 
 def get_CIFAR10(augment, dataroot, download):
@@ -204,6 +206,7 @@ def main():
     epoch_step = json.loads(opt.epoch_step)
 
     num_classes = 10 if opt.dataset == 'CIFAR10' else 100
+    hidden_dim = num_classes
 
     torch.manual_seed(opt.seed)
     os.environ['CUDA_VISIBLE_DEVICES'] = opt.gpu_id
@@ -261,7 +264,7 @@ def main():
     constraint_accuracy, super_class_accuracy = [], []
     superclass_indexes = {}
 
-    f, params = resnet(opt.depth, opt.width, num_classes)
+    f, params = resnet(opt.depth, opt.width, hidden_dim*2)
 
     if opt.sloss:
         # don't model on the simplex
@@ -283,9 +286,16 @@ def main():
         optimizer_logic = Adam(logic_net.parameters(), lr=1e-1, weight_decay=1e-5)
         scheduler = StepLR(optimizer_logic, step_size=50, gamma=0.2)
 
+    decoder = Decoder(hidden_dim=hidden_dim, num_dim=num_classes)
+    decoder.to(device)
+        # optimizer_decoder = Adam(decoder.parameters(), lr=1e-1, weight_decay=1e-5)
+        # scheduler_decoder = StepLR(optimizer_decoder, step_size=50, gamma=0.2)
+
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
-        return SGD([v for v in params.values() if v.requires_grad], lr, momentum=0.9, weight_decay=args.weight_decay)
+        params_ = [v for v in params.values() if v.requires_grad]
+        params_ += list(decoder.parameters())
+        return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
 
     optimizer = create_optimizer(opt, opt.lr)
 
@@ -321,8 +331,12 @@ def main():
         targets_l = cast(l[1], 'long')
         inputs_u = cast(u[0], opt.dtype)
 
-        y_l = data_parallel(f, inputs_l, params, sample[2], list(range(opt.ngpu))).float()
+        hidden_params = data_parallel(f, inputs_l, params, sample[2], list(range(opt.ngpu))).float()
+        z, mu, logvar = resample(hidden_params, hidden_dim=hidden_dim)
+        y_l = decoder(z)
+
         loss = F.cross_entropy(y_l, targets_l)
+        kld = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()).sum(dim=-1)
         #
         # if opt.sloss:
         #     # train logic net
@@ -358,7 +372,7 @@ def main():
         #             target_loss = F.binary_cross_entropy(pred, true_label, reduction="none")[idxs]
         #             loss += opt.unl_weight*target_loss.mean()
 
-        return loss, y_l
+        return loss + 0.01*kld.mean(), y_l
 
 
         # if opt.dataset == "CIFAR100":
