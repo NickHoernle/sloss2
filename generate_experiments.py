@@ -19,7 +19,7 @@ repeats = 1
 sloss = [True, False]
 dataset = ["CIFAR10"]
 learning_rate = [1.0, 5e-1, 2e-1, 1e-1]
-unl_weight = [5e-2, 1e-2, 5e-3]
+unl_weight = [1.]
 lr_decay_ratio = [.2]
 
 settings = [(lr, sloss_, unl_, lr_decay_ratio_, dataset_, rep)
