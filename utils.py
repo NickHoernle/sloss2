@@ -5,11 +5,12 @@ from torch.nn.parallel._functions import Broadcast
 from torch.nn.parallel import scatter, parallel_apply, gather
 from functools import partial
 from nested_dict import nested_dict
+import numpy as np
 
 
 def cast(params, dtype='float'):
     if isinstance(params, dict):
-        return {k: cast(v, dtype) for k,v in params.items()}
+        return {k: cast(v, dtype) for k, v in params.items()}
     else:
         return getattr(params.cuda() if torch.cuda.is_available() else params, dtype)()
 
@@ -38,7 +39,7 @@ def data_parallel(f, input, params, mode, device_ids, output_device=None):
         return f(input, params, mode)
 
     params_all = Broadcast.apply(device_ids, *params.values())
-    params_replicas = [{k: params_all[i + j*len(params)] for i, k in enumerate(params.keys())}
+    params_replicas = [{k: params_all[i + j * len(params)] for i, k in enumerate(params.keys())}
                        for j in range(len(device_ids))]
 
     replicas = [partial(f, params=p, mode=mode)
@@ -70,3 +71,28 @@ def set_requires_grad_except_bn_(params):
     for k, v in params.items():
         if not k.endswith('running_mean') and not k.endswith('running_var'):
             v.requires_grad = True
+
+
+def x_u_split(labels, num_labelled, num_classes):
+    label_per_class = num_labelled // num_classes
+    labels = np.array(labels)
+    labelled_idx = []
+    unlabelled_idx = []
+    for i in range(num_classes):
+        idx = np.where(labels == i)[0]
+        np.random.shuffle(idx)
+        labelled_idx.extend(idx[:label_per_class])
+        unlabelled_idx.extend(idx[label_per_class:])
+
+    return labelled_idx, unlabelled_idx
+
+
+def calculate_accuracy(preds, labels):
+    no_examples = labels.shape[0]
+    preds = preds.cpu().numpy()
+    labels = labels.cpu().numpy()
+
+    preds = (preds > 0.5).astype(int)
+    acc = np.sum(np.all(preds == labels, axis=1)) / float(labels.shape[0])
+    return acc * 100
+
