@@ -3,10 +3,10 @@ import torch.nn.functional as F
 import utils
 
 
-def resnet(depth, width, num_classes):
+def resnet(depth, width, num_classes, img_size):
     assert (depth - 4) % 6 == 0, 'depth should be 6n+4'
     n = (depth - 4) // 6
-    widths = [int(v * width) for v in (16, 32, 64)]
+    widths = [int(v * width) for v in (img_size//2, img_size, img_size*2)]
 
     def gen_block_params(ni, no):
         return {
@@ -22,8 +22,8 @@ def resnet(depth, width, num_classes):
                 for i in range(count)}
 
     flat_params = utils.cast(utils.flatten({
-        'conv0': utils.conv_params(3, 16, 3),
-        'group0': gen_group_params(16, widths[0], n),
+        'conv0': utils.conv_params(3, img_size//2, 3),
+        'group0': gen_group_params(img_size//2, widths[0], n),
         'group1': gen_group_params(widths[0], widths[1], n),
         'group2': gen_group_params(widths[1], widths[2], n),
         'bn': utils.bnparams(widths[2]),
@@ -53,7 +53,7 @@ def resnet(depth, width, num_classes):
         g1 = group(g0, params, 'group1', mode, 2)
         g2 = group(g1, params, 'group2', mode, 2)
         o = F.relu(utils.batch_norm(g2, params, 'bn', mode))
-        o = F.avg_pool2d(o, 8, 1, 0)
+        o = F.avg_pool2d(o, img_size//4, 1, 0)
         o = o.view(o.size(0), -1)
         o = F.linear(o, params['fc.weight'], params['fc.bias'])
         return o
