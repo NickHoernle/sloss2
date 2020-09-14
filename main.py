@@ -205,6 +205,17 @@ def main():
     global counter
     counter = 0
 
+    device = torch.cuda.current_device()
+    print(f"On GPU: {device}")
+
+    print(f"{torch.cuda.device(device)}")
+
+    print(f"# devices: {torch.cuda.device_count()}")
+
+    print(f"Device name: {torch.cuda.get_device_name(device)}")
+
+    print(f"{torch.cuda.is_available()}")
+
     def compute_loss(sample):
         model_y.train()
         if not args.ssl:
@@ -217,6 +228,8 @@ def main():
                 return F.cross_entropy(y, targets), y
         else:
             global counter
+            print(f"Train: {counter}")
+
             l = sample[0]
             u = sample[1]
             inputs_l = cast(l[0], args.dtype)
