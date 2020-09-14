@@ -9,6 +9,8 @@ from torch.optim import SGD, Adam
 import torch.utils.data as data
 from torch.utils.data import DataLoader, Subset
 import torch.nn.functional as F
+from torch import nn
+
 import torchnet as tnt
 from torchnet.engine import Engine
 from utils import cast, data_parallel, print_tensor_dict, x_u_split, calculate_accuracy
@@ -97,6 +99,12 @@ def check_manual_seed(seed):
     torch.backends.cudnn.deterministic = True
 
 
+def reparameterise(mu, logvar):
+    std = torch.exp(0.5 * logvar)
+    eps = torch.randn_like(std)
+    return F.softmax(mu + eps * std, dim=1)
+
+
 def main():
     args = parser.parse_args()
     print('parsed options:', vars(args))
@@ -148,22 +156,29 @@ def main():
         worker_init_fn=_init_fn
     )
 
-    model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
+    if args.lp:
+        model, params = resnet(args.depth, args.width, 2*num_classes, image_shape[0])
+    else:
+        model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
 
     if args.lp:
-        num_flow_classes = num_classes if not num_classes % 2 else num_classes + 1
-        prior_y = MultivariateNormal(torch.zeros(num_flow_classes).to("cuda:0"),
-                                     torch.eye(num_flow_classes).to("cuda:0"))
-        num_flows = 3
-        flows = [NSF_CL(dim=num_flow_classes, K=8, B=3, hidden_dim=16) for _ in range(num_flows)]
-        convs = [Invertible1x1Conv(dim=num_flow_classes) for i in range(num_flows)]
-        flows = list(itertools.chain(*zip(convs, flows)))
-        model_y = NormalizingFlowModel(prior_y, flows, num_flow_classes).to("cuda:0")
-        optimizer_y = Adam(model_y.parameters(), lr=1e-3, weight_decay=1e-5)
+        model_y = nn.Sequential(
+            nn.Linear(num_classes, 50),
+            nn.BatchNorm1d(50),
+            nn.ReLU(True),
+            nn.Linear(50, 50),
+            nn.BatchNorm1d(50),
+            nn.ReLU(True),
+            nn.Linear(50, num_classes)
+        )
+        # optimizer_y = Adam(model_y.parameters(), lr=1e-3, weight_decay=1e-5)
 
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
-        return SGD([v for v in params.values() if v.requires_grad], lr, momentum=0.9, weight_decay=args.weight_decay)
+        params_ = [v for v in params.values() if v.requires_grad]
+        if args.lp:
+            params_ += list(model_y.parameters())
+        return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
 
     optimizer = create_optimizer(args, args.lr)
 
@@ -205,8 +220,10 @@ def main():
             inputs_l = cast(l[0], args.dtype)
             targets_l = cast(l[1], 'long')
             inputs_u = cast(u[0], args.dtype)
+
             y_l = data_parallel(model, inputs_l, params, sample[2], list(range(args.ngpu))).float()
             y_u = data_parallel(model, inputs_u, params, sample[2], list(range(args.ngpu))).float()
+
             if args.dataset == "awa2":
                 loss = F.binary_cross_entropy_with_logits(y_l, targets_l.float())
             else:
@@ -237,42 +254,33 @@ def main():
 
 
             elif args.lp:
-                model_y.eval()
-                if args.dataset == "awa2":
-                    labels_pred = F.sigmoid(y_u)
-                else:
-                    labels_pred = F.softmax(y_u, dim=1)
-                if num_classes % 2:
-                    labels_pred = torch.cat((labels_pred, torch.zeros((labels_pred.shape[0], 1)).to("cuda:0")), dim=1)
-                _, nll_ypred = model_y(labels_pred)
-                if counter >= 10:
-                    loss_nll_ypred = args.unl_weight * torch.mean(nll_ypred)
-                    loss += loss_nll_ypred
+                mu_l, logvar_l = y_l[:, :num_classes], y_l[:, num_classes:]
+                y_l_full = model_y(reparameterise(mu_l, logvar_l))
 
-                model_y.train()
-                optimizer_y.zero_grad()
-                if args.dataset == "awa2":
-                    a = targets_l.float() * 120. + (1 - targets_l.float()) * 1.1
-                    b = (1 - targets_l.float()) * 120. + targets_l.float() * 1.1
-                    beta_targets = Beta(a, b).rsample()
-                    if num_classes % 2:
-                        beta_targets = torch.cat((beta_targets, torch.zeros((beta_targets.shape[0], 1)).to("cuda:0")),
-                                                 dim=1)
-                    zs, nll_y = model_y(beta_targets)
-                else:
-                    one_hot_targets = F.one_hot(torch.tensor(targets_l), num_classes).float()
-                    one_hot_targets = one_hot_targets * 120 + (1 - one_hot_targets) * 1.1
-                    dirichlet_targets = torch.stack([Dirichlet(i).sample() for i in one_hot_targets])
-                    zs, nll_y = model_y(dirichlet_targets)
-                loss_nll_y = torch.mean(nll_y)
-                loss_nll_y.backward()
-                optimizer_y.step()
+                mu_u, logvar_u = y_u[:, :num_classes], y_u[:, num_classes:]
+                # y_u_full = model_y(reparameterise(mu_u, logvar_u))
+
+                kld_l = -0.5 * (1 + logvar_l - mu_l.pow(2) - logvar_l.exp()).sum(dim=-1)
+                kld_u = -0.5 * (1 + logvar_u - mu_u.pow(2) - logvar_u.exp()).sum(dim=-1)
+
+                loss = F.cross_entropy(y_l_full, targets_l)
+                loss += kld_l.mean()
+
+                loss += args.unl_weight * kld_u.mean()
+                return loss, y_l_full
+
             return loss, y_l
 
     def compute_loss_test(sample):
         inputs = cast(sample[0], args.dtype)
         targets = cast(sample[1], 'long')
         y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
+        if args.lp:
+            mu, logvar = y[:, :num_classes], y[:, num_classes:]
+            y_full = model_y(reparameterise(mu, logvar))
+            kld = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()).sum(dim=-1)
+            return F.cross_entropy(y_full, targets) + kld.mean(), y_full
+
         if args.dataset == "awa2":
             return F.binary_cross_entropy_with_logits(y, targets.float()), y
         else:
