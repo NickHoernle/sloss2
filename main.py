@@ -171,6 +171,7 @@ def main():
             nn.ReLU(True),
             nn.Linear(50, num_classes)
         )
+        model_y.to("cuda:0")
         # optimizer_y = Adam(model_y.parameters(), lr=1e-3, weight_decay=1e-5)
 
     def create_optimizer(args, lr):
