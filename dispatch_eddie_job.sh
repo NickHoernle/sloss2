@@ -10,7 +10,7 @@
 #
 # Minimum 16 GB RAM for K80 GPUs
 #$ -pe gpu 1
-#$ -l h_vmem=16G
+#$ -l h_vmem=32G
 
 
 
