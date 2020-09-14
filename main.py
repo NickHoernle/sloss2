@@ -320,8 +320,8 @@ def main():
                 classacc.add(state['output'].data, state['sample'][0][1])
         meter_loss.add(loss)
 
-        if state['train']:
-            state['iterator'].set_postfix(loss=loss)
+        # if state['train']:
+        #     state['iterator'].set_postfix(loss=loss)
 
     def on_start(state):
         state['epoch'] = epoch
@@ -330,7 +330,7 @@ def main():
         classacc.reset()
         meter_loss.reset()
         timer_train.reset()
-        state['iterator'] = tqdm(train_loader, dynamic_ncols=True)
+        # state['iterator'] = tqdm(train_loader, dynamic_ncols=True)
 
         epoch = state['epoch'] + 1
         if epoch in epoch_step:
