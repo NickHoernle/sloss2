@@ -255,6 +255,7 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
+                weight = np.min([1, 0.01*counter])
 
                 mu_l, logvar_l = y_l[:, :num_classes], y_l[:, num_classes:]
                 y_l_full = model_y(reparameterise(mu_l, logvar_l))
@@ -266,10 +267,10 @@ def main():
                 kld_u = -0.5 * (1 + logvar_u - mu_u.pow(2) - logvar_u.exp()).sum(dim=-1)
 
                 loss = F.cross_entropy(y_l_full, targets_l)
-                # loss += args.unl_weight * kld_l.mean()
+                loss += weight * args.unl_weight * kld_l.mean()
 
-                # if epoch > 10:
-                #     loss += args.unl_weight * kld_u.mean()
+                if counter >= 10:
+                    loss += weight * args.unl_weight * kld_u.mean()
 
                 return loss, y_l_full
 
