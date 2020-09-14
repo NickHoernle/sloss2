@@ -18,12 +18,14 @@ repeats = 1
 
 dataset = ["cifar10"]
 learning_rate = [5e-1, 1e-1, 5e-2]
-unl_weight = [1, .5, 0.1]
+unl_weight = [1, 0.1, 0.01]
+unl2_weight = [1, 0.1, 0.01]
 lr_decay_ratio = [0.2]
 
-settings = [(lr, unl_, lr_decay_ratio_, dataset_, rep)
+settings = [(lr, unl_, unl2_, lr_decay_ratio_, dataset_, rep)
             for lr in learning_rate
             for unl_ in unl_weight
+            for unl2_ in unl2_weight
             for lr_decay_ratio_ in lr_decay_ratio
             for dataset_ in dataset
             for rep in range(repeats)]
@@ -37,13 +39,14 @@ print(f'Estimated time = {(nr_expts / nr_servers * avg_expt_time)/60} hrs')
 
 output_file = open("experiment.txt", "w")
 
-for (lr, unl_, lr_decay_ratio_, dataset_, rep) in settings:
+for (lr, unl_, unl2_, lr_decay_ratio_, dataset_, rep) in settings:
     # Note that we don't set a seed for rep - a seed is selected at random
     # and recorded in the output data by the python script
     expt_call = (
         f"{base_call} "
         f"--lr {lr} "
         f"--unl_weight {unl_} "
+        f"--unl2_weight {unl2_} "
         f"--lr_decay_ratio {lr_decay_ratio_} "
         f"--dataset {dataset_} "
     )

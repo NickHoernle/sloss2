@@ -76,6 +76,8 @@ parser.add_argument("--semantic_loss", action="store_true",
                     help="Add the semantic loss")
 parser.add_argument("--unl_weight", type=float, default=0.1,
                     help="Weight for unlabelled regularizer loss")
+parser.add_argument("--unl2_weight", type=float, default=0.1,
+                    help="Weight for unlabelled regularizer loss")
 
 
 def check_dataset(dataset, dataroot, augment, download):
@@ -261,7 +263,7 @@ def main():
                 y_l_full = model_y(reparameterise(mu_l, logvar_l))
 
                 mu_u, logvar_u = y_u[:, :num_classes], y_u[:, num_classes:]
-                # y_u_full = model_y(reparameterise(mu_u, logvar_u))
+                y_u_full = model_y(reparameterise(mu_u, logvar_u))
 
                 kld_l = -0.5 * (1 + logvar_l - mu_l.pow(2) - logvar_l.exp()).sum(dim=-1)
                 kld_u = -0.5 * (1 + logvar_u - mu_u.pow(2) - logvar_u.exp()).sum(dim=-1)
@@ -270,7 +272,9 @@ def main():
                 loss += weight * args.unl_weight * kld_l.mean()
 
                 if counter >= 10:
-                    loss += weight * args.unl_weight * kld_u.mean()
+                    log_y_u_full = torch.log_softmax(y_u_full, dim=1)
+                    cross_ent = (torch.exp(log_y_u_full)*log_y_u_full).sum(dim=-1)
+                    loss += args.unl2_weight * (weight * kld_u.mean() + cross_ent.mean())
 
                 return loss, y_l_full
 
