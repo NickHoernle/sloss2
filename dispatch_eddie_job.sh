@@ -3,20 +3,19 @@
 # Grid Engine options (lines prefixed with #$)
 # Runtime limit of 1 hour:
 #$ -l h_rt=01:00:00
+#$ -N torchtest
 #
 # Set working directory to the directory where the job is submitted from:
 #$ -cwd
 #
-# Request one GPU:
+# Minimum 16 GB RAM for K80 GPUs
 #$ -pe gpu 1
-#
-# Request 4 GB system RAM
-# the total system RAM available to the job is the value specified here multiplied by
-# the number of requested GPUs (above)
-#$ -l h_vmem=16G
+#$ -l h_vmem=20G
+
+
 
 # Initialise the environment modules and load CUDA version 8.0.61
-. /etc/profile.d/modules.sh
+#. /etc/profile.d/modules.sh
 module load anaconda
 
 # Run the executable
