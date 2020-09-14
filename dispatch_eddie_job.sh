@@ -16,6 +16,7 @@
 
 # Initialise the environment modules and load CUDA version 8.0.61
 #. /etc/profile.d/modules.sh
+source /exports/applications/support/set_cuda_visible_devices.sh
 module load anaconda
 
 # Run the executable
