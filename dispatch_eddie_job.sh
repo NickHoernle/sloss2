@@ -14,6 +14,8 @@
 # the total system RAM available to the job is the value specified here multiplied by
 # the number of requested GPUs (above)
 #$ -l h_vmem=4G
+#PBS -e /exports/csce/eddie/inf/groups/cisa_gal/nick/error_logs/${SGE_TASK_ID}.txt
+#PBS -o /exports/csce/eddie/inf/groups/cisa_gal/nick/file_logs/${SGE_TASK_ID}.txt
 
 # Initialise the environment modules and load CUDA version 8.0.61
 . /etc/profile.d/modules.sh
@@ -50,7 +52,7 @@ mkdir -p ${SCRATCH_HOME}
 # Activate your conda environment
 CONDA_ENV_NAME=sloss
 echo "Activating conda environment: ${CONDA_ENV_NAME}"
-conda activate ${CONDA_ENV_NAME}
+source activate ${CONDA_ENV_NAME}
 
 # ensure you are running the latest code
 pip uninstall -y semantic-loss
