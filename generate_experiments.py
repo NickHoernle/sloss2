@@ -6,7 +6,7 @@ import os
 USER = os.getenv('USER')
 # This may need changing to e.g. /disk/scratch_fast depending on the cluster
 
-SCRATCH_DISK = '/disk/scratch'
+SCRATCH_DISK = '/exports/eddie/scratch'
 SCRATCH_HOME = f'{SCRATCH_DISK}/{USER}'
 
 DATA_HOME = f'{SCRATCH_HOME}/vaelib'
