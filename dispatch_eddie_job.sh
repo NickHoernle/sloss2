@@ -13,7 +13,7 @@
 # Request 4 GB system RAM
 # the total system RAM available to the job is the value specified here multiplied by
 # the number of requested GPUs (above)
-#$ -l h_vmem=4G
+#$ -l h_vmem=12G
 
 # Initialise the environment modules and load CUDA version 8.0.61
 . /etc/profile.d/modules.sh
