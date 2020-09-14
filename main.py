@@ -206,6 +206,7 @@ def main():
     counter = 0
 
     def compute_loss(sample):
+        model_y.train()
         if not args.ssl:
             inputs = cast(sample[0], args.dtype)
             targets = cast(sample[1], 'long')
@@ -275,6 +276,7 @@ def main():
             return loss, y_l
 
     def compute_loss_test(sample):
+        model_y.eval()
         inputs = cast(sample[0], args.dtype)
         targets = cast(sample[1], 'long')
         y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
