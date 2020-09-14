@@ -166,10 +166,8 @@ def main():
     if args.lp:
         model_y = nn.Sequential(
             nn.Linear(num_classes, 50),
-            nn.BatchNorm1d(50),
             nn.ReLU(True),
             nn.Linear(50, 50),
-            nn.BatchNorm1d(50),
             nn.ReLU(True),
             nn.Linear(50, num_classes)
         )
@@ -274,7 +272,7 @@ def main():
                 if counter >= 10:
                     log_y_u_full = torch.log_softmax(y_u_full, dim=1)
                     cross_ent = (torch.exp(log_y_u_full)*log_y_u_full).sum(dim=-1)
-                    loss += args.unl2_weight * (weight * kld_u.mean() + cross_ent.mean())
+                    loss += args.unl2_weight * (args.unl_weight * weight * kld_u.mean() + cross_ent.mean())
 
                 return loss, y_l_full
 

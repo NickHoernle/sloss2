@@ -17,9 +17,9 @@ base_call = (f"python main.py --save {DATA_HOME}/logs/resnet_$RANDOM$RANDOM "
 repeats = 1
 
 dataset = ["cifar10"]
-learning_rate = [5e-1, 1e-1, 5e-2]
-unl_weight = [1, 0.1, 0.01]
-unl2_weight = [1, 0.1, 0.01]
+learning_rate = [1e-1, 5e-2]
+unl_weight = [1e-1, 1e-2, 1e-3, 1e-4]
+unl2_weight = [1e-1, 1e-2, 1e-3]
 lr_decay_ratio = [0.2]
 
 settings = [(lr, unl_, unl2_, lr_decay_ratio_, dataset_, rep)
