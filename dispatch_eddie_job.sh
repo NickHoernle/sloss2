@@ -3,14 +3,14 @@
 # Grid Engine options (lines prefixed with #$)
 # Runtime limit of 1 hour:
 #$ -l h_rt=01:00:00
-#$ -N /exports/csce/eddie/inf/groups/cisa_gal/nick/logs/semloss
+#$ -N zsemloss
 #
 # Set working directory to the directory where the job is submitted from:
 #$ -cwd
 #
 # Minimum 16 GB RAM for K80 GPUs
-#$ -pe gpu-titanx 1
-#$ -l h_vmem=24G
+#$ -pe gpu 1
+#$ -l h_vmem=16G
 
 
 
