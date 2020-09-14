@@ -55,8 +55,8 @@ echo "Activating conda environment: ${CONDA_ENV_NAME}"
 source activate ${CONDA_ENV_NAME}
 
 # ensure you are running the latest code
-pip uninstall -y semantic-loss
-pip install .
+#pip uninstall -y semantic-loss
+#pip install .
 
 echo "Moving input data to the compute node's scratch space: $SCRATCH_DISK"
 
