@@ -18,7 +18,7 @@ repeats = 1
 
 dataset = ["cifar10"]
 learning_rate = [1e-1, 5e-2]
-unl_weight = [1., 1e-1, 1e-2, 1e-3, 1e-4]
+unl_weight = [1., 1e-1, 1e-2]
 unl2_weight = [1e-1, 1e-2, 1e-3]
 lr_decay_ratio = [0.2]
 
