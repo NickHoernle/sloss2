@@ -104,7 +104,32 @@ def check_manual_seed(seed):
 def reparameterise(mu, logvar):
     std = torch.exp(0.5 * logvar)
     eps = torch.randn_like(std)
-    return F.softmax(mu + eps * std, dim=1)
+    return mu + eps * std
+
+
+def init_weights(m):
+    if type(m) == nn.Linear:
+        torch.nn.init.xavier_uniform(m.weight)
+        m.bias.data.fill_(0.01)
+
+
+class DecoderModel(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+        self.net = nn.Sequential(
+                nn.Linear(num_classes, 50),
+                nn.ReLU(True),
+                nn.Linear(50, 50),
+                nn.ReLU(True),
+                nn.Linear(50, num_classes)
+            )
+        self.scale_param = nn.Parameter(torch.ones(num_classes))
+
+    def forward(self, x):
+        identity = x
+        out = self.net(x)
+        out += identity
+        return self.scale_param*out
 
 
 def main():
@@ -164,15 +189,9 @@ def main():
         model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
 
     if args.lp:
-        model_y = nn.Sequential(
-            nn.Linear(num_classes, 50),
-            nn.ReLU(True),
-            nn.Linear(50, 50),
-            nn.ReLU(True),
-            nn.Linear(50, num_classes)
-        )
+        model_y = DecoderModel(num_classes)
         model_y.to("cuda:0")
-        # optimizer_y = Adam(model_y.parameters(), lr=1e-3, weight_decay=1e-5)
+        model_y.apply(init_weights)
 
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
@@ -228,7 +247,6 @@ def main():
                 return F.cross_entropy(y, targets), y
         else:
             global counter
-            print(f"Train: {counter}")
 
             l = sample[0]
             u = sample[1]
