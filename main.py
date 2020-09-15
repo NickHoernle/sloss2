@@ -104,7 +104,7 @@ def check_manual_seed(seed):
 def reparameterise(mu, logvar):
     std = torch.exp(0.5 * logvar)
     eps = torch.randn_like(std)
-    return mu + eps * std
+    return torch.log_softmax(mu + eps * std, dim=1)
 
 
 def init_weights(m):
