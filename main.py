@@ -292,7 +292,8 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                weight = np.min([1, 0.01*counter])
+                # weight = np.min([1, 0.01*counter])
+                weight = 1.
 
                 mu_l, logvar_l = y_l[:, :num_classes], y_l[:, num_classes:]
                 y_l_full = model_y(reparameterise(mu_l, logvar_l))
