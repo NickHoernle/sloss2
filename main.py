@@ -235,6 +235,12 @@ def main():
 
     print(f"{torch.cuda.is_available()}")
 
+    alpha = 1. / num_classes
+    mu_prior = np.log(alpha) - 1 / num_classes * num_classes * np.log(alpha)
+    sigma_prior = 1. / alpha * (1 - 2. / num_classes) + 1 / (num_classes ** 2) * num_classes / alpha
+    inv_sigma1 = 1. / sigma_prior
+    log_det_sigma = num_classes * np.log(sigma_prior)
+
     def compute_loss(sample):
         model_y.train()
         if not args.ssl:
@@ -294,8 +300,8 @@ def main():
                 mu_u, logvar_u = y_u[:, :num_classes], y_u[:, num_classes:]
                 y_u_full = model_y(reparameterise(mu_u, logvar_u))
 
-                kld_l = -0.5 * (1 + logvar_l - mu_l.pow(2) - logvar_l.exp()).sum(dim=-1)
-                kld_u = -0.5 * (1 + logvar_u - mu_u.pow(2) - logvar_u.exp()).sum(dim=-1)
+                kld_l = 0.5 * ((inv_sigma1*logvar_l.exp() + inv_sigma1*mu_l.pow(2) - 1 - logvar_l).sum(dim=1) + log_det_sigma)
+                kld_u = 0.5 * ((inv_sigma1*logvar_u.exp() + inv_sigma1*mu_u.pow(2) - 1 - logvar_u).sum(dim=1) + log_det_sigma)
 
                 loss = F.cross_entropy(y_l_full, targets_l)
                 loss += weight * args.unl_weight * kld_l.mean()
