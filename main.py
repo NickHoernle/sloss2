@@ -150,8 +150,7 @@ class DecoderModel(nn.Module):
         # identity = z
         # out = self.net(z)
         # out += identity
-
-        return probs.mm(decoder_.T), mu, logvar
+        return probs.mm(decoder_.transpose(0, 1)), mu, logvar
 
 
 def main():
