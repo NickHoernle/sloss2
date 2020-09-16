@@ -130,6 +130,7 @@ class DecoderModel(nn.Module):
             nn.Linear(50, num_classes)
         )
 
+        self.decoder = nn.Parameter(torch.ones((num_classes, num_classes)), requires_grad=True)
         # self.net = nn.Sequential(
         #         nn.Linear(num_classes, 50),
         #         nn.ReLU(True),
@@ -143,11 +144,14 @@ class DecoderModel(nn.Module):
         logvar = self.logvar_encoder(x)
         z = reparameterise(mu, logvar)
 
+        # apply decoding layer(s)
+        probs = torch.softmax(z, dim=1)
+        decoder_ = torch.softmax(self.decoder, dim=1)
         # identity = z
         # out = self.net(z)
         # out += identity
 
-        return z, mu, logvar
+        return probs.mm(decoder_.T), mu, logvar
 
 
 def main():
@@ -316,11 +320,10 @@ def main():
                 y_l_full, mu_l, logvar_l = model_y(y_l)
                 kld_l = 0.5 * ((inv_sigma1*logvar_l.exp() + inv_sigma1*mu_l.pow(2) - 1 - logvar_l).sum(dim=1) + log_det_sigma)
 
-                recon_loss = F.cross_entropy(y_l_full, targets_l)
+                recon_loss = F.nll_loss(torch.log(y_l_full), targets_l)
                 loss = recon_loss
                 kld_loss = weight * args.unl_weight * kld_l.mean()
                 loss += kld_loss
-
                 # import pdb
                 # pdb.set_trace()
 
@@ -329,8 +332,7 @@ def main():
                     kld_u = 0.5 * ((inv_sigma1 * logvar_u.exp() + inv_sigma1 * mu_u.pow(2) - 1 - logvar_u).sum(
                         dim=1) + log_det_sigma)
 
-                    log_y_u_full = torch.log_softmax(y_u_full, dim=1)
-                    cross_ent = (torch.exp(log_y_u_full)*log_y_u_full).sum(dim=-1)
+                    cross_ent = (y_u_full*torch.log(y_u_full)).sum(dim=-1)
                     loss += args.unl2_weight * (args.unl_weight * weight * kld_u.mean() + cross_ent.mean())
 
                 return loss, y_l_full
@@ -345,7 +347,8 @@ def main():
         if args.lp:
             y_full, mu, logvar = model_y(y)
             kld = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()).sum(dim=-1)
-            return F.cross_entropy(y_full, targets) + args.unl_weight*kld.mean(), y_full
+            recon = F.nll_loss(torch.log(y_full), targets)
+            return recon + args.unl_weight*kld.mean(), y_full
 
         if args.dataset == "awa2":
             return F.binary_cross_entropy_with_logits(y, targets.float()), y
