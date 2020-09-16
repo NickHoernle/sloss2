@@ -44,7 +44,7 @@ parser.add_argument('--lr', default=0.1, type=float)
 parser.add_argument('--epochs', default=200, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--weight_decay', default=0.0005, type=float)
-parser.add_argument('--epoch_step', default='[60, 120, 160]', type=str,
+parser.add_argument('--epoch_step', default='[10, 50, 100, 150]', type=str,
                     help='json list with epochs to drop lr on')
 parser.add_argument('--lr_decay_ratio', default=0.2, type=float)
 parser.add_argument('--resume', default='', type=str)
@@ -320,9 +320,6 @@ def main():
                 loss = recon_loss
                 kld_loss = weight * args.unl_weight * kld_l.mean()
                 loss += kld_loss
-
-                # import pdb
-                # pdb.set_trace()
 
                 if counter >= 10:
                     log_y_u_full = torch.log_softmax(y_u_full, dim=1)
