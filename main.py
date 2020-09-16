@@ -104,7 +104,7 @@ def check_manual_seed(seed):
 def reparameterise(mu, logvar):
     std = torch.exp(0.5 * logvar)
     eps = torch.randn_like(std)
-    return torch.log_softmax(mu + eps * std, dim=1)
+    return mu + eps * std
 
 
 def init_weights(m):
@@ -116,6 +116,18 @@ def init_weights(m):
 class DecoderModel(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
+        self.mu_encoder = nn.Sequential(
+            nn.Linear(num_classes, 50),
+            nn.ReLU(True),
+            nn.Linear(50, num_classes)
+        )
+
+        self.logvar_encoder = nn.Sequential(
+            nn.Linear(num_classes, 50),
+            nn.ReLU(True),
+            nn.Linear(50, num_classes)
+        )
+
         self.net = nn.Sequential(
                 nn.Linear(num_classes, 50),
                 nn.ReLU(True),
@@ -123,13 +135,17 @@ class DecoderModel(nn.Module):
                 nn.ReLU(True),
                 nn.Linear(50, num_classes)
             )
-        self.scale_param = nn.Parameter(torch.ones(num_classes))
 
     def forward(self, x):
-        identity = x
-        out = self.net(x)
+        mu = self.mu_encoder(x)
+        logvar = self.logvar_encoder(x)
+        z = reparameterise(mu, logvar)
+
+        identity = z
+        out = self.net(z)
         out += identity
-        return self.scale_param*out
+
+        return out, mu, logvar
 
 
 def main():
@@ -183,10 +199,7 @@ def main():
         worker_init_fn=_init_fn
     )
 
-    if args.lp:
-        model, params = resnet(args.depth, args.width, 2*num_classes, image_shape[0])
-    else:
-        model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
+    model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
 
     if args.lp:
         model_y = DecoderModel(num_classes)
@@ -295,11 +308,9 @@ def main():
                 # weight = np.min([1, 0.01*counter])
                 weight = 1.
 
-                mu_l, logvar_l = y_l[:, :num_classes], y_l[:, num_classes:]
-                y_l_full = model_y(reparameterise(mu_l, logvar_l))
+                y_l_full, mu_l, logvar_l = model_y(y_l)
 
-                mu_u, logvar_u = y_u[:, :num_classes], y_u[:, num_classes:]
-                y_u_full = model_y(reparameterise(mu_u, logvar_u))
+                y_u_full, mu_u, logvar_u = model_y(y_u)
 
                 kld_l = 0.5 * ((inv_sigma1*logvar_l.exp() + inv_sigma1*mu_l.pow(2) - 1 - logvar_l).sum(dim=1) + log_det_sigma)
                 kld_u = 0.5 * ((inv_sigma1*logvar_u.exp() + inv_sigma1*mu_u.pow(2) - 1 - logvar_u).sum(dim=1) + log_det_sigma)
@@ -322,8 +333,7 @@ def main():
         targets = cast(sample[1], 'long')
         y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
         if args.lp:
-            mu, logvar = y[:, :num_classes], y[:, num_classes:]
-            y_full = model_y(reparameterise(mu, logvar))
+            y_full, mu, logvar = model_y(y)
             kld = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()).sum(dim=-1)
             return F.cross_entropy(y_full, targets) + args.unl_weight*kld.mean(), y_full
 
