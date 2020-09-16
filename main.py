@@ -128,28 +128,29 @@ class DecoderModel(nn.Module):
             nn.Linear(50, num_classes)
         )
 
-        self.net = nn.Sequential(
-                nn.Linear(num_classes, 50),
-                nn.ReLU(True),
-                nn.Linear(50, 50),
-                nn.ReLU(True),
-                nn.Linear(50, num_classes)
-            )
+        # self.net = nn.Sequential(
+        #         nn.Linear(num_classes, 50),
+        #         nn.ReLU(True),
+        #         nn.Linear(50, 50),
+        #         nn.ReLU(True),
+        #         nn.Linear(50, num_classes)
+        #     )
 
     def forward(self, x):
         mu = self.mu_encoder(x)
         logvar = self.logvar_encoder(x)
         z = reparameterise(mu, logvar)
 
-        identity = z
-        out = self.net(z)
-        out += identity
+        # identity = z
+        # out = self.net(z)
+        # out += identity
 
-        return out, mu, logvar
+        return z, mu, logvar
 
 
 def main():
     device = "cuda:0"
+    # device = "cpu"
 
     args = parser.parse_args()
     print('parsed options:', vars(args))
