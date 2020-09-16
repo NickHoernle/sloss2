@@ -149,6 +149,8 @@ class DecoderModel(nn.Module):
 
 
 def main():
+    device = "cuda:0"
+
     args = parser.parse_args()
     print('parsed options:', vars(args))
     epoch_step = json.loads(args.epoch_step)
@@ -160,10 +162,10 @@ def main():
 
     if args.dataset == "awa2":
         image_shape, num_classes, train_dataset, test_dataset, all_labels = ds
-        all_labels = all_labels.to("cuda:0")
+        all_labels = all_labels.to(device)
     else:
         image_shape, num_classes, train_dataset, test_dataset = ds
-        all_labels = torch.eye(num_classes).to("cuda:0")
+        all_labels = torch.eye(num_classes).to(device)
 
     if args.ssl:
         num_labelled = args.num_labelled
@@ -203,7 +205,7 @@ def main():
 
     if args.lp:
         model_y = DecoderModel(num_classes)
-        model_y.to("cuda:0")
+        model_y.to(device)
         model_y.apply(init_weights)
 
     def create_optimizer(args, lr):
@@ -237,16 +239,16 @@ def main():
     global counter
     counter = 0
 
-    device = torch.cuda.current_device()
-    print(f"On GPU: {device}")
-
-    print(f"{torch.cuda.device(device)}")
-
-    print(f"# devices: {torch.cuda.device_count()}")
-
-    print(f"Device name: {torch.cuda.get_device_name(device)}")
-
-    print(f"{torch.cuda.is_available()}")
+    # device = torch.cuda.current_device()
+    # print(f"On GPU: {device}")
+    #
+    # print(f"{torch.cuda.device(device)}")
+    #
+    # print(f"# devices: {torch.cuda.device_count()}")
+    #
+    # print(f"Device name: {torch.cuda.get_device_name(device)}")
+    #
+    # print(f"{torch.cuda.is_available()}")
 
     alpha = 1. / num_classes
     mu_prior = np.log(alpha) - 1 / num_classes * num_classes * np.log(alpha)
@@ -305,8 +307,7 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                # weight = np.min([1, 0.01*counter])
-                weight = 1.
+                weight = np.min([1, 0.01*counter])
 
                 y_l_full, mu_l, logvar_l = model_y(y_l)
 
@@ -315,8 +316,13 @@ def main():
                 kld_l = 0.5 * ((inv_sigma1*logvar_l.exp() + inv_sigma1*mu_l.pow(2) - 1 - logvar_l).sum(dim=1) + log_det_sigma)
                 kld_u = 0.5 * ((inv_sigma1*logvar_u.exp() + inv_sigma1*mu_u.pow(2) - 1 - logvar_u).sum(dim=1) + log_det_sigma)
 
-                loss = F.cross_entropy(y_l_full, targets_l)
-                loss += weight * args.unl_weight * kld_l.mean()
+                recon_loss = F.cross_entropy(y_l_full, targets_l)
+                loss = recon_loss
+                kld_loss = weight * args.unl_weight * kld_l.mean()
+                loss += kld_loss
+
+                # import pdb
+                # pdb.set_trace()
 
                 if counter >= 10:
                     log_y_u_full = torch.log_softmax(y_u_full, dim=1)
