@@ -77,9 +77,9 @@ mkdir -p ${output_dir}/logs
 
 cd /exports/csce/eddie/inf/groups/cisa_gal/nick/git/sloss2
 
-experiment_text_file=$1
-COMMAND="`sed \"${SGE_TASK_ID}q;d\" ${experiment_text_file}`"
-
+#experiment_text_file=$1
+#COMMAND="`sed \"${SGE_TASK_ID}q;d\" ${experiment_text_file}`"
+COMMAND=python main.py --save ${SCRATCH_HOME}/vaelib/logs/resnet_$RANDOM$RANDOM --depth 28 --width 2 --ngpu 1 --dataroot ${SCRATCH_HOME}/vaelib/data --num_labelled 4000 --cuda --ssl --lp --lr 0.1 --unl_weight 1.0 --unl2_weight 0.1 --lr_decay_ratio 0.2 --dataset cifar10
 echo "Running provided command: ${COMMAND}"
 eval "${COMMAND}"
 echo "Command ran successfully!"
