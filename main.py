@@ -118,12 +118,14 @@ class DecoderModel(nn.Module):
         super().__init__()
         self.mu_encoder = nn.Sequential(
             nn.Linear(num_classes, 50),
+            nn.BatchNorm1d(50),
             nn.ReLU(True),
             nn.Linear(50, num_classes)
         )
 
         self.logvar_encoder = nn.Sequential(
             nn.Linear(num_classes, 50),
+            nn.BatchNorm1d(50),
             nn.ReLU(True),
             nn.Linear(50, num_classes)
         )
@@ -308,21 +310,25 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                weight = np.min([1, 0.01*counter])
+                # weight = np.min([1, 0.01*counter])
+                weight = 1.
 
                 y_l_full, mu_l, logvar_l = model_y(y_l)
-
-                y_u_full, mu_u, logvar_u = model_y(y_u)
-
                 kld_l = 0.5 * ((inv_sigma1*logvar_l.exp() + inv_sigma1*mu_l.pow(2) - 1 - logvar_l).sum(dim=1) + log_det_sigma)
-                kld_u = 0.5 * ((inv_sigma1*logvar_u.exp() + inv_sigma1*mu_u.pow(2) - 1 - logvar_u).sum(dim=1) + log_det_sigma)
 
                 recon_loss = F.cross_entropy(y_l_full, targets_l)
                 loss = recon_loss
                 kld_loss = weight * args.unl_weight * kld_l.mean()
                 loss += kld_loss
 
+                # import pdb
+                # pdb.set_trace()
+
                 if counter >= 10:
+                    y_u_full, mu_u, logvar_u = model_y(y_u)
+                    kld_u = 0.5 * ((inv_sigma1 * logvar_u.exp() + inv_sigma1 * mu_u.pow(2) - 1 - logvar_u).sum(
+                        dim=1) + log_det_sigma)
+
                     log_y_u_full = torch.log_softmax(y_u_full, dim=1)
                     cross_ent = (torch.exp(log_y_u_full)*log_y_u_full).sum(dim=-1)
                     loss += args.unl2_weight * (args.unl_weight * weight * kld_u.mean() + cross_ent.mean())
