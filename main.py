@@ -117,43 +117,20 @@ class DecoderModel(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
         self.mu_encoder = nn.Sequential(
-            nn.ReLU(True),
-            nn.Linear(num_classes, num_classes),
-            #nn.BatchNorm1d(50),
-            #nn.ReLU(True),
-            #nn.Linear(50, num_classes)
+            nn.ReLU(),
+            nn.Linear(num_classes, num_classes)
         )
 
         self.logvar_encoder = nn.Sequential(
-            nn.ReLU(True),
-            nn.Linear(num_classes, num_classes),
-            #nn.BatchNorm1d(50),
-            #nn.ReLU(True),
-            #nn.Linear(50, num_classes)
+            nn.ReLU(),
+            nn.Linear(num_classes, num_classes)
         )
-
-        #self.decoder = nn.Parameter(torch.eye(num_classes), requires_grad=True)
-        #self.net = nn.Sequential(
-        #         nn.Linear(num_classes, 50),
-        #         nn.ReLU(True),
-        #         nn.Linear(50, 50),
-        #         nn.ReLU(True),
-        #         nn.Linear(50, num_classes))
 
     def forward(self, x):
         mu = self.mu_encoder(x)
         logvar = self.logvar_encoder(x)
         z = reparameterise(mu, logvar)
-
-        # apply decoding layer(s
-        #probs = torch.softmax(z, dim=1)
-        #decoder_ = torch.softmax(self.decoder, dim=1)
-        # identity = z
-        # out = self.net(z)
-        # out += identity
         return z, mu, logvar
-        # return self.net(z), mu, logvar
-        #return probs.mm(decoder_), mu, logvar
 
 
 def main():
@@ -384,8 +361,8 @@ def main():
                 classacc.add(state['output'].data, state['sample'][0][1])
         meter_loss.add(loss)
 
-        # if state['train']:
-        #     state['iterator'].set_postfix(loss=loss)
+        if state['train']:
+            state['iterator'].set_postfix(loss=loss)
 
     def on_start(state):
         state['epoch'] = epoch
@@ -394,7 +371,7 @@ def main():
         classacc.reset()
         meter_loss.reset()
         timer_train.reset()
-        # state['iterator'] = tqdm(train_loader, dynamic_ncols=True)
+        state['iterator'] = tqdm(train_loader, dynamic_ncols=True)
 
         epoch = state['epoch'] + 1
         if epoch in epoch_step:
