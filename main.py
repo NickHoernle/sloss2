@@ -374,7 +374,7 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                weight = np.min([1, 0.005*counter])
+                weight = np.min([1., 0.1*counter])
                 # weight = 1.
 
                 y_l_full, mu_l, logvar_l = model_y(y_l)
@@ -392,7 +392,7 @@ def main():
                 # log_p_theta = l_p_theta[np.arange(len(targets_l)), targets_l]
                 # kld_l = l_q_phi - log_p_theta
 
-                kld_loss = kld_l.mean()
+                kld_loss = weight*kld_l.mean()
                 loss += kld_loss
                 # import pdb
                 # pdb.set_trace()
