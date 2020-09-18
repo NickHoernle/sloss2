@@ -93,6 +93,59 @@ def one_hot_embedding(labels, num_classes, device="cuda:0"):
     y = torch.eye(num_classes).to(device)
     return y[labels]
 
+
+def log_normal(x, m, log_v):
+    """
+    Computes the elem-wise log probability of a Gaussian and then sum over the
+    last dim. Basically we're assuming all dims are batch dims except for the
+    last dim.
+    Args:
+        x: tensor: (batch, ..., dim): Observation
+        m: tensor: (batch, ..., dim): Mean
+        v: tensor: (batch, ..., dim): Variance
+    Return:
+        kl: tensor: (batch1, batch2, ...): log probability of each sample. Note
+            that the summation dimension (dim=-1) is not kept
+    """
+    ################################################################################
+    # TODO: Modify/complete the code here
+    # Compute element-wise log probability of normal and remember to sum over
+    # the last dimension
+    ################################################################################
+    #print("q_m", m.size())
+    #print("q_v", v.size())
+    const = -0.5*x.size(-1)*torch.log(2*torch.tensor(np.pi))
+    #print(const.size())
+    log_det = -0.5*torch.sum(log_v, dim = -1)
+    #print("log_det", log_det.size())
+    log_exp = -0.5*torch.sum( (x - m)**2/(log_v.exp()), dim = -1)
+
+    log_prob = const + log_det + log_exp
+
+    ################################################################################
+    # End of code modification
+    ################################################################################
+    return log_prob
+
+
+def gaussian_parameters(h, dim=-1):
+    """
+    Thanks: https://github.com/divymurli/VAEs/blob/master/codebase/utils.py
+    Converts generic real-valued representations into mean and variance
+    parameters of a Gaussian distribution
+    Args:
+        h: tensor: (batch, ..., dim, ...): Arbitrary tensor
+        dim: int: (): Dimension along which to split the tensor for mean and
+            variance
+    Returns:z
+        m: tensor: (batch, ..., dim / 2, ...): Mean
+        v: tensor: (batch, ..., dim / 2, ...): Variance
+    """
+    m, h = torch.split(h, h.size(dim) // 2, dim=dim)
+    v = F.softplus(h) + 1e-8
+    return m, v
+
+
 def check_dataset(dataset, dataroot, augment, download):
     if dataset == "cifar10":
         dataset = get_CIFAR10(augment, dataroot, download)
@@ -145,11 +198,31 @@ class DecoderModel(nn.Module):
             nn.Linear(50, num_classes)
         )
 
+        # Mixture of Gaussians prior
+        self.z_pre = torch.nn.Parameter(torch.randn(1, 2 * num_classes, num_classes) / np.sqrt(num_classes**2))
+
+        # Uniform weighting
+        self.pi = torch.nn.Parameter(torch.ones(num_classes) / num_classes, requires_grad=False)
+
     def forward(self, x):
+        # Compute the mixture of Gaussian prior
+        prior = gaussian_parameters(self.z_pre, dim=1)
         mu = self.mu_encoder(x)
         logvar = self.logvar_encoder(x)
-        z = torch.log_softmax(reparameterise(mu, logvar), dim=1)
-        return self.net(z), mu, logvar
+        z = reparameterise(mu, logvar)
+        decoded_val = self.net(z)
+
+        # terms for KL divergence
+        log_q_phi = log_normal(z, mu, logvar)
+
+        # print("log_q_phi", log_q_phi.size())
+        log_p_theta_ = log_normal(z.unsqueeze(1), prior[0], prior[1])
+        log_p_theta = torch.logsumexp(log_p_theta_, dim=1) - np.log(x.size(1))
+
+        # print("log_p_theta", log_p_theta.size())
+        kl = log_q_phi - log_p_theta
+
+        return self.net(z), mu, logvar, kl
 
 
 def main():
@@ -316,24 +389,23 @@ def main():
                 weight = np.min([1, 0.005*counter])
                 # weight = 1.
 
-                y_l_full, mu_l, logvar_l = model_y(y_l)
-                kld_l = 0.5 * ((inv_sigma1*logvar_l.exp() + inv_sigma1*mu_l.pow(2) - 1 - logvar_l).sum(dim=1) + log_det_sigma)
-
-                targets = one_hot_embedding(targets_l, num_classes, device=device)
-                recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets)
+                y_l_full, mu_l, logvar_l, kld_l = model_y(y_l)
+                # kld_l = 0.5 * ((inv_sigma1*logvar_l.exp() + inv_sigma1*mu_l.pow(2) - 1 - logvar_l).sum(dim=1) + log_det_sigma)
+                # targets = one_hot_embedding(targets_l, num_classes, device=device)
+                recon_loss = F.cross_entropy(y_l_full, targets_l)
                 loss = recon_loss
-                kld_loss = weight * kld_l.mean()
+                kld_loss = kld_l.mean()
                 loss += kld_loss
                 
                 # import pdb
                 # pdb.set_trace()
 
                 if counter >= 10:
-                    y_u_full, mu_u, logvar_u = model_y(y_u)
-                    kld_u = 0.5 * ((inv_sigma1 * logvar_u.exp() + inv_sigma1 * mu_u.pow(2) - 1 - logvar_u).sum(dim=1) + log_det_sigma)
+                    y_u_full, mu_u, logvar_u, kld_u = model_y(y_u)
+                    # kld_u = 0.5 * ((inv_sigma1 * logvar_u.exp() + inv_sigma1 * mu_u.pow(2) - 1 - logvar_u).sum(dim=1) + log_det_sigma)
                     y_u_pred = torch.log_softmax(y_u_full, dim=1)
                     cross_ent = -(y_u_pred.exp()*y_u_pred).sum(dim=-1)
-                    loss += args.unl2_weight * (weight * kld_u.mean() + cross_ent.mean())
+                    loss += args.unl2_weight * (kld_u.mean() + cross_ent.mean())
                     #loss += args.unl2_weight * (args.unl_weight * weight * kld_u.mean() + cross_ent.mean())
 
                 return loss, y_l_full
@@ -346,12 +418,12 @@ def main():
         targets = cast(sample[1], 'long')
         y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
         if args.lp:
-            y_full, mu, logvar = model_y(y)
-            kld = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()).sum(dim=-1)
+            y_full, mu, logvar, kld = model_y(y)
+            # kld = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()).sum(dim=-1)
             # recon = F.cross_entropy(y_full, targets)
-            tgts = one_hot_embedding(targets, num_classes, device=device)
-            recon_loss = F.binary_cross_entropy_with_logits(y_full, tgts)
-            return recon_loss + args.unl_weight*kld.mean(), y_full
+            # tgts = one_hot_embedding(targets, num_classes, device=device)
+            recon_loss = F.cross_entropy(y_full, targets)
+            return recon_loss + kld.mean(), y_full
 
         if args.dataset == "awa2":
             return F.binary_cross_entropy_with_logits(y, targets.float()), y
