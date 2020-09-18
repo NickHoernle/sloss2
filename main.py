@@ -116,9 +116,9 @@ def log_normal(x, m, log_v):
     #print("q_v", v.size())
     const = -0.5*x.size(-1)*torch.log(2*torch.tensor(np.pi))
     #print(const.size())
-    log_det = -0.5*torch.sum(log_v, dim = -1)
+    log_det = -0.5*torch.sum(log_v, dim=-1)
     #print("log_det", log_det.size())
-    log_exp = -0.5*torch.sum( (x - m)**2/(log_v.exp()), dim = -1)
+    log_exp = -0.5*torch.sum((x - m)**2/(log_v.exp()), dim = -1)
 
     log_prob = const + log_det + log_exp
 
@@ -180,26 +180,26 @@ def init_weights(m):
 
 
 class DecoderModel(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, z_dim=2):
         super().__init__()
         self.mu_encoder = nn.Sequential(
             nn.ReLU(),
-            nn.Linear(num_classes, num_classes)
+            nn.Linear(num_classes, z_dim)
         )
 
         self.logvar_encoder = nn.Sequential(
             nn.ReLU(),
-            nn.Linear(num_classes, num_classes)
+            nn.Linear(num_classes, z_dim)
         )
 
         self.net = nn.Sequential(
-            nn.Linear(num_classes, 50),
+            nn.Linear(z_dim, 50),
             nn.ReLU(),
             nn.Linear(50, num_classes)
         )
 
         # Mixture of Gaussians prior
-        self.z_pre = torch.nn.Parameter(torch.randn(1, 2 * num_classes, num_classes) / np.sqrt(num_classes**2))
+        self.z_pre = torch.nn.Parameter(torch.randn(1, 2 * num_classes, z_dim) / np.sqrt(num_classes*z_dim))
 
         # Uniform weighting
         self.pi = torch.nn.Parameter(torch.ones(num_classes) / num_classes, requires_grad=False)
@@ -274,11 +274,11 @@ def main():
         num_workers=args.n_workers,
         worker_init_fn=_init_fn
     )
-
+    z_dim = 2
     model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
 
     if args.lp:
-        model_y = DecoderModel(num_classes)
+        model_y = DecoderModel(num_classes, z_dim)
         model_y.to(device)
         model_y.apply(init_weights)
 
@@ -397,6 +397,8 @@ def main():
 
                 kld_loss = kld_l.mean()
                 loss += kld_loss
+                # import pdb
+                # pdb.set_trace()
                 
                 # import pdb
                 # pdb.set_trace()
