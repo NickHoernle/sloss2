@@ -374,17 +374,22 @@ def main():
                 # weight = 1.
 
                 y_l_full, mu_l, logvar_l = model_y(y_l)
-                # kld_l = 0.5 * ((inv_sigma1*logvar_l.exp() + inv_sigma1*mu_l.pow(2) - 1 - logvar_l).sum(dim=1) + log_det_sigma)
+                kld_l = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp(), dim=1)
+                # kld_l = 0.5 * (1 + (inv_sigma1*(logvar_l.exp()) + inv_sigma1*(mu_l.pow(2)) - logvar_l).sum(dim=1) + log_det_sigma)
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=1)
                 loss = recon_loss.mean()
+
+                # import pdb
+                # pdb.set_trace()
+
                 # log_p_theta = torch.logsumexp(log_p_theta_, dim=1) - np.log(x.size(1))
                 # print("log_p_theta", log_p_theta.size())
                 # log_p_theta = l_p_theta[np.arange(len(targets_l)), targets_l]
                 # kld_l = l_q_phi - log_p_theta
 
-                # kld_loss = kld_l.mean()
-                # loss += kld_loss
+                kld_loss = kld_l.mean()
+                loss += kld_loss
                 # import pdb
                 # pdb.set_trace()
                 
@@ -393,10 +398,11 @@ def main():
 
                 if counter >= 10:
                     y_u_full, mu_u, logvar_u = model_y(y_u)
+                    kld_u = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp(), dim=1)
                     # kld_u = 0.5 * ((inv_sigma1 * logvar_u.exp() + inv_sigma1 * mu_u.pow(2) - 1 - logvar_u).sum(dim=1) + log_det_sigma)
                     y_u_pred = torch.log_softmax(y_u_full, dim=1)
 
-                    u_loss = ((y_u_pred.exp() * (y_u_full)).sum(dim=-1)).mean()
+                    u_loss = ((y_u_pred.exp() * (y_u_full)).sum(dim=-1)).mean() + kld_u.mean()
                     # cross_ent = -(y_u_pred.exp()*y_u_pred).sum(dim=-1)
 
                     loss += args.unl2_weight * u_loss
