@@ -80,6 +80,19 @@ parser.add_argument("--unl2_weight", type=float, default=0.1,
                     help="Weight for unlabelled regularizer loss")
 
 
+def one_hot_embedding(labels, num_classes, device="cuda:0"):
+    """Embedding labels to one-hot form.
+
+    Args:
+      labels: (LongTensor) class labels, sized [N,].
+      num_classes: (int) number of classes.
+
+    Returns:
+      (tensor) encoded labels, sized [N, #classes].
+    """
+    y = torch.eye(num_classes).to(device)
+    return y[labels]
+
 def check_dataset(dataset, dataroot, augment, download):
     if dataset == "cifar10":
         dataset = get_CIFAR10(augment, dataroot, download)
@@ -135,13 +148,13 @@ class DecoderModel(nn.Module):
     def forward(self, x):
         mu = self.mu_encoder(x)
         logvar = self.logvar_encoder(x)
-        z = reparameterise(mu, logvar)
+        z = torch.log_softmax(reparameterise(mu, logvar), dim=1)
         return self.net(z), mu, logvar
 
 
 def main():
-    device = "cuda:0"
-    # device = "cpu"
+    # device = "cuda:0"
+    device = "cpu"
 
     args = parser.parse_args()
     print('parsed options:', vars(args))
@@ -228,8 +241,9 @@ def main():
     if not os.path.exists(args.save):
         os.mkdir(args.save)
 
-    global counter
+    global counter, aggressive
     counter = 0
+    aggressive = False
 
     # device = torch.cuda.current_device()
     # print(f"On GPU: {device}")
@@ -305,7 +319,8 @@ def main():
                 y_l_full, mu_l, logvar_l = model_y(y_l)
                 kld_l = 0.5 * ((inv_sigma1*logvar_l.exp() + inv_sigma1*mu_l.pow(2) - 1 - logvar_l).sum(dim=1) + log_det_sigma)
 
-                recon_loss = F.cross_entropy(y_l_full, targets_l)
+                targets = one_hot_embedding(targets_l, num_classes, device=device)
+                recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets)
                 loss = recon_loss
                 kld_loss = weight * kld_l.mean()
                 loss += kld_loss
@@ -333,8 +348,10 @@ def main():
         if args.lp:
             y_full, mu, logvar = model_y(y)
             kld = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()).sum(dim=-1)
-            recon = F.cross_entropy(y_full, targets)
-            return recon + args.unl_weight*kld.mean(), y_full
+            # recon = F.cross_entropy(y_full, targets)
+            tgts = one_hot_embedding(targets, num_classes, device=device)
+            recon_loss = F.binary_cross_entropy_with_logits(y_full, tgts)
+            return recon_loss + args.unl_weight*kld.mean(), y_full
 
         if args.dataset == "awa2":
             return F.binary_cross_entropy_with_logits(y, targets.float()), y
