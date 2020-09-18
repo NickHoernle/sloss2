@@ -207,8 +207,10 @@ class DecoderModel(nn.Module):
         logvar = self.logvar_encoder(x)
         z_ = reparameterise(mu, logvar)
         z = torch.log_softmax(torch.exp(self.scale_params).unsqueeze(0)*z_, dim=1)
+
         identity = z
         output = self.net(z) + identity
+
         return output, mu, logvar
 
 
@@ -278,8 +280,8 @@ def main():
         params_ = [v for v in params.values() if v.requires_grad]
         if args.lp:
             params_ += list(model_y.parameters())
-        return Adam(params_, lr)
-        # return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
+        # return Adam(params_, lr)
+        return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
 
     optimizer = create_optimizer(args, args.lr)
 
@@ -320,7 +322,7 @@ def main():
     alpha = 1. / num_classes
     mu_prior = np.log(alpha) - 1 / num_classes * num_classes * np.log(alpha)
     sigma_prior = 1. / alpha * (1 - 2. / num_classes) + 1 / (num_classes ** 2) * num_classes / alpha
-    log_sigma = np.log(sigma_prior)
+    prior_log_var = np.log(sigma_prior)
     inv_sigma1 = 1. / sigma_prior
     log_det_sigma = num_classes * np.log(sigma_prior)
 
@@ -379,11 +381,15 @@ def main():
                 # weight = 1.
 
                 y_l_full, mu_l, logvar_l = model_y(y_l)
-                kld_l = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp(), dim=1)
+                var_division = logvar_l.exp() / np.exp(prior_log_var)
+                diff = mu_l - mu_prior
+                diff_term = diff * diff / np.exp(prior_log_var)
+                logvar_division = prior_log_var - logvar_l
+                # put KLD together
+                kld_l = 0.5 * ((var_division + diff_term + logvar_division).sum(1) - num_classes)
+
                 # kld_l = 0.5 * (1 + (inv_sigma1*(logvar_l.exp()) + inv_sigma1*(mu_l.pow(2)) - logvar_l).sum(dim=1) + log_det_sigma)
                 # kld_l = 1/2*((log_sigma - logvar_l) + (logvar_l.exp() + mu_l.pow(2))/sigma_prior - 1).sum(dim=1)
-                # import pdb
-                # pdb.set_trace()
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=1)
                 loss = recon_loss.mean()
@@ -406,7 +412,7 @@ def main():
 
                 if counter >= 10:
                     y_u_full, mu_u, logvar_u = model_y(y_u)
-                    kld_u = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp(), dim=1)
+                    kld_u = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp(), dim=1) + num_classes/2.
                     # kld_u = 0.5 * ((inv_sigma1 * logvar_u.exp() + inv_sigma1 * mu_u.pow(2) - 1 - logvar_u).sum(dim=1) + log_det_sigma)
                     y_u_pred = torch.log_softmax(y_u_full, dim=1)
 
