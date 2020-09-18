@@ -198,12 +198,15 @@ class DecoderModel(nn.Module):
             nn.Linear(50, num_classes)
         )
 
+        self.scale_params = nn.Parameter(torch.zeros(num_classes), requires_grad=True)
+
     def forward(self, x):
         # Compute the mixture of Gaussian prior
         # prior = gaussian_parameters(self.z_pre, dim=1)
         mu = self.mu_encoder(x)
         logvar = self.logvar_encoder(x)
-        z = torch.log_softmax(reparameterise(mu, logvar), dim=1)
+        z_ = reparameterise(mu, logvar)
+        z = torch.log_softmax(torch.exp(self.scale_params).unsqueeze(0)*z_, dim=1)
         identity = z
         output = self.net(z) + identity
         return output, mu, logvar
