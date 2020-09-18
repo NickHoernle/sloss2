@@ -198,7 +198,7 @@ class DecoderModel(nn.Module):
             nn.Linear(50, num_classes)
         )
 
-        self.scale_params = nn.Parameter(torch.zeros(num_classes), requires_grad=True)
+        # self.scale_params = nn.Parameter(torch.ones(num_classes), requires_grad=True)
 
     def forward(self, x):
         # Compute the mixture of Gaussian prior
@@ -206,7 +206,7 @@ class DecoderModel(nn.Module):
         mu = self.mu_encoder(x)
         logvar = self.logvar_encoder(x)
         z_ = reparameterise(mu, logvar)
-        z = torch.log_softmax(torch.exp(self.scale_params).unsqueeze(0)*z_, dim=1)
+        z = torch.log_softmax(z_, dim=1)
         identity = z
         output = self.net(z) + identity
         return output, mu, logvar
@@ -278,7 +278,8 @@ def main():
         params_ = [v for v in params.values() if v.requires_grad]
         if args.lp:
             params_ += list(model_y.parameters())
-        return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
+        return Adam(params_, lr)
+        # return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
 
     optimizer = create_optimizer(args, args.lr)
 
@@ -377,8 +378,8 @@ def main():
                 # weight = 1.
 
                 y_l_full, mu_l, logvar_l = model_y(y_l)
-                kld_l = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp(), dim=1)
-                # kld_l = 0.5 * (1 + (inv_sigma1*(logvar_l.exp()) + inv_sigma1*(mu_l.pow(2)) - logvar_l).sum(dim=1) + log_det_sigma)
+                # kld_l = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp(), dim=1)
+                kld_l = 0.5 * (1 + (inv_sigma1*(logvar_l.exp()) + inv_sigma1*(mu_l.pow(2)) - logvar_l).sum(dim=1) + log_det_sigma)
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=1)
                 loss = recon_loss.mean()
@@ -401,8 +402,8 @@ def main():
 
                 if counter >= 10:
                     y_u_full, mu_u, logvar_u = model_y(y_u)
-                    kld_u = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp(), dim=1)
-                    # kld_u = 0.5 * ((inv_sigma1 * logvar_u.exp() + inv_sigma1 * mu_u.pow(2) - 1 - logvar_u).sum(dim=1) + log_det_sigma)
+                    # kld_u = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp(), dim=1)
+                    kld_u = 0.5 * ((inv_sigma1 * logvar_u.exp() + inv_sigma1 * mu_u.pow(2) - 1 - logvar_u).sum(dim=1) + log_det_sigma)
                     y_u_pred = torch.log_softmax(y_u_full, dim=1)
 
                     u_loss = ((y_u_pred.exp() * (y_u_full)).sum(dim=-1)).mean() + kld_u.mean()
