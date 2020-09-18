@@ -200,7 +200,7 @@ class DecoderModel(nn.Module):
 
     def forward(self, x):
         # Compute the mixture of Gaussian prior
-        prior = gaussian_parameters(self.z_pre, dim=1)
+        # prior = gaussian_parameters(self.z_pre, dim=1)
         mu = self.mu_encoder(x)
         logvar = self.logvar_encoder(x)
         z = torch.log_softmax(reparameterise(mu, logvar), dim=1)
@@ -375,8 +375,8 @@ def main():
                 y_l_full, mu_l, logvar_l = model_y(y_l)
                 # kld_l = 0.5 * ((inv_sigma1*logvar_l.exp() + inv_sigma1*mu_l.pow(2) - 1 - logvar_l).sum(dim=1) + log_det_sigma)
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
-                recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets)
-                loss = recon_loss
+                recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=1)
+                loss = recon_loss.mean()
                 # log_p_theta = torch.logsumexp(log_p_theta_, dim=1) - np.log(x.size(1))
                 # print("log_p_theta", log_p_theta.size())
                 # log_p_theta = l_p_theta[np.arange(len(targets_l)), targets_l]
@@ -415,8 +415,8 @@ def main():
             # kld = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()).sum(dim=-1)
             # recon = F.cross_entropy(y_full, targets)
             tgts = one_hot_embedding(targets, num_classes, device=device)
-            recon_loss = F.binary_cross_entropy_with_logits(y_full, tgts)
-            return recon_loss, y_full
+            recon_loss = F.binary_cross_entropy_with_logits(y_full, tgts, reduction="none").sum(dim=1)
+            return recon_loss.mean(), y_full
 
         if args.dataset == "awa2":
             return F.binary_cross_entropy_with_logits(y, targets.float()), y
