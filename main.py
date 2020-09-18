@@ -422,12 +422,12 @@ def main():
         targets = cast(sample[1], 'long')
         y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
         if args.lp:
-            y_full, mu, logvar, kld = model_y(y)
+            y_full, mu, logvar, l_q_phi, l_p_theta = model_y(y)
             # kld = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()).sum(dim=-1)
             # recon = F.cross_entropy(y_full, targets)
             # tgts = one_hot_embedding(targets, num_classes, device=device)
             recon_loss = F.cross_entropy(y_full, targets)
-            return recon_loss + kld.mean(), y_full
+            return recon_loss, y_full
 
         if args.dataset == "awa2":
             return F.binary_cross_entropy_with_logits(y, targets.float()), y
