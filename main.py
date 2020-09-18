@@ -44,7 +44,7 @@ parser.add_argument('--lr', default=0.1, type=float)
 parser.add_argument('--epochs', default=200, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--weight_decay', default=0.0005, type=float)
-parser.add_argument('--epoch_step', default='[10, 50, 100, 150]', type=str,
+parser.add_argument('--epoch_step', default='[50, 100, 150]', type=str,
                     help='json list with epochs to drop lr on')
 parser.add_argument('--lr_decay_ratio', default=0.2, type=float)
 parser.add_argument('--resume', default='', type=str)
@@ -126,11 +126,17 @@ class DecoderModel(nn.Module):
             nn.Linear(num_classes, num_classes)
         )
 
+        self.net = nn.Sequential(
+            nn.Linear(num_classes, 50),
+            nn.ReLU(),
+            nn.Linear(50, num_classes)
+        )
+
     def forward(self, x):
         mu = self.mu_encoder(x)
         logvar = self.logvar_encoder(x)
         z = reparameterise(mu, logvar)
-        return z, mu, logvar
+        return self.net(z), mu, logvar
 
 
 def main():
@@ -293,26 +299,26 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                weight = np.min([5, 1+0.01*counter])
+                weight = np.min([1, 0.005*counter])
                 # weight = 1.
 
                 y_l_full, mu_l, logvar_l = model_y(y_l)
                 kld_l = 0.5 * ((inv_sigma1*logvar_l.exp() + inv_sigma1*mu_l.pow(2) - 1 - logvar_l).sum(dim=1) + log_det_sigma)
 
-                recon_loss = F.cross_entropy(y_l_full*weight, targets_l)
+                recon_loss = F.cross_entropy(y_l_full, targets_l)
                 loss = recon_loss
-                #kld_loss = weight * args.unl_weight * kld_l.mean()
-                #loss += kld_loss
+                kld_loss = weight * kld_l.mean()
+                loss += kld_loss
+                
                 # import pdb
                 # pdb.set_trace()
 
                 if counter >= 10:
                     y_u_full, mu_u, logvar_u = model_y(y_u)
-                    #kld_u = 0.5 * ((inv_sigma1 * logvar_u.exp() + inv_sigma1 * mu_u.pow(2) - 1 - logvar_u).sum(
-                    #    dim=1) + log_det_sigma)
+                    kld_u = 0.5 * ((inv_sigma1 * logvar_u.exp() + inv_sigma1 * mu_u.pow(2) - 1 - logvar_u).sum(dim=1) + log_det_sigma)
                     y_u_pred = torch.log_softmax(y_u_full, dim=1)
-                    cross_ent = (y_u_pred.exp()*y_u_pred).sum(dim=-1)
-                    loss += cross_ent.mean()
+                    cross_ent = -(y_u_pred.exp()*y_u_pred).sum(dim=-1)
+                    loss += args.unl2_weight * (weight * kld_u.mean() + cross_ent.mean())
                     #loss += args.unl2_weight * (args.unl_weight * weight * kld_u.mean() + cross_ent.mean())
 
                 return loss, y_l_full
