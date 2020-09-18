@@ -204,8 +204,9 @@ class DecoderModel(nn.Module):
         mu = self.mu_encoder(x)
         logvar = self.logvar_encoder(x)
         z = torch.log_softmax(reparameterise(mu, logvar), dim=1)
-
-        return self.net(z), mu, logvar
+        identity = z
+        output = self.net(z) + identity
+        return output, mu, logvar
 
 
 def main():
