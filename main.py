@@ -198,27 +198,14 @@ class DecoderModel(nn.Module):
             nn.Linear(50, num_classes)
         )
 
-        # Mixture of Gaussians prior
-        self.z_pre = torch.nn.Parameter(torch.randn(1, 2 * num_classes, z_dim) / np.sqrt(num_classes*z_dim))
-
-        # Uniform weighting
-        self.pi = torch.nn.Parameter(torch.ones(num_classes) / num_classes, requires_grad=False)
-
     def forward(self, x):
         # Compute the mixture of Gaussian prior
         prior = gaussian_parameters(self.z_pre, dim=1)
         mu = self.mu_encoder(x)
         logvar = self.logvar_encoder(x)
-        z = reparameterise(mu, logvar)
-        decoded_val = self.net(z)
+        z = torch.log_softmax(reparameterise(mu, logvar), dim=1)
 
-        # terms for KL divergence
-        log_q_phi = log_normal(z, mu, logvar)
-
-        # print("log_q_phi", log_q_phi.size())
-        log_p_theta = log_normal(z.unsqueeze(1), prior[0], prior[1])
-
-        return self.net(z), mu, logvar, log_q_phi, log_p_theta
+        return self.net(z), mu, logvar
 
 
 def main():
@@ -274,7 +261,7 @@ def main():
         num_workers=args.n_workers,
         worker_init_fn=_init_fn
     )
-    z_dim = 2
+    z_dim = 10
     model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
 
     if args.lp:
@@ -385,18 +372,18 @@ def main():
                 weight = np.min([1, 0.005*counter])
                 # weight = 1.
 
-                y_l_full, mu_l, logvar_l, l_q_phi, l_p_theta = model_y(y_l)
+                y_l_full, mu_l, logvar_l = model_y(y_l)
                 # kld_l = 0.5 * ((inv_sigma1*logvar_l.exp() + inv_sigma1*mu_l.pow(2) - 1 - logvar_l).sum(dim=1) + log_det_sigma)
-                # targets = one_hot_embedding(targets_l, num_classes, device=device)
-                recon_loss = F.cross_entropy(y_l_full, targets_l)
+                targets = one_hot_embedding(targets_l, num_classes, device=device)
+                recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets)
                 loss = recon_loss
                 # log_p_theta = torch.logsumexp(log_p_theta_, dim=1) - np.log(x.size(1))
                 # print("log_p_theta", log_p_theta.size())
-                log_p_theta = l_p_theta[np.arange(len(targets_l)), targets_l]
-                kld_l = l_q_phi - log_p_theta
+                # log_p_theta = l_p_theta[np.arange(len(targets_l)), targets_l]
+                # kld_l = l_q_phi - log_p_theta
 
-                kld_loss = kld_l.mean()
-                loss += kld_loss
+                # kld_loss = kld_l.mean()
+                # loss += kld_loss
                 # import pdb
                 # pdb.set_trace()
                 
@@ -404,11 +391,11 @@ def main():
                 # pdb.set_trace()
 
                 if counter >= 10:
-                    y_u_full, mu_u, logvar_u, l_q_phi_u, l_p_theta_u = model_y(y_u)
+                    y_u_full, mu_u, logvar_u = model_y(y_u)
                     # kld_u = 0.5 * ((inv_sigma1 * logvar_u.exp() + inv_sigma1 * mu_u.pow(2) - 1 - logvar_u).sum(dim=1) + log_det_sigma)
                     y_u_pred = torch.log_softmax(y_u_full, dim=1)
 
-                    u_loss = ((y_u_pred.exp() * (y_u_pred + l_p_theta_u)).sum(dim=-1) - l_q_phi_u).mean()
+                    u_loss = ((y_u_pred.exp() * (y_u_full)).sum(dim=-1)).mean()
                     # cross_ent = -(y_u_pred.exp()*y_u_pred).sum(dim=-1)
 
                     loss += args.unl2_weight * u_loss
@@ -424,11 +411,11 @@ def main():
         targets = cast(sample[1], 'long')
         y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
         if args.lp:
-            y_full, mu, logvar, l_q_phi, l_p_theta = model_y(y)
+            y_full, mu, logvar = model_y(y)
             # kld = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()).sum(dim=-1)
             # recon = F.cross_entropy(y_full, targets)
-            # tgts = one_hot_embedding(targets, num_classes, device=device)
-            recon_loss = F.cross_entropy(y_full, targets)
+            tgts = one_hot_embedding(targets, num_classes, device=device)
+            recon_loss = F.binary_cross_entropy_with_logits(y_full, tgts)
             return recon_loss, y_full
 
         if args.dataset == "awa2":
