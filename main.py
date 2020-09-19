@@ -44,7 +44,7 @@ parser.add_argument('--lr', default=0.1, type=float)
 parser.add_argument('--epochs', default=200, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--weight_decay', default=0.0005, type=float)
-parser.add_argument('--epoch_step', default='[50, 100, 150]', type=str,
+parser.add_argument('--epoch_step', default='[25, 50, 100]', type=str,
                     help='json list with epochs to drop lr on')
 parser.add_argument('--lr_decay_ratio', default=0.2, type=float)
 parser.add_argument('--resume', default='', type=str)
@@ -215,8 +215,8 @@ class DecoderModel(nn.Module):
 
 
 def main():
-    # device = "cuda:0"
-    device = "cpu"
+    device = "cuda:0"
+    # device = "cpu"
 
     args = parser.parse_args()
     print('parsed options:', vars(args))
@@ -377,7 +377,7 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                weight = np.min([1., 0.1*counter])
+                weight = np.min([1., 0.005*counter])
                 # weight = 1.
 
                 y_l_full, mu_l, logvar_l = model_y(y_l)
@@ -402,15 +402,15 @@ def main():
                 # log_p_theta = l_p_theta[np.arange(len(targets_l)), targets_l]
                 # kld_l = l_q_phi - log_p_theta
 
-                kld_loss = weight*kld_l.mean()
-                loss += kld_loss
+                #kld_loss = weight*kld_l.mean()
+                #loss += kld_loss
                 # import pdb
                 # pdb.set_trace()
                 
                 # import pdb
                 # pdb.set_trace()
 
-                if counter >= 10:
+                if counter >= 25:
                     y_u_full, mu_u, logvar_u = model_y(y_u)
 
                     var_division = logvar_u.exp() / np.exp(prior_log_var)
@@ -422,7 +422,7 @@ def main():
                     # kld_u = 0.5 * ((inv_sigma1 * logvar_u.exp() + inv_sigma1 * mu_u.pow(2) - 1 - logvar_u).sum(dim=1) + log_det_sigma)
                     y_u_pred = torch.log_softmax(y_u_full, dim=1)
 
-                    u_loss = ((y_u_pred.exp() * (y_u_full)).sum(dim=-1)).mean() + kld_u.mean()
+                    u_loss = ((y_u_pred.exp() * (-y_u_full)).sum(dim=-1)).mean() # + weight*kld_u.mean()
                     # cross_ent = -(y_u_pred.exp()*y_u_pred).sum(dim=-1)
 
                     loss += args.unl2_weight * u_loss
