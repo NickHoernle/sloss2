@@ -399,7 +399,7 @@ def main():
 
                 y_l_full, mu_l, logvar_l = model_y(y_l)
 
-                KLD_l = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp())
+                KLD_l = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp(), dim=-1)
                 # recon_loss = F.cross_entropy(y_l_full, targets_l)
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
@@ -409,7 +409,7 @@ def main():
                 if counter >= 25:
                     y_u_full, mu_u, logvar_u = model_y(y_u)
 
-                    kld_u = -0.5 * torch.sum(1 + logvar_u - mu_u.pow(2) - logvar_u.exp())
+                    kld_u = -0.5 * torch.sum(1 + logvar_u - mu_u.pow(2) - logvar_u.exp(), dim=-1)
                     y_u_pred = torch.log_softmax(y_u_full, dim=1)
 
                     u_loss = ((y_u_pred.exp() * (-y_u_full)).sum(dim=-1)).mean() + weight*kld_u.mean()
