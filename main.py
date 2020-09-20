@@ -215,17 +215,17 @@ class DecoderModel(nn.Module):
     def forward(self, x):
         # Compute the mixture of Gaussian prior
         # prior = gaussian_parameters(self.z_pre, dim=1)
-        pis = torch.log_softmax(x, dim=1)
+        pis = torch.softmax(x, dim=1)
         mu = self.mu_encoder(x)
         logvar = self.logvar_encoder(x)
+
         w_samp = reparameterise(mu, logvar)
 
         Wz = torch.sqrt(self.softplus(self.proj_y(pis)))
         Wyy = self.Wy(pis)
-        MG = Wyy + Wz * w_samp
 
-        h1 = F.relu(MG)
-        output = self.net(h1)
+        MG = F.relu( Wyy + Wz * w_samp )
+        output = self.net(MG)
 
         return output, mu, logvar
 
@@ -393,25 +393,24 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                # weight = np.min([1., 0.005*counter])
-                weight = 1.
+                weight = np.min([1., 0.01*(counter+1)])
+                # weight = 1.
 
                 y_l_full, mu_l, logvar_l = model_y(y_l)
 
                 KLD_l = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp())
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
-                loss = recon_loss.mean() + KLD_l.mean()
-
-
-
+                loss = recon_loss.mean() + weight*KLD_l.mean()
+                # import pdb
+                # pdb.set_trace()
                 if counter >= 25:
                     y_u_full, mu_u, logvar_u = model_y(y_u)
 
                     kld_u = -0.5 * torch.sum(1 + logvar_u - mu_u.pow(2) - logvar_u.exp())
                     y_u_pred = torch.log_softmax(y_u_full, dim=1)
 
-                    u_loss = ((y_u_pred.exp() * (-y_u_full)).sum(dim=-1)).mean() + kld_u.mean()
+                    u_loss = ((y_u_pred.exp() * (-y_u_full)).sum(dim=-1)).mean() + weight*kld_u.mean()
 
                     loss += args.unl2_weight * u_loss
 
