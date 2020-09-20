@@ -205,9 +205,12 @@ class DecoderModel(nn.Module):
         # Compute the mixture of Gaussian prior
         # prior = gaussian_parameters(self.z_pre, dim=1)
         pis = torch.softmax(x, dim=1)
-        w_samp = reparameterise(self.mus, self.logvar)
+        w_samp = reparameterise(
+            self.mus.unsqueeze(0).repeat(len(x), 1, 1),
+            self.logvar.unsqueeze(0).repeat(len(x), 1, 1)
+        )
 
-        mixture_samp = (pis.unsqueeze(-1)*w_samp.unsqueeze(0).repeat(len(x), 1, 1)).sum(dim=1)
+        mixture_samp = (pis.unsqueeze(-1)*w_samp).sum(dim=1)
         output = self.net(mixture_samp)
 
         return output, self.mus, self.logvar
