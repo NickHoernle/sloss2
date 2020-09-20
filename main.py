@@ -198,7 +198,8 @@ class DecoderModel(nn.Module):
             nn.Linear(50, num_classes)
         )
 
-        self.scale_params = nn.Parameter(torch.ones(num_classes), requires_grad=True)
+        self.apply(init_weights)
+        # self.scale_params = nn.Parameter(torch.ones(num_classes), requires_grad=True)
 
     def forward(self, x):
         # Compute the mixture of Gaussian prior
@@ -215,8 +216,8 @@ class DecoderModel(nn.Module):
 
 
 def main():
-    device = "cuda:0"
-    # device = "cpu"
+    # device = "cuda:0"
+    device = "cpu"
 
     args = parser.parse_args()
     print('parsed options:', vars(args))
@@ -390,8 +391,8 @@ def main():
 
                 # kld_l = 0.5 * (1 + (inv_sigma1*(logvar_l.exp()) + inv_sigma1*(mu_l.pow(2)) - logvar_l).sum(dim=1) + log_det_sigma)
                 # kld_l = 1/2*((log_sigma - logvar_l) + (logvar_l.exp() + mu_l.pow(2))/sigma_prior - 1).sum(dim=1)
-                # targets = one_hot_embedding(targets_l, num_classes, device=device)
-                recon_loss = F.cross_entropy(y_l_full, targets_l)
+                targets = one_hot_embedding(targets_l, num_classes, device=device)
+                recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
                 loss = recon_loss.mean()
 
                 # import pdb
@@ -422,7 +423,7 @@ def main():
                     # kld_u = 0.5 * ((inv_sigma1 * logvar_u.exp() + inv_sigma1 * mu_u.pow(2) - 1 - logvar_u).sum(dim=1) + log_det_sigma)
                     y_u_pred = torch.log_softmax(y_u_full, dim=1)
 
-                    u_loss = ((y_u_pred.exp() * (-y_u_pred)).sum(dim=-1)).mean() # + weight*kld_u.mean()
+                    u_loss = ((y_u_pred.exp() * (-y_u_full)).sum(dim=-1)).mean() # + weight*kld_u.mean()
                     # cross_ent = -(y_u_pred.exp()*y_u_pred).sum(dim=-1)
 
                     loss += args.unl2_weight * u_loss
@@ -441,8 +442,8 @@ def main():
             y_full, mu, logvar = model_y(y)
             # kld = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()).sum(dim=-1)
             # recon = F.cross_entropy(y_full, targets)
-            # tgts = one_hot_embedding(targets, num_classes, device=device)
-            recon_loss = F.cross_entropy(y_full, targets)
+            tgts = one_hot_embedding(targets, num_classes, device=device)
+            recon_loss = F.binary_cross_entropy_with_logits(y_full, tgts)
             return recon_loss.mean(), y_full
 
         if args.dataset == "awa2":
