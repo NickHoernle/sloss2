@@ -182,21 +182,29 @@ def init_weights(m):
 class DecoderModel(nn.Module):
     def __init__(self, num_classes, z_dim=2):
         super().__init__()
+
         self.mu_encoder = nn.Sequential(
             nn.ReLU(),
-            nn.Linear(num_classes, z_dim)
+            nn.Linear(num_classes, z_dim),
         )
-
         self.logvar_encoder = nn.Sequential(
             nn.ReLU(),
-            nn.Linear(num_classes, z_dim)
+            nn.Linear(num_classes, z_dim),
+        )
+        self.w_net = nn.Sequential(
+            nn.Linear(z_dim, num_classes*z_dim),
         )
 
         self.net = nn.Sequential(
             nn.Linear(z_dim, 50),
             nn.ReLU(),
+            nn.Linear(50, 50),
+            nn.ReLU(),
             nn.Linear(50, num_classes)
         )
+
+        self.zdim = z_dim
+        self.nc = num_classes
 
         self.apply(init_weights)
         # self.scale_params = nn.Parameter(torch.ones(num_classes), requires_grad=True)
@@ -204,13 +212,16 @@ class DecoderModel(nn.Module):
     def forward(self, x):
         # Compute the mixture of Gaussian prior
         # prior = gaussian_parameters(self.z_pre, dim=1)
+        pis = torch.softmax(x, dim=1)
         mu = self.mu_encoder(x)
         logvar = self.logvar_encoder(x)
-        z = reparameterise(mu, logvar)
-        # z = torch.log_softmax(z_, dim=1)
+        w = reparameterise(mu, logvar)
 
-        identity = z
-        output = self.net(z) + identity
+        zs = torch.stack(torch.split(self.w_net(w), self.zdim, dim=-1), dim=1)
+        post = (pis.unsqueeze(-1) * zs).sum(dim=1)
+
+        # identity = post
+        output = self.net(post) #+ identity
 
         return output, mu, logvar
 
@@ -268,7 +279,7 @@ def main():
         num_workers=args.n_workers,
         worker_init_fn=_init_fn
     )
-    z_dim = 10
+    z_dim = 2
     model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
 
     if args.lp:
@@ -382,15 +393,15 @@ def main():
                 weight = 1.
 
                 y_l_full, mu_l, logvar_l = model_y(y_l)
-                var_division = logvar_l.exp() / np.exp(prior_log_var)
-                diff = mu_l - mu_prior
-                diff_term = diff * diff / np.exp(prior_log_var)
-                logvar_division = prior_log_var - logvar_l
-                # put KLD together
-                kld_l = 0.5 * ((var_division + diff_term + logvar_division).sum(1) - num_classes)
-
-                # kld_l = 0.5 * (1 + (inv_sigma1*(logvar_l.exp()) + inv_sigma1*(mu_l.pow(2)) - logvar_l).sum(dim=1) + log_det_sigma)
-                # kld_l = 1/2*((log_sigma - logvar_l) + (logvar_l.exp() + mu_l.pow(2))/sigma_prior - 1).sum(dim=1)
+                # var_division = logvar_l.exp() / np.exp(prior_log_var)
+                # diff = mu_l - mu_prior
+                # diff_term = diff * diff / np.exp(prior_log_var)
+                # logvar_division = prior_log_var - logvar_l
+                # # put KLD together
+                # kld_l = 0.5 * ((var_division + diff_term + logvar_division).sum(1) - num_classes)
+                #
+                # # kld_l = 0.5 * (1 + (inv_sigma1*(logvar_l.exp()) + inv_sigma1*(mu_l.pow(2)) - logvar_l).sum(dim=1) + log_det_sigma)
+                # # kld_l = 1/2*((log_sigma - logvar_l) + (logvar_l.exp() + mu_l.pow(2))/sigma_prior - 1).sum(dim=1)
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
                 loss = recon_loss.mean()
@@ -403,8 +414,8 @@ def main():
                 # log_p_theta = l_p_theta[np.arange(len(targets_l)), targets_l]
                 # kld_l = l_q_phi - log_p_theta
 
-                kld_loss = weight*kld_l.mean()
-                loss += kld_loss
+                # kld_loss = weight*kld_l.mean()
+                # loss += kld_loss
                 # import pdb
                 # pdb.set_trace()
                 
@@ -423,7 +434,7 @@ def main():
                     # kld_u = 0.5 * ((inv_sigma1 * logvar_u.exp() + inv_sigma1 * mu_u.pow(2) - 1 - logvar_u).sum(dim=1) + log_det_sigma)
                     y_u_pred = torch.log_softmax(y_u_full, dim=1)
 
-                    u_loss = ((y_u_pred.exp() * (-y_u_full)).sum(dim=-1)).mean() + weight*kld_u.mean()
+                    u_loss = ((y_u_pred.exp() * (-y_u_full)).sum(dim=-1)).mean() #+ weight*kld_u.mean()
                     # cross_ent = -(y_u_pred.exp()*y_u_pred).sum(dim=-1)
 
                     loss += args.unl2_weight * u_loss
