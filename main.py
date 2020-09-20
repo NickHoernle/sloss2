@@ -170,7 +170,7 @@ def check_manual_seed(seed):
 def reparameterise(mu, logvar):
     std = torch.exp(0.5 * logvar)
     eps = torch.randn_like(std)
-    return mu + eps * std
+    return mu + eps
 
 
 def init_weights(m):
@@ -183,20 +183,8 @@ class DecoderModel(nn.Module):
     def __init__(self, num_classes, z_dim=2):
         super().__init__()
 
-        self.mu_encoder = nn.Sequential(
-            nn.ReLU(),
-            nn.Linear(num_classes, z_dim),
-        )
-
-        self.logvar_encoder = nn.Sequential(
-            nn.ReLU(),
-            nn.Linear(num_classes, z_dim),
-        )
-
-        self.pi_encoder = nn.Sequential(
-            nn.ReLU(),
-            nn.Linear(num_classes, num_classes),
-        )
+        self.mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
+        self.logvar = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
 
         self.net = nn.Sequential(
             nn.Linear(z_dim, 50),
@@ -206,7 +194,6 @@ class DecoderModel(nn.Module):
             nn.Linear(50, num_classes)
         )
 
-        self.w_proj = nn.Linear(z_dim, z_dim*num_classes)
 
         self.zdim = z_dim
         self.nc = num_classes
@@ -217,18 +204,13 @@ class DecoderModel(nn.Module):
     def forward(self, x):
         # Compute the mixture of Gaussian prior
         # prior = gaussian_parameters(self.z_pre, dim=1)
-        pis = torch.softmax(self.pi_encoder(x), dim=1)
+        pis = torch.softmax(x, dim=1)
+        w_samp = reparameterise(self.mus, self.logvar)
 
-        mu = self.mu_encoder(x)
-        logvar = self.logvar_encoder(x)
-
-        w_samp = reparameterise(mu, logvar)
-        w_proj = torch.stack(torch.split(self.w_proj(w_samp), self.zdim, 1), 1)
-
-        mixture_samp = (pis.unsqueeze(-1)*w_proj).sum(dim=1)
+        mixture_samp = (pis.unsqueeze(-1)*w_samp.unsqueeze(0).repeat(len(x), 1, 1)).sum(dim=1)
         output = self.net(mixture_samp)
 
-        return output, mu, logvar
+        return output, self.mus, self.logvar
 
 
 def main():
