@@ -377,7 +377,7 @@ def main():
 
             elif args.lp:
                 # weight = np.min([1., 0.01*(counter+1)])
-                weight = 1.
+                weight = num_classes/len(y_l)
 
                 y_l_full, mu_l, logvar_l = model_y(y_l)
 
