@@ -193,6 +193,11 @@ class DecoderModel(nn.Module):
             nn.Linear(num_classes, z_dim),
         )
 
+        self.pi_encoder = nn.Sequential(
+            nn.ReLU(),
+            nn.Linear(num_classes, num_classes),
+        )
+
         self.net = nn.Sequential(
             nn.Linear(z_dim, 50),
             nn.ReLU(),
@@ -201,13 +206,10 @@ class DecoderModel(nn.Module):
             nn.Linear(50, num_classes)
         )
 
+        self.w_proj = nn.Linear(z_dim, z_dim*num_classes)
+
         self.zdim = z_dim
         self.nc = num_classes
-
-        self.proj_y = nn.Linear(num_classes, z_dim)
-        self.Wy = nn.Linear(num_classes, z_dim)
-
-        self.softplus = nn.Softplus()
 
         self.apply(init_weights)
         # self.scale_params = nn.Parameter(torch.ones(num_classes), requires_grad=True)
@@ -215,17 +217,16 @@ class DecoderModel(nn.Module):
     def forward(self, x):
         # Compute the mixture of Gaussian prior
         # prior = gaussian_parameters(self.z_pre, dim=1)
-        pis = torch.softmax(x, dim=1)
+        pis = torch.softmax(self.pi_encoder(x), dim=1)
+
         mu = self.mu_encoder(x)
         logvar = self.logvar_encoder(x)
 
         w_samp = reparameterise(mu, logvar)
+        w_proj = torch.stack(torch.split(self.w_proj(w_samp), self.zdim, 1), 1)
 
-        Wz = torch.sqrt(self.softplus(self.proj_y(pis)))
-        Wyy = self.Wy(pis)
-
-        MG = F.relu( Wyy + Wz * w_samp )
-        output = self.net(MG)
+        mixture_samp = (pis.unsqueeze(-1)*w_proj).sum(dim=1)
+        output = self.net(mixture_samp)
 
         return output, mu, logvar
 
@@ -393,17 +394,18 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                weight = np.min([1., 0.01*(counter+1)])
-                # weight = 1.
+                # weight = np.min([1., 0.01*(counter+1)])
+                weight = 1.
 
                 y_l_full, mu_l, logvar_l = model_y(y_l)
 
                 KLD_l = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp())
+                # recon_loss = F.cross_entropy(y_l_full, targets_l)
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
+
                 loss = recon_loss.mean() + weight*KLD_l.mean()
-                # import pdb
-                # pdb.set_trace()
+
                 if counter >= 25:
                     y_u_full, mu_u, logvar_u = model_y(y_u)
 
