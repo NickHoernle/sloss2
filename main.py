@@ -183,8 +183,11 @@ class DecoderModel(nn.Module):
     def __init__(self, num_classes, z_dim=2):
         super().__init__()
 
-        self.q_mus = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, z_dim))
-        self.q_logvar = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, z_dim))
+        # self.q_mus = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, z_dim))
+        # self.q_logvar = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, z_dim))
+        self.zero = torch.zeros(z_dim)
+        self.ones = torch.ones(z_dim)
+
         self.q_pis = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, num_classes))
 
         self.net = nn.Sequential(
@@ -206,11 +209,11 @@ class DecoderModel(nn.Module):
     def forward(self, x):
         # Compute the mixture of Gaussian prior
         # prior = gaussian_parameters(self.z_pre, dim=1)
-        q_mu = self.q_mus(x)
-        q_logvar = self.q_logvar(x)
+        # q_mu = self.q_mus(x)
+        # q_logvar = self.q_logvar(x)
         log_q_pis = torch.log_softmax(self.q_pis(x), dim=1)
 
-        w_samp = reparameterise(q_mu, q_logvar)
+        w_samp = reparameterise(self.zero.unsqueeze(0).repeat(1,1), self.ones.unsqueeze(0).repeat(1,1))
         w_proj = [self.proj_w[i](w_samp) for i in range(self.nc)]
 
         predictions = []
@@ -219,21 +222,22 @@ class DecoderModel(nn.Module):
             output_i = self.net(w_proj[i])
             predictions.append(output_i)
 
-        return torch.stack(predictions, dim=0), (q_mu, q_logvar, log_q_pis)
+        return torch.stack(predictions, dim=0), (log_q_pis)
 
     def forward_labeled(self, x, labels):
         # Compute the mixture of Gaussian prior
         # prior = gaussian_parameters(self.z_pre, dim=1)
-        q_mu = self.q_mus(x)
-        q_logvar = self.q_logvar(x)
+        # q_mu = self.q_mus(x)
+        # q_logvar = self.q_logvar(x)
         log_q_pis = torch.log_softmax(self.q_pis(x), dim=1)
 
-        w_samp = reparameterise(q_mu, q_logvar)
+        # w_samp = reparameterise(q_mu, q_logvar)
+        w_samp = reparameterise(self.zero.unsqueeze(0).repeat(1, 1), self.ones.unsqueeze(0).repeat(1, 1))
         w_proj = labels.unsqueeze(-1) * torch.stack([self.proj_w[i](w_samp) for i in range(self.nc)], dim=1)
 
         predictions = self.net(w_proj.sum(dim=1))
 
-        return predictions, (q_mu, q_logvar, log_q_pis)
+        return predictions, (log_q_pis)
 
 
 def main():
@@ -400,17 +404,17 @@ def main():
 
             elif args.lp:
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
-                y_l_full, (mu_l, logvar_l, log_pi) = model_y.forward_labeled(y_l, targets)
+                y_l_full, (log_pi) = model_y.forward_labeled(y_l, targets)
 
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
 
-                KLD = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp(), dim=-1)
-                loss = recon_loss.mean() + np.log(num_classes) + KLD.mean() + F.nll_loss(log_pi, targets_l)
+                # KLD = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp(), dim=-1)
+                loss = recon_loss.mean() + np.log(num_classes) + F.nll_loss(log_pi, targets_l)
 
                 if counter >= 10:
-                    y_u_full, (mu_u, logvar_u, log_pi) = model_y(y_u)
+                    y_u_full, (log_pi) = model_y(y_u)
 
-                    KLD_u = -0.5 * torch.sum(1 + logvar_u - mu_u.pow(2) - logvar_u.exp(), dim=-1)
+                    # KLD_u = -0.5 * torch.sum(1 + logvar_u - mu_u.pow(2) - logvar_u.exp(), dim=-1)
                     preds_list = []
                     for cat in range(num_classes):
                         targets = torch.zeros_like(log_pi)
@@ -420,7 +424,7 @@ def main():
                     preds = -torch.stack(preds_list, dim=1)
                     cat_KL = (-log_pi + np.log(num_classes))
 
-                    u_loss = ((log_pi.exp() * (preds + cat_KL)).sum(dim=-1)).mean() + KLD_u.mean()
+                    u_loss = ((log_pi.exp() * (preds + cat_KL)).sum(dim=-1)).mean() # + KLD_u.mean()
                     loss += args.unl2_weight * u_loss
 
                 return loss, log_pi
