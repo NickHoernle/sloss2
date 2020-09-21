@@ -413,7 +413,7 @@ def main():
                 y_l_full, (mu_l, logvar_l, log_pi) = model_y.forward_labeled(y_l, targets)
 
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
-                
+
                 KLD = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp(), dim=-1)
                 loss = recon_loss.mean() + np.log(num_classes) + KLD.mean() + F.cross_entropy(log_pi, targets_l)
 
@@ -427,9 +427,10 @@ def main():
                         targets[:, cat] = 1
                         preds_list.append(F.binary_cross_entropy_with_logits(y_u_full[cat], targets, reduction="none").sum(dim=-1))
 
-                    preds = torch.stack(preds_list, dim=1)
+                    preds = -torch.stack(preds_list, dim=1)
+                    cat_KL = (-log_pi + np.log(num_classes))
 
-                    u_loss = ((log_pi.exp() * (-preds)).sum(dim=-1)).mean() + np.log(num_classes) + KLD_u.mean()
+                    u_loss = ((log_pi.exp() * (preds + cat_KL)).sum(dim=-1)).mean() + KLD_u.mean()
                     loss += args.unl2_weight * u_loss
 
                 return loss, log_pi
