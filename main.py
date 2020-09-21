@@ -370,13 +370,17 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                tau = np.max([.5, 5*(np.exp(-counter*0.1))])
-
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 y_l_full, latent = model_y(y_l)
 
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
                 loss = recon_loss.mean()
+
+                alpha = latent
+                alpha_k = torch.tensor(1-1/num_classes)
+                kld = (torch.lgamma(alpha_k) - torch.lgamma(alpha) + (alpha - alpha_k)*torch.digamma(alpha)).sum(dim=1)
+
+                loss += kld.mean()
                 # # KLS
                 # cat_kl = np.log(num_classes)
                 # cont_kl = -0.5 * torch.sum(1 + q_logvar_l - q_mu_l.pow(2) - q_logvar_l.exp(), dim=1)
@@ -407,12 +411,12 @@ def main():
         targets = cast(sample[1], 'long')
         y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
         if args.lp:
-            y_full, (mu, logvar, log_pi) = model_y(y)
+            y_full, latent = model_y(y)
 
-            # tgts = one_hot_embedding(targets, num_classes, device=device)
-            recon_loss = F.cross_entropy(log_pi, targets)
+            tgts = one_hot_embedding(targets, num_classes, device=device)
+            recon_loss = F.binary_cross_entropy_with_logits(y_full, tgts)
 
-            return recon_loss.mean(), log_pi
+            return recon_loss.mean(), y_full
 
         if args.dataset == "awa2":
             return F.binary_cross_entropy_with_logits(y, targets.float()), y
