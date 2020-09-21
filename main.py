@@ -421,7 +421,7 @@ def main():
                     u_loss = cat_KL.mean() + cont_kl.mean()
                     loss += args.unl2_weight * u_loss
 
-                return loss, log_pi
+                return loss, y_l_full
 
             return loss, y_l
 
