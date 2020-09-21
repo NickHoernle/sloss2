@@ -415,7 +415,7 @@ def main():
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
 
                 KLD = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp(), dim=-1)
-                loss = recon_loss.mean() + np.log(num_classes) + KLD.mean() + F.cross_entropy(log_pi, targets_l)
+                loss = recon_loss.mean() + np.log(num_classes) + KLD.mean() + F.nll_loss(log_pi, targets_l)
 
                 if counter >= 10:
                     y_u_full, (mu_u, logvar_u, log_pi) = model_y(y_u)
