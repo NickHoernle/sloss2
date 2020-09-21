@@ -221,11 +221,8 @@ class DecoderModel(nn.Module):
             labels = torch.zeros_like(log_q_pis)
             labels[:, i] = 1
 
-            Wz = torch.sqrt(self.softplus(self.proj_y(labels)))
-            Wyy = self.Wy(labels)
-            MG = Wyy + Wz * w_samp
+            output_i = self.net(torch.cat((labels, w_samp), dim=1))
 
-            output_i = self.net(MG)
             predictions.append(output_i)
 
         return torch.stack(predictions, dim=0), (q_mu, q_logvar, log_q_pis)
@@ -238,10 +235,7 @@ class DecoderModel(nn.Module):
         log_q_pis = torch.log_softmax(self.q_pis(x), dim=1)
 
         w_samp = reparameterise(q_mu, q_logvar)
-        Wz = torch.sqrt(self.softplus(self.proj_y(labels)))
-        Wyy = self.Wy(labels)
-        MG = Wyy + Wz * w_samp
-        predictions = self.net(MG)
+        predictions = self.net(torch.cat((labels, w_samp), dim=1))
 
         return predictions, (q_mu, q_logvar, log_q_pis)
 
