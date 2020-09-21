@@ -438,7 +438,7 @@ def main():
         y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
         if args.lp:
             tgts = one_hot_embedding(targets, num_classes, device=device)
-            y_full, (mu_l, logvar_l, log_pi) = model_y.forward_labeled(y, tgts)
+            y_full, (log_pi) = model_y.forward_labeled(y, tgts)
 
             recon_loss = F.binary_cross_entropy_with_logits(y_full, tgts)
             return recon_loss.mean(), log_pi
