@@ -228,15 +228,13 @@ class DecoderModel(nn.Module):
 
         # sample from z prior
         zs = reparameterise(q_mu, q_logvar)
-        ws = torch.stack([w_proj(zs) for w_proj in self.w_proj], dim=1)
-        y = F.gumbel_softmax(logits, tau)
 
-        w = (y.unsqueeze(-1) * ws).sum(dim=1)
+        preds = []
+        for cat in range(self.nc):
+            w = self.w_proj[cat](zs)
+            preds.append(self.net(w))
 
-        # compute the mixture result
-        predictions = self.net(w)
-
-        return predictions, (q_mu, q_logvar, log_qy)
+        return preds, (q_mu, q_logvar, log_qy)
 
 
 def main():
@@ -414,11 +412,18 @@ def main():
 
                 loss = recon_loss.mean() + cat_kl.mean() + F.nll_loss(log_qy_l, targets_l) + cont_kl.mean()
 
-                if counter >= 10:
+                if counter >= -1:
                     y_u_full, (q_mu_u, q_logvar_u, log_pi) = model_y(y_u)
-                    cat_KL = (log_pi.exp()*log_pi).sum(dim=1) + np.log(num_classes)
                     cont_kl = -0.5 * torch.sum(1 + q_logvar_u - q_mu_u.pow(2) - q_logvar_u.exp(), dim=1)
-                    u_loss = cat_KL.mean() + cont_kl.mean()
+                    recon = []
+                    for cat in range(num_classes):
+                        targets = torch.zeros_like(log_pi)
+                        targets[:, cat] = 1
+                        pred_acc = F.binary_cross_entropy_with_logits(y_u_full[cat], targets, reduction="none").sum(dim=-1)
+                        recon.append(pred_acc)
+
+                    predictions = torch.stack(recon, dim=1)
+                    u_loss = (log_pi.exp()*(predictions + log_pi + np.log(num_classes))).sum(dim=1).mean() + cont_kl.mean()
                     loss += args.unl2_weight * u_loss
 
                 return loss, y_l_full
