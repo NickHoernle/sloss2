@@ -183,8 +183,11 @@ class DecoderModel(nn.Module):
     def __init__(self, num_classes, z_dim=2):
         super().__init__()
 
+        self.mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
+        self.logvar = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
+
         self.net = nn.Sequential(
-            nn.Linear(z_dim+num_classes, 50),
+            nn.Linear(z_dim, 50),
             nn.ReLU(),
             nn.Linear(50, 50),
             nn.ReLU(),
@@ -201,11 +204,13 @@ class DecoderModel(nn.Module):
         log_qy = torch.log_softmax(x, dim=1)
 
         # sample from z prior
-        zs = torch.rand_like(log_qy[:, :self.zdim])
+        zs = reparameterise(self.mus.unsqueeze(0).repeat(len(x), 1, 1), self.logvar.unsqueeze(0).repeat(len(x), 1, 1))
         y = F.gumbel_softmax(x, tau=tau)
 
+        w = (y.unsqueeze(-1) * zs).sum(dim=1)
+
         # compute the mixture result
-        predictions = self.net(torch.cat((zs, y), dim=1))
+        predictions = self.net(w)
 
         return predictions, log_qy
 
