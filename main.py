@@ -185,7 +185,7 @@ class DecoderModel(nn.Module):
 
         self.q_mu = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, z_dim))
         self.q_logvar = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, z_dim))
-        self.q_pi = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, z_dim))
+        self.q_pi = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, num_classes))
 
         self.w_proj = nn.ModuleList([nn.Linear(z_dim, z_dim) for _ in range(num_classes)])
 
