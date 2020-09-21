@@ -183,13 +183,8 @@ class DecoderModel(nn.Module):
     def __init__(self, num_classes, z_dim=2):
         super().__init__()
 
-        # self.q_mus = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, z_dim))
-        # self.q_logvar = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, z_dim))
-        self.mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
-        self.logvars = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
-
         self.net = nn.Sequential(
-            nn.Linear(z_dim, 50),
+            nn.Linear(num_classes, 50),
             nn.ReLU(),
             nn.Linear(50, 50),
             nn.ReLU(),
@@ -205,10 +200,9 @@ class DecoderModel(nn.Module):
         # Compute the mixture of Gaussian prior
         # log_q_pis = torch.log_softmax(x, dim=1)
         log_qy = torch.log_softmax(x, dim=1)
-        alphas = F.gumbel_softmax(x, tau=tau)
-        w_samp = reparameterise(self.mus.unsqueeze(0).repeat(len(x), 1, 1), self.logvars.unsqueeze(0).repeat(len(x), 1, 1))
-        w_proj = (alphas.unsqueeze(-1) * w_samp).sum(dim=1)
-        predictions = self.net(w_proj)
+
+        y = F.gumbel_softmax(x, tau=tau)
+        predictions = self.net(y)
 
         return predictions, log_qy
 
@@ -376,14 +370,14 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                y_l_full, log_pi = model_y(y_l)
+                y_l_full, log_pi = model_y(y_l, tau=5.)
 
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
 
                 cat_kl = (log_pi.exp()*log_pi).sum(dim=1) + np.log(num_classes)
 
-                loss = recon_loss.mean() + cat_kl.mean()
+                loss = recon_loss.mean() + cat_kl.mean() #+ F.nll_loss(log_pi, targets_l)
 
                 # if counter >= 10:
                 #     y_u_full, log_pi = model_y(y_u)
