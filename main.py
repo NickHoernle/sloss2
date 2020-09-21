@@ -183,8 +183,8 @@ class DecoderModel(nn.Module):
     def __init__(self, num_classes, z_dim=2):
         super().__init__()
 
-        self.mus = nn.Parameter(nn.randn(num_classes, z_dim), requires_grad=True)
-        self.logvars = nn.Parameter(nn.randn(num_classes, z_dim), requires_grad=True)
+        self.mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
+        self.logvars = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
 
         self.net = nn.Sequential(
             nn.Linear(z_dim, 50),
