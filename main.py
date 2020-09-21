@@ -182,6 +182,8 @@ def init_weights(m):
 class DecoderModel(nn.Module):
     def __init__(self, num_classes, z_dim=2):
         super().__init__()
+        self.q_mu = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, num_classes))
+        self.q_logvar = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, num_classes))
 
         self.net = nn.Sequential(
             nn.Linear(num_classes, 50),
@@ -197,14 +199,14 @@ class DecoderModel(nn.Module):
 
     def forward(self, x):
         # Compute the mixture of Gaussian prior
-        alpha_hat = F.softplus(x)
-        u = torch.rand_like(x)
-        gamma_samp = (1/alpha_hat)*(torch.log(u) + torch.log(alpha_hat) + torch.lgamma(alpha_hat))
+        q_mu = self.q_mu(x)
+        q_logvar = self.q_logvar(x)
+        z = reparameterise(q_mu, q_logvar)
 
-        dir_samp = torch.log_softmax(gamma_samp, dim=1)
-        output = self.net(dir_samp)
+        alpha = torch.softmax(z, dim=1)
+        output = self.net(alpha)
 
-        return output, alpha_hat
+        return output, alpha
 
 
 def main():
@@ -373,14 +375,14 @@ def main():
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 y_l_full, latent = model_y(y_l)
 
-                recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
-                loss = recon_loss.mean()
-
-                alpha = latent
-                alpha_k = torch.tensor(1-1/num_classes)
-                kld = (torch.lgamma(alpha_k) - torch.lgamma(alpha) + (alpha - alpha_k)*torch.digamma(alpha)).sum(dim=1)
-
-                loss += kld.mean()
+                # recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
+                # loss = recon_loss.mean()
+                #
+                # alpha = latent
+                # alpha_k = torch.tensor(1-1/num_classes)
+                # kld = (torch.lgamma(alpha_k) - torch.lgamma(alpha) + (alpha - alpha_k)*torch.digamma(alpha)).sum(dim=1)
+                #
+                # loss += kld.mean()
                 # # KLS
                 # cat_kl = np.log(num_classes)
                 # cont_kl = -0.5 * torch.sum(1 + q_logvar_l - q_mu_l.pow(2) - q_logvar_l.exp(), dim=1)
