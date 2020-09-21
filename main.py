@@ -205,7 +205,7 @@ class DecoderModel(nn.Module):
         # Compute the mixture of Gaussian prior
         # log_q_pis = torch.log_softmax(x, dim=1)
         log_qy = torch.log_softmax(x, dim=1)
-        alphas = F.gumbel_softmax(log_qy, tau=tau)
+        alphas = F.gumbel_softmax(x, tau=tau)
         w_samp = reparameterise(self.mus.unsqueeze(0).repeat(len(x), 1, 1), self.logvars.unsqueeze(0).repeat(len(x), 1, 1))
         w_proj = (alphas.unsqueeze(-1) * w_samp).sum(dim=1)
         predictions = self.net(w_proj)
@@ -380,10 +380,11 @@ def main():
 
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
-                cat_kl = (log_pi.exp()*log_pi + np.log(num_classes)).sum(dim=1)
+
+                cat_kl = (log_pi.exp()*log_pi).sum(dim=1) + np.log(num_classes)
 
                 loss = recon_loss.mean() + cat_kl.mean()
-                
+
                 # if counter >= 10:
                 #     y_u_full, log_pi = model_y(y_u)
                 #     cat_KL = (-log_pi + np.log(num_classes))
