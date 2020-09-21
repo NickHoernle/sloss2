@@ -370,14 +370,14 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                y_l_full, log_pi = model_y(y_l, tau=5.)
+                weight = np.min([1., 0.01*counter])
+                y_l_full, log_pi = model_y(y_l, tau=1.)
 
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
 
                 cat_kl = (log_pi.exp()*log_pi).sum(dim=1) + np.log(num_classes)
-
-                loss = recon_loss.mean() + cat_kl.mean() #+ F.nll_loss(log_pi, targets_l)
+                loss = recon_loss.mean() + weight*cat_kl.mean()
 
                 # if counter >= 10:
                 #     y_u_full, log_pi = model_y(y_u)
