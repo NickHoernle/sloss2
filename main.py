@@ -183,58 +183,28 @@ class DecoderModel(nn.Module):
     def __init__(self, num_classes, z_dim=2):
         super().__init__()
 
-        self.q_mu = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, z_dim))
-        self.q_logvar = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, z_dim))
-        self.q_pi = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, num_classes))
-
-        self.w_proj = nn.ModuleList([nn.Linear(z_dim, z_dim) for _ in range(num_classes)])
-
         self.net = nn.Sequential(
-            nn.Linear(z_dim, 50),
+            nn.Linear(num_classes, 50),
             nn.ReLU(),
             nn.Linear(50, 50),
             nn.ReLU(),
             nn.Linear(50, num_classes)
         )
 
-        self.zdim = z_dim
         self.nc = num_classes
 
         self.apply(init_weights)
 
-    def forward_labeled(self, x, labels, tau=1.):
+    def forward(self, x):
         # Compute the mixture of Gaussian prior
-        q_mu = self.q_mu(x)
-        q_logvar = self.q_logvar(x)
-        log_qy = torch.log_softmax(self.q_pi(x), dim=1)
+        alpha_hat = F.softplus(x)
+        u = torch.rand_like(x)
+        gamma_samp = (1/alpha_hat)*(torch.log(u) + torch.log(alpha_hat) + torch.lgamma(alpha_hat))
 
-        # sample from z prior
-        zs = reparameterise(q_mu, q_logvar)
-        ws = torch.stack([w_proj(zs) for w_proj in self.w_proj], dim=1)
+        dir_samp = torch.log_softmax(gamma_samp, dim=1)
+        output = self.net(dir_samp)
 
-        w = (labels.unsqueeze(-1) * ws).sum(dim=1)
-
-        # compute the mixture result
-        predictions = self.net(w)
-
-        return predictions, (q_mu, q_logvar, log_qy)
-
-    def forward(self, x, tau=1.):
-        # Compute the mixture of Gaussian prior
-        q_mu = self.q_mu(x)
-        q_logvar = self.q_logvar(x)
-        logits = self.q_pi(x)
-        log_qy = torch.log_softmax(logits, dim=1)
-
-        # sample from z prior
-        zs = reparameterise(q_mu, q_logvar)
-
-        preds = []
-        for cat in range(self.nc):
-            w = self.w_proj[cat](zs)
-            preds.append(self.net(w))
-
-        return preds, (q_mu, q_logvar, log_qy)
+        return output, alpha_hat
 
 
 def main():
@@ -403,28 +373,29 @@ def main():
                 tau = np.max([.5, 5*(np.exp(-counter*0.1))])
 
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
-                y_l_full, (q_mu_l, q_logvar_l, log_qy_l) = model_y.forward_labeled(y_l, targets, tau=tau)
+                y_l_full, latent = model_y(y_l)
 
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
-                # KLS
-                cat_kl = np.log(num_classes)
-                cont_kl = -0.5 * torch.sum(1 + q_logvar_l - q_mu_l.pow(2) - q_logvar_l.exp(), dim=1)
-
-                loss = recon_loss.mean() + cat_kl.mean() + F.nll_loss(log_qy_l, targets_l) + cont_kl.mean()
-
-                if counter >= -1:
-                    y_u_full, (q_mu_u, q_logvar_u, log_pi) = model_y(y_u)
-                    cont_kl = -0.5 * torch.sum(1 + q_logvar_u - q_mu_u.pow(2) - q_logvar_u.exp(), dim=1)
-                    recon = []
-                    for cat in range(num_classes):
-                        targets = torch.zeros_like(log_pi)
-                        targets[:, cat] = 1
-                        pred_acc = F.binary_cross_entropy_with_logits(y_u_full[cat], targets, reduction="none").sum(dim=-1)
-                        recon.append(pred_acc)
-
-                    predictions = torch.stack(recon, dim=1)
-                    u_loss = (log_pi.exp()*(predictions + log_pi + np.log(num_classes))).sum(dim=1).mean() + cont_kl.mean()
-                    loss += args.unl2_weight * u_loss
+                loss = recon_loss.mean()
+                # # KLS
+                # cat_kl = np.log(num_classes)
+                # cont_kl = -0.5 * torch.sum(1 + q_logvar_l - q_mu_l.pow(2) - q_logvar_l.exp(), dim=1)
+                #
+                # loss = recon_loss.mean() + cat_kl.mean() + F.nll_loss(log_qy_l, targets_l) + cont_kl.mean()
+                #
+                # if counter >= -1:
+                #     y_u_full, (q_mu_u, q_logvar_u, log_pi) = model_y(y_u)
+                #     cont_kl = -0.5 * torch.sum(1 + q_logvar_u - q_mu_u.pow(2) - q_logvar_u.exp(), dim=1)
+                #     recon = []
+                #     for cat in range(num_classes):
+                #         targets = torch.zeros_like(log_pi)
+                #         targets[:, cat] = 1
+                #         pred_acc = F.binary_cross_entropy_with_logits(y_u_full[cat], targets, reduction="none").sum(dim=-1)
+                #         recon.append(pred_acc)
+                #
+                #     predictions = torch.stack(recon, dim=1)
+                #     u_loss = (log_pi.exp()*(predictions + log_pi + np.log(num_classes))).sum(dim=1).mean() + cont_kl.mean()
+                #     loss += args.unl2_weight * u_loss
 
                 return loss, y_l_full
 
