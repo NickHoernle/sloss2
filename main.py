@@ -188,7 +188,6 @@ class DecoderModel(nn.Module):
         self.q_pis = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, num_classes))
 
         self.net = nn.Sequential(
-            nn.ReLU(),
             nn.Linear(z_dim, 50),
             nn.ReLU(),
             nn.Linear(50, 50),
@@ -197,9 +196,6 @@ class DecoderModel(nn.Module):
         )
 
         self.proj_w = nn.ModuleList([nn.Linear(z_dim, z_dim) for c in range(num_classes)])
-        self.Wy = nn.Linear(num_classes, z_dim)
-
-        self.softplus = nn.Softplus()
 
         self.zdim = z_dim
         self.nc = num_classes
