@@ -183,11 +183,8 @@ class DecoderModel(nn.Module):
     def __init__(self, num_classes, z_dim=2):
         super().__init__()
 
-        self.mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
-        self.logvars = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
-
         self.net = nn.Sequential(
-            nn.Linear(z_dim, 50),
+            nn.Linear(z_dim+num_classes, 50),
             nn.ReLU(),
             nn.Linear(50, 50),
             nn.ReLU(),
@@ -204,15 +201,11 @@ class DecoderModel(nn.Module):
         log_qy = torch.log_softmax(x, dim=1)
 
         # sample from z prior
-        zs = reparameterise(
-            self.mus.unsqueeze(0).repeat(len(x), 1, 1),
-            self.logvars.unsqueeze(0).repeat(len(x), 1, 1)
-        )
+        zs = torch.rand_like(log_qy[:, :self.zdim])
+        y = F.gumbel_softmax(x, tau=tau)
 
         # compute the mixture result
-        w = (log_qy.exp().unsqueeze(-1)*zs).sum(dim=1)
-
-        predictions = self.net(w)
+        predictions = self.net(torch.cat((zs, y), dim=1))
 
         return predictions, log_qy
 
@@ -388,7 +381,7 @@ def main():
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
 
                 cat_kl = (log_pi.exp()*log_pi).sum(dim=1) + np.log(num_classes)
-                loss = recon_loss.mean() + weight*cat_kl.mean()
+                loss = recon_loss.mean() + weight*cat_kl.mean() + F.nll_loss(log_pi, targets_l)
 
                 # if counter >= 10:
                 #     y_u_full, log_pi = model_y(y_u)
