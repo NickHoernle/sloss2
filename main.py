@@ -206,38 +206,35 @@ class DecoderModel(nn.Module):
         self.apply(init_weights)
         # self.scale_params = nn.Parameter(torch.ones(num_classes), requires_grad=True)
 
+    # def forward(self, x):
+    #     # Compute the mixture of Gaussian prior
+    #     # prior = gaussian_parameters(self.z_pre, dim=1)
+    #     # q_mu = self.q_mus(x)
+    #     # q_logvar = self.q_logvar(x)
+    #     log_q_pis = torch.log_softmax(self.q_pis(x), dim=1)
+    #
+    #     w_samp = reparameterise(self.zero.unsqueeze(0).repeat(1,1), self.ones.unsqueeze(0).repeat(1,1))
+    #     w_proj = [self.proj_w[i](w_samp) for i in range(self.nc)]
+    #
+    #     predictions = []
+    #     for i in range(self.nc):
+    #
+    #         output_i = self.net(w_proj[i])
+    #         predictions.append(output_i)
+    #
+    #     return torch.stack(predictions, dim=0), (log_q_pis)
+
     def forward(self, x):
         # Compute the mixture of Gaussian prior
-        # prior = gaussian_parameters(self.z_pre, dim=1)
-        # q_mu = self.q_mus(x)
-        # q_logvar = self.q_logvar(x)
-        log_q_pis = torch.log_softmax(self.q_pis(x), dim=1)
-
-        w_samp = reparameterise(self.zero.unsqueeze(0).repeat(1,1), self.ones.unsqueeze(0).repeat(1,1))
-        w_proj = [self.proj_w[i](w_samp) for i in range(self.nc)]
-
-        predictions = []
-        for i in range(self.nc):
-
-            output_i = self.net(w_proj[i])
-            predictions.append(output_i)
-
-        return torch.stack(predictions, dim=0), (log_q_pis)
-
-    def forward_labeled(self, x, labels):
-        # Compute the mixture of Gaussian prior
-        # prior = gaussian_parameters(self.z_pre, dim=1)
-        # q_mu = self.q_mus(x)
-        # q_logvar = self.q_logvar(x)
         log_q_pis = torch.log_softmax(self.q_pis(x), dim=1)
 
         # w_samp = reparameterise(q_mu, q_logvar)
         w_samp = reparameterise(self.zero.unsqueeze(0).repeat(1, 1), self.ones.unsqueeze(0).repeat(1, 1))
-        w_proj = labels.unsqueeze(-1) * torch.stack([self.proj_w[i](w_samp) for i in range(self.nc)], dim=1)
+        w_proj = log_q_pis.unsqueeze(-1).exp() * torch.stack([self.proj_w[i](w_samp) for i in range(self.nc)], dim=1)
 
         predictions = self.net(w_proj.sum(dim=1))
 
-        return predictions, (log_q_pis)
+        return predictions, log_q_pis
 
 
 def main():
@@ -403,28 +400,17 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                targets = one_hot_embedding(targets_l, num_classes, device=device)
-                y_l_full, (log_pi) = model_y.forward_labeled(y_l, targets)
+                y_l_full, log_pi = model_y(y_l)
 
+                targets = one_hot_embedding(targets_l, num_classes, device=device)
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
 
-                # KLD = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp(), dim=-1)
                 loss = recon_loss.mean() + np.log(num_classes) + F.nll_loss(log_pi, targets_l)
 
                 if counter >= 10:
-                    y_u_full, (log_pi) = model_y(y_u)
-
-                    # KLD_u = -0.5 * torch.sum(1 + logvar_u - mu_u.pow(2) - logvar_u.exp(), dim=-1)
-                    preds_list = []
-                    for cat in range(num_classes):
-                        targets = torch.zeros_like(log_pi)
-                        targets[:, cat] = 1
-                        preds_list.append(F.binary_cross_entropy_with_logits(y_u_full[cat], targets, reduction="none").sum(dim=-1))
-
-                    preds = -torch.stack(preds_list, dim=1)
+                    y_u_full, log_pi = model_y(y_u)
                     cat_KL = (-log_pi + np.log(num_classes))
-
-                    u_loss = ((log_pi.exp() * (preds + cat_KL)).sum(dim=-1)).mean() # + KLD_u.mean()
+                    u_loss = (log_pi.exp() * (-y_u_full + cat_KL)).sum(dim=-1).mean() # + KLD_u.mean()
                     loss += args.unl2_weight * u_loss
 
                 return loss, log_pi
@@ -437,11 +423,12 @@ def main():
         targets = cast(sample[1], 'long')
         y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
         if args.lp:
-            tgts = one_hot_embedding(targets, num_classes, device=device)
-            y_full, (log_pi) = model_y.forward_labeled(y, tgts)
+            y_full, log_pi = model_y(y)
 
+            tgts = one_hot_embedding(targets, num_classes, device=device)
             recon_loss = F.binary_cross_entropy_with_logits(y_full, tgts)
-            return recon_loss.mean(), log_pi
+
+            return recon_loss.mean(), y_full
 
         if args.dataset == "awa2":
             return F.binary_cross_entropy_with_logits(y, targets.float()), y
