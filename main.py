@@ -381,9 +381,9 @@ def main():
             elif args.lp:
                 y_l_full, mu_l, logvar_l = model_y(y_l)
 
-                # recon_loss = F.cross_entropy(y_l_full, targets_l)
+                recon_loss = F.cross_entropy(y_l_full, targets_l)
                 # targets = one_hot_embedding(targets_l, num_classes, device=device)
-                recon_loss = F.cross_entropy(y_l_full, targets_l, reduction="none").sum(dim=-1)
+                # recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets_l, reduction="none").sum(dim=-1)
 
                 loss = recon_loss.mean() + np.log(num_classes)
 
