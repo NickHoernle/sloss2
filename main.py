@@ -299,7 +299,7 @@ def main():
         num_workers=args.n_workers,
         worker_init_fn=_init_fn
     )
-    z_dim = 10
+    z_dim = 2
     model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
 
     if args.lp:
@@ -412,15 +412,10 @@ def main():
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 y_l_full, (mu_l, logvar_l, log_pi) = model_y.forward_labeled(y_l, targets)
 
-                # cat_kld = -(log_pi + np.log(num_classes))
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
-
-                # torch.stack([
-                # F.binary_cross_entropy_with_logits(pred, targets, reduction="none").sum(dim=-1) for pred in y_l_full
-                # ], dim=1)
-
+                
                 KLD = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp(), dim=-1)
-                loss = recon_loss.mean() + np.log(num_classes) + KLD.mean()
+                loss = recon_loss.mean() + np.log(num_classes) + KLD.mean() + F.cross_entropy(log_pi, targets_l)
 
                 if counter >= 10:
                     y_u_full, (mu_u, logvar_u, log_pi) = model_y(y_u)
