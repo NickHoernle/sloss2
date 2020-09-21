@@ -438,10 +438,10 @@ def main():
         if args.lp:
             y_full, (mu, logvar, log_pi) = model_y(y)
 
-            tgts = one_hot_embedding(targets, num_classes, device=device)
-            recon_loss = F.binary_cross_entropy_with_logits(y_full, tgts)
+            # tgts = one_hot_embedding(targets, num_classes, device=device)
+            recon_loss = F.cross_entropy(log_pi, targets)
 
-            return recon_loss.mean(), y_full
+            return recon_loss.mean(), log_pi
 
         if args.dataset == "awa2":
             return F.binary_cross_entropy_with_logits(y, targets.float()), y
