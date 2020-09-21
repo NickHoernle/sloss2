@@ -188,8 +188,7 @@ class DecoderModel(nn.Module):
         self.q_pis = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, num_classes))
 
         self.net = nn.Sequential(
-            nn.ReLU(),
-            nn.Linear(z_dim, 50),
+            nn.Linear(num_classes+z_dim, 50),
             nn.ReLU(),
             nn.Linear(50, 50),
             nn.ReLU(),
