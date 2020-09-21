@@ -269,7 +269,7 @@ def main():
         num_workers=args.n_workers,
         worker_init_fn=_init_fn
     )
-    z_dim = 2
+    z_dim = 10
     model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
 
     if args.lp:
@@ -380,16 +380,16 @@ def main():
 
             elif args.lp:
                 # weight = np.min([1., 0.01*(counter+1)])
-                weight = num_classes/len(y_l)
+                weight = 0
 
                 y_l_full, mu_l, logvar_l = model_y(y_l)
 
-                KLD_l = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp(), dim=-1)
+                # KLD_l = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp(), dim=-1)
                 # recon_loss = F.cross_entropy(y_l_full, targets_l)
-                targets = one_hot_embedding(targets_l, num_classes, device=device)
-                recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
+                # targets = one_hot_embedding(targets_l, num_classes, device=device)
+                recon_loss = F.cross_entropy(y_l_full, targets_l, reduction="none").sum(dim=-1)
 
-                loss = recon_loss.mean() + weight*KLD_l.mean()
+                loss = recon_loss.mean() - np.log(num_classes)
 
                 if counter >= 25:
                     y_u_full, mu_u, logvar_u = model_y(y_u)
@@ -397,7 +397,7 @@ def main():
                     kld_u = -0.5 * torch.sum(1 + logvar_u - mu_u.pow(2) - logvar_u.exp(), dim=-1)
                     y_u_pred = torch.log_softmax(y_u_full, dim=1)
 
-                    u_loss = ((y_u_pred.exp() * (-y_u_full)).sum(dim=-1)).mean() + weight*kld_u.mean()
+                    u_loss = ((y_u_pred.exp() * (-y_u_pred)).sum(dim=-1)).mean() - np.log(num_classes)
 
                     loss += args.unl2_weight * u_loss
 
