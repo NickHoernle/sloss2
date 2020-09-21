@@ -185,10 +185,8 @@ class DecoderModel(nn.Module):
 
         # self.q_mus = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, z_dim))
         # self.q_logvar = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, z_dim))
-        self.zero = nn.Parameter(torch.zeros(z_dim), requires_grad=False)
-        self.ones = nn.Parameter(torch.ones(z_dim), requires_grad=False)
-
-        self.q_pis = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, num_classes))
+        self.mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
+        self.logvars = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
 
         self.net = nn.Sequential(
             nn.Linear(z_dim, 50),
@@ -198,43 +196,21 @@ class DecoderModel(nn.Module):
             nn.Linear(50, num_classes)
         )
 
-        self.proj_w = nn.ModuleList([nn.Linear(z_dim, z_dim) for c in range(num_classes)])
-
         self.zdim = z_dim
         self.nc = num_classes
 
         self.apply(init_weights)
-        # self.scale_params = nn.Parameter(torch.ones(num_classes), requires_grad=True)
 
-    # def forward(self, x):
-    #     # Compute the mixture of Gaussian prior
-    #     # prior = gaussian_parameters(self.z_pre, dim=1)
-    #     # q_mu = self.q_mus(x)
-    #     # q_logvar = self.q_logvar(x)
-    #     log_q_pis = torch.log_softmax(self.q_pis(x), dim=1)
-    #
-    #     w_samp = reparameterise(self.zero.unsqueeze(0).repeat(1,1), self.ones.unsqueeze(0).repeat(1,1))
-    #     w_proj = [self.proj_w[i](w_samp) for i in range(self.nc)]
-    #
-    #     predictions = []
-    #     for i in range(self.nc):
-    #
-    #         output_i = self.net(w_proj[i])
-    #         predictions.append(output_i)
-    #
-    #     return torch.stack(predictions, dim=0), (log_q_pis)
-
-    def forward(self, x):
+    def forward(self, x, tau=1.):
         # Compute the mixture of Gaussian prior
-        log_q_pis = torch.log_softmax(self.q_pis(x), dim=1)
+        # log_q_pis = torch.log_softmax(x, dim=1)
+        log_qy = torch.log_softmax(x, dim=1)
+        alphas = F.gumbel_softmax(log_qy, tau=tau)
+        w_samp = reparameterise(self.mus.unsqueeze(0).repeat(len(x), 1, 1), self.logvars.unsqueeze(0).repeat(len(x), 1, 1))
+        w_proj = (alphas.unsqueeze(-1) * w_samp).sum(dim=1)
+        predictions = self.net(w_proj)
 
-        # w_samp = reparameterise(q_mu, q_logvar)
-        w_samp = reparameterise(self.zero.unsqueeze(0).repeat(1, 1), self.ones.unsqueeze(0).repeat(1, 1))
-        w_proj = log_q_pis.unsqueeze(-1).exp() * torch.stack([self.proj_w[i](w_samp) for i in range(self.nc)], dim=1)
-
-        predictions = self.net(w_proj.sum(dim=1))
-
-        return predictions, log_q_pis
+        return predictions, log_qy
 
 
 def main():
@@ -404,14 +380,15 @@ def main():
 
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
+                cat_kl = (log_pi.exp()*log_pi + np.log(num_classes)).sum(dim=1)
 
-                loss = recon_loss.mean() + np.log(num_classes) + F.nll_loss(log_pi, targets_l)
-
-                if counter >= 10:
-                    y_u_full, log_pi = model_y(y_u)
-                    cat_KL = (-log_pi + np.log(num_classes))
-                    u_loss = (log_pi.exp() * (-y_u_full + cat_KL)).sum(dim=-1).mean() # + KLD_u.mean()
-                    loss += args.unl2_weight * u_loss
+                loss = recon_loss.mean() + cat_kl.mean()
+                
+                # if counter >= 10:
+                #     y_u_full, log_pi = model_y(y_u)
+                #     cat_KL = (-log_pi + np.log(num_classes))
+                #     u_loss = (log_pi.exp() * (-y_u_full + cat_KL)).sum(dim=-1).mean() # + KLD_u.mean()
+                #     loss += args.unl2_weight * u_loss
 
                 return loss, log_pi
 
