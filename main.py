@@ -373,21 +373,20 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                # weight = np.min([1., 0.01*counter])
-                weight = 1.
-                y_l_full, log_pi = model_y(y_l, tau=1.)
+                tau = np.max([.5, 5*(torch.exp(-counter))])
+                y_l_full, log_pi = model_y(y_l, tau=tau)
 
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
 
                 cat_kl = (log_pi.exp()*log_pi).sum(dim=1) + np.log(num_classes)
-                loss = recon_loss.mean() + weight*cat_kl.mean() + F.nll_loss(log_pi, targets_l)
+                loss = recon_loss.mean() + cat_kl.mean() + F.nll_loss(log_pi, targets_l)
 
-                # if counter >= 10:
-                #     y_u_full, log_pi = model_y(y_u)
-                #     cat_KL = (-log_pi + np.log(num_classes))
-                #     u_loss = (log_pi.exp() * (-y_u_full + cat_KL)).sum(dim=-1).mean() # + KLD_u.mean()
-                #     loss += args.unl2_weight * u_loss
+                if counter >= 10:
+                    y_u_full, log_pi = model_y(y_u)
+                    cat_KL = (log_pi.exp()*log_pi).sum(dim=1) + np.log(num_classes)
+                    u_loss = cat_KL.mean()
+                    loss += args.unl2_weight * u_loss
 
                 return loss, log_pi
 
