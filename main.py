@@ -199,6 +199,20 @@ class DecoderModel(nn.Module):
 
         self.apply(init_weights)
 
+    def forward_labeled(self, x, labels, tau=1.):
+        # Compute the mixture of Gaussian prior
+        log_qy = torch.log_softmax(x, dim=1)
+
+        # sample from z prior
+        zs = reparameterise(self.mus.unsqueeze(0).repeat(len(x), 1, 1), self.logvar.unsqueeze(0).repeat(len(x), 1, 1))
+
+        w = (labels.unsqueeze(-1) * zs).sum(dim=1)
+
+        # compute the mixture result
+        predictions = self.net(w)
+
+        return predictions, log_qy
+
     def forward(self, x, tau=1.):
         # Compute the mixture of Gaussian prior
         log_qy = torch.log_softmax(x, dim=1)
@@ -379,17 +393,17 @@ def main():
 
             elif args.lp:
                 tau = np.max([.5, 5*(np.exp(-counter*0.1))])
-                y_l_full, log_pi = model_y(y_l, tau=tau)
 
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
+                y_l_full, log_pi = model_y.forward_labeled(y_l, targets, tau=tau)
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
 
-                cat_kl = (log_pi.exp()*log_pi).sum(dim=1) + np.log(num_classes)
+                cat_kl = np.log(num_classes)
                 loss = recon_loss.mean() + cat_kl.mean() + F.nll_loss(log_pi, targets_l)
 
                 if counter >= 10:
                     y_u_full, log_pi = model_y(y_u)
-                    cat_KL = (log_pi.exp()*log_pi).sum(dim=1) + np.log(num_classes)
+                    cat_KL = (log_pi.exp()*log_pi).sum(dim=1) - np.log(num_classes)
                     u_loss = cat_KL.mean()
                     loss += args.unl2_weight * u_loss
 
