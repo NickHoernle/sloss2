@@ -373,7 +373,7 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                tau = np.max([.5, 5*(torch.exp(-counter))])
+                tau = np.max([.5, 5*(np.exp(-counter*0.1))])
                 y_l_full, log_pi = model_y(y_l, tau=tau)
 
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
