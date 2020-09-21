@@ -44,7 +44,7 @@ parser.add_argument('--lr', default=0.1, type=float)
 parser.add_argument('--epochs', default=200, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--weight_decay', default=0.0005, type=float)
-parser.add_argument('--epoch_step', default='[25, 50, 100]', type=str,
+parser.add_argument('--epoch_step', default='[60, 120, 160]', type=str,
                     help='json list with epochs to drop lr on')
 parser.add_argument('--lr_decay_ratio', default=0.2, type=float)
 parser.add_argument('--resume', default='', type=str)
@@ -112,13 +112,13 @@ def log_normal(x, m, log_v):
     # Compute element-wise log probability of normal and remember to sum over
     # the last dimension
     ################################################################################
-    #print("q_m", m.size())
-    #print("q_v", v.size())
-    const = -0.5*x.size(-1)*torch.log(2*torch.tensor(np.pi))
-    #print(const.size())
-    log_det = -0.5*torch.sum(log_v, dim=-1)
-    #print("log_det", log_det.size())
-    log_exp = -0.5*torch.sum((x - m)**2/(log_v.exp()), dim = -1)
+    # print("q_m", m.size())
+    # print("q_v", v.size())
+    const = -0.5 * x.size(-1) * torch.log(2 * torch.tensor(np.pi))
+    # print(const.size())
+    log_det = -0.5 * torch.sum(log_v, dim=-1)
+    # print("log_det", log_det.size())
+    log_exp = -0.5 * torch.sum((x - m) ** 2 / (log_v.exp()), dim=-1)
 
     log_prob = const + log_det + log_exp
 
@@ -415,19 +415,27 @@ def main():
                 # cat_kld = -(log_pi + np.log(num_classes))
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
 
-                #torch.stack([
-                    # F.binary_cross_entropy_with_logits(pred, targets, reduction="none").sum(dim=-1) for pred in y_l_full
-                    # ], dim=1)
+                # torch.stack([
+                # F.binary_cross_entropy_with_logits(pred, targets, reduction="none").sum(dim=-1) for pred in y_l_full
+                # ], dim=1)
 
                 KLD = -0.5 * torch.sum(1 + logvar_l - mu_l.pow(2) - logvar_l.exp(), dim=-1)
                 loss = recon_loss.mean() + np.log(num_classes) + KLD.mean()
 
-                # if counter >= 25:
-                #     y_u_full, mu_u, logvar_u = model_y(y_u)
-                #     y_u_pred = torch.log_softmax(y_u_full, dim=1)
-                #     u_loss = ((y_u_pred.exp() * (-y_u_pred)).sum(dim=-1)).mean() + np.log(num_classes)
-                #
-                #     loss += args.unl2_weight * u_loss
+                if counter >= 10:
+                    y_u_full, (mu_u, logvar_u, log_pi) = model_y(y_u)
+
+                    KLD_u = -0.5 * torch.sum(1 + logvar_u - mu_u.pow(2) - logvar_u.exp(), dim=-1)
+                    preds_list = []
+                    for cat in range(num_classes):
+                        targets = torch.zeros_like(log_pi)
+                        targets[:, cat] = 1
+                        preds_list.append(F.binary_cross_entropy_with_logits(y_u_full[cat], targets, reduction="none").sum(dim=-1))
+
+                    preds = torch.stack(preds_list, dim=1)
+
+                    u_loss = ((log_pi.exp() * (-preds)).sum(dim=-1)).mean() + np.log(num_classes) + KLD_u.mean()
+                    loss += args.unl2_weight * u_loss
 
                 return loss, log_pi
 
@@ -439,12 +447,11 @@ def main():
         targets = cast(sample[1], 'long')
         y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
         if args.lp:
-            y_full, (mu, logvar, logpi) = model_y(y)
-            # kld = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()).sum(dim=-1)
-            # recon = F.cross_entropy(y_full, targets)
             tgts = one_hot_embedding(targets, num_classes, device=device)
+            y_full, (mu_l, logvar_l, log_pi) = model_y.forward_labeled(y, tgts)
+
             recon_loss = F.binary_cross_entropy_with_logits(y_full, tgts)
-            return recon_loss.mean(), logpi
+            return recon_loss.mean(), log_pi
 
         if args.dataset == "awa2":
             return F.binary_cross_entropy_with_logits(y, targets.float()), y
