@@ -185,8 +185,8 @@ class DecoderModel(nn.Module):
 
         # self.q_mus = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, z_dim))
         # self.q_logvar = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, z_dim))
-        self.zero = torch.zeros(z_dim)
-        self.ones = torch.ones(z_dim)
+        self.zero = nn.Parameter(torch.zeros(z_dim), requires_grad=False)
+        self.ones = nn.Parameter(torch.ones(z_dim), requires_grad=False)
 
         self.q_pis = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, num_classes))
 
