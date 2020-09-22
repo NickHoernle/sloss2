@@ -207,7 +207,7 @@ class DecoderModel(nn.Module):
         alpha = torch.log_softmax(z, dim=1)
 
         output = self.net(alpha)+alpha
-        return output, (q_mu, q_logvar)
+        return output, (q_mu, q_logvar, alpha)
 
 
 def main():
@@ -372,13 +372,22 @@ def main():
             elif args.lp:
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 y_l_full, latent = model_y(y_l)
-                q_mu, q_logvar = latent
+                q_mu, q_logvar, alpha = latent
 
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
                 loss = recon_loss.mean()
 
                 KLD = 0.5*(torch.sum((1/sigma_prior)*q_logvar.exp() + q_mu.pow(2)/sigma_prior - 1 - q_logvar, dim=1) + num_classes*np.log(sigma_prior))
                 loss += KLD.mean()
+
+                if counter > 10:
+                    y_u_full, latent_u = model_y(y_u)
+                    q_mu_u, q_logvar_u, alpha_u = latent
+                    KLD_u = 0.5 * (
+                                torch.sum((1 / sigma_prior) * q_logvar_u.exp() + q_mu_u.pow(2) / sigma_prior - 1 - q_logvar_u,
+                                          dim=1) + num_classes * np.log(sigma_prior))
+                    loss_u = -(alpha_u.exp()*y_u_full).sum(dim=1).mean() + KLD_u.mean()
+                    loss += args.unl_weight*loss_u
 
                 return loss, y_l_full
 
