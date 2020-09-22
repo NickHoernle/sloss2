@@ -318,7 +318,7 @@ def main():
 
     def compute_loss(sample):
 
-        alpha = 1./num_classes
+        alpha = 1./num_classes**2
         # mu_prior = (np.log(alpha) - 1 / np.log(alpha)) * num_classes ** 2
         sigma_prior = (1. / alpha * (1 - 2. / num_classes) + 1 / (num_classes ** 2) * num_classes / alpha)
 
