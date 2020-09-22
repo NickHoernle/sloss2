@@ -318,7 +318,7 @@ def main():
 
     def compute_loss(sample):
 
-        alpha = torch.exp(model_y.scale_param)
+        alpha = 1./num_classes**2
         # mu_prior = (np.log(alpha) - 1 / np.log(alpha)) * num_classes ** 2
         sigma_prior = (1. / alpha * (1 - 2. / num_classes) + 1 / (num_classes ** 2) * num_classes / alpha)
 
@@ -380,7 +380,7 @@ def main():
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
                 loss = recon_loss.mean()
 
-                KLD = 0.5*(torch.sum((1/sigma_prior)*q_logvar.exp() + q_mu.pow(2)/sigma_prior - 1 - q_logvar + num_classes*torch.log(sigma_prior), dim=1))
+                KLD = 0.5*(torch.sum((1/sigma_prior)*q_logvar.exp() + q_mu.pow(2)/sigma_prior - 1 - q_logvar, dim=1) + num_classes*torch.log(sigma_prior))
                 # KLD = -0.5 * torch.sum(1 + q_logvar - q_mu.pow(2) - q_logvar.exp())
                 loss += weight*KLD.mean()
 
@@ -388,7 +388,8 @@ def main():
                     y_u_full, latent_u = model_y(y_u)
                     q_mu_u, q_logvar_u, alpha_u = latent
                     KLD_u = 0.5 * (
-                                torch.sum((1 / sigma_prior) * q_logvar_u.exp() + q_mu_u.pow(2) / sigma_prior - 1 - q_logvar_u + num_classes*torch.log(sigma_prior), dim=1))
+                                torch.sum((1 / sigma_prior) * q_logvar_u.exp() + q_mu_u.pow(2) / sigma_prior - 1 - q_logvar_u,
+                                          dim=1) + num_classes * torch.log(sigma_prior))
                     # KLD_u = -0.5 * torch.sum(1 + q_logvar_u - q_mu_u.pow(2) - q_logvar_u.exp())
                     loss_u = -(alpha_u.exp()*y_u_full).sum(dim=1).mean() + weight*KLD_u.mean()
 
