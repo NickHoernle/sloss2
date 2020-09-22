@@ -370,6 +370,7 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
+                weight = np.min([1., 0.05 * (counter+1)])
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 y_l_full, latent = model_y(y_l)
                 q_mu, q_logvar, alpha = latent
@@ -378,15 +379,15 @@ def main():
                 loss = recon_loss.mean()
 
                 KLD = 0.5*(torch.sum((1/sigma_prior)*q_logvar.exp() + q_mu.pow(2)/sigma_prior - 1 - q_logvar, dim=1) + num_classes*np.log(sigma_prior))
-                loss += KLD.mean()
+                loss += weight*KLD.mean()
 
-                if counter > 10:
+                if counter > 30:
                     y_u_full, latent_u = model_y(y_u)
                     q_mu_u, q_logvar_u, alpha_u = latent
                     KLD_u = 0.5 * (
                                 torch.sum((1 / sigma_prior) * q_logvar_u.exp() + q_mu_u.pow(2) / sigma_prior - 1 - q_logvar_u,
                                           dim=1) + num_classes * np.log(sigma_prior))
-                    loss_u = -(alpha_u.exp()*y_u_full).sum(dim=1).mean() + KLD_u.mean()
+                    loss_u = -(alpha_u.exp()*y_u_full).sum(dim=1).mean() + weight*KLD_u.mean()
                     loss += args.unl_weight*loss_u
 
                 return loss, y_l_full
