@@ -198,15 +198,16 @@ class DecoderModel(nn.Module):
         self.apply(init_weights)
 
     def forward(self, x):
-        # Compute the mixture of Gaussian prior
+        # encoding step
         q_mu = self.q_mu(x)
         q_logvar = self.q_logvar(x)
+
+        # stochastic step
         z = reparameterise(q_mu, q_logvar)
+        alpha = torch.log_softmax(z, dim=1)
 
-        alpha = torch.softmax(z, dim=1)
-        output = self.net(alpha)
-
-        return output, alpha
+        output = self.net(alpha)+alpha
+        return output, (q_mu, q_logvar)
 
 
 def main():
@@ -314,12 +315,9 @@ def main():
     #
     # print(f"{torch.cuda.is_available()}")
 
-    alpha = 1. / num_classes
-    mu_prior = np.log(alpha) - 1 / num_classes * num_classes * np.log(alpha)
-    sigma_prior = 1. / alpha * (1 - 2. / num_classes) + 1 / (num_classes ** 2) * num_classes / alpha
-    prior_log_var = np.log(sigma_prior)
-    inv_sigma1 = 1. / sigma_prior
-    log_det_sigma = num_classes * np.log(sigma_prior)
+    alpha = (1/num_classes)
+    mu_prior = (np.log(alpha) - 1 / np.log(alpha))*num_classes**2
+    sigma_prior = (1. / alpha * (1 - 2. / num_classes) + 1 / (num_classes ** 2) * num_classes / alpha)
 
     def compute_loss(sample):
         model_y.train()
@@ -374,34 +372,13 @@ def main():
             elif args.lp:
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 y_l_full, latent = model_y(y_l)
+                q_mu, q_logvar = latent
 
-                # recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
-                # loss = recon_loss.mean()
-                #
-                # alpha = latent
-                # alpha_k = torch.tensor(1-1/num_classes)
-                # kld = (torch.lgamma(alpha_k) - torch.lgamma(alpha) + (alpha - alpha_k)*torch.digamma(alpha)).sum(dim=1)
-                #
-                # loss += kld.mean()
-                # # KLS
-                # cat_kl = np.log(num_classes)
-                # cont_kl = -0.5 * torch.sum(1 + q_logvar_l - q_mu_l.pow(2) - q_logvar_l.exp(), dim=1)
-                #
-                # loss = recon_loss.mean() + cat_kl.mean() + F.nll_loss(log_qy_l, targets_l) + cont_kl.mean()
-                #
-                # if counter >= -1:
-                #     y_u_full, (q_mu_u, q_logvar_u, log_pi) = model_y(y_u)
-                #     cont_kl = -0.5 * torch.sum(1 + q_logvar_u - q_mu_u.pow(2) - q_logvar_u.exp(), dim=1)
-                #     recon = []
-                #     for cat in range(num_classes):
-                #         targets = torch.zeros_like(log_pi)
-                #         targets[:, cat] = 1
-                #         pred_acc = F.binary_cross_entropy_with_logits(y_u_full[cat], targets, reduction="none").sum(dim=-1)
-                #         recon.append(pred_acc)
-                #
-                #     predictions = torch.stack(recon, dim=1)
-                #     u_loss = (log_pi.exp()*(predictions + log_pi + np.log(num_classes))).sum(dim=1).mean() + cont_kl.mean()
-                #     loss += args.unl2_weight * u_loss
+                recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
+                loss = recon_loss.mean()
+
+                KLD = 0.5*(torch.sum((1/sigma_prior)*q_logvar.exp() + q_mu.pow(2)/sigma_prior - 1 - q_logvar, dim=1) + num_classes*np.log(sigma_prior))
+                loss += KLD.mean()
 
                 return loss, y_l_full
 
