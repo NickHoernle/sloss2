@@ -392,7 +392,7 @@ def main():
                                 torch.sum((1 / sigma_prior) * q_logvar_u.exp() + q_mu_u.pow(2) / sigma_prior - 1 - q_logvar_u,
                                           dim=1) + num_classes * np.log(sigma_prior))
                     # KLD_u = -0.5 * torch.sum(1 + q_logvar_u - q_mu_u.pow(2) - q_logvar_u.exp())
-                    loss_u = -(preds*y_u_full).sum(dim=1).mean() + weight*KLD_u.mean()
+                    loss_u = weight*KLD_u.mean()
 
                     loss += args.unl_weight*loss_u
 
