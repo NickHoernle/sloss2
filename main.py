@@ -207,7 +207,7 @@ class DecoderModel(nn.Module):
         z = reparameterise(q_mu, q_logvar)
         alpha = torch.log_softmax(z, dim=1)
 
-        output = self.net(alpha)
+        output = self.net(alpha) + alpha
         return output, (q_mu, q_logvar, alpha)
 
 
