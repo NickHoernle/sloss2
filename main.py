@@ -385,15 +385,14 @@ def main():
                 # KLD = -0.5 * torch.sum(1 + q_logvar - q_mu.pow(2) - q_logvar.exp())
                 loss += weight*KLD.mean()
 
-                if counter > 30:
+                if counter > -1:
                     y_u_full, latent_u = model_y(y_u)
-                    preds = F.log_softmax(y_u_full)
                     q_mu_u, q_logvar_u, alpha_u = latent
                     KLD_u = 0.5 * (
                                 torch.sum((1 / sigma_prior) * q_logvar_u.exp() + q_mu_u.pow(2) / sigma_prior - 1 - q_logvar_u,
                                           dim=1) + num_classes * np.log(sigma_prior))
                     # KLD_u = -0.5 * torch.sum(1 + q_logvar_u - q_mu_u.pow(2) - q_logvar_u.exp())
-                    loss_u = (preds.exp()*(-preds)).sum(dim=1).mean() + weight*KLD_u.mean()
+                    loss_u = (alpha_u.exp()*(-y_u_full)).sum(dim=1).mean() + weight*KLD_u.mean()
                     loss += args.unl_weight*loss_u
 
                 return loss, y_l_full
