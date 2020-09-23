@@ -318,7 +318,7 @@ def main():
 
     def compute_loss(sample):
 
-        alpha = 1./num_classes**2
+        alpha = 1./num_classes
         # mu_prior = (np.log(alpha) - 1 / np.log(alpha)) * num_classes ** 2
         sigma_prior = (1. / alpha * (1 - 2. / num_classes) + 1 / (num_classes ** 2) * num_classes / alpha)
 
@@ -372,7 +372,7 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                weight = np.min([1., 0.05 * (counter+1)])
+                weight = np.min([1., 0.01 * (counter+1)])
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 y_l_full, latent = model_y(y_l)
                 q_mu, q_logvar, alpha = latent
@@ -397,8 +397,9 @@ def main():
                     for cat in range(num_classes):
                         true_labels = torch.zeros_like(preds)
                         true_labels[:, cat] = 1
-                        weights = torch.sigmoid(y_u_full)
-                        recon_loss_u.append((F.binary_cross_entropy_with_logits(y_u_full, true_labels, reduction="none")*weights).sum(dim=-1))
+                        ps = torch.sigmoid(y_u_full)
+                        qs = (1-ps)
+                        recon_loss_u.append(-(ps*(ps.log() + qs*(qs.log()))))
 
                     recon_loss_u = torch.stack(recon_loss_u, dim=1).logsumexp(dim=1).mean()
                     # KLD_u = -0.5 * torch.sum(1 + q_logvar_u - q_mu_u.pow(2) - q_logvar_u.exp())
