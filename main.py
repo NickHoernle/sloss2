@@ -385,7 +385,7 @@ def main():
                 # KLD = -0.5 * torch.sum(1 + q_logvar - q_mu.pow(2) - q_logvar.exp())
                 loss += weight*KLD.mean()
 
-                if counter > -1:
+                if counter > 20:
                     y_u_full, latent_u = model_y(y_u)
                     preds = torch.sigmoid(y_u_full)
                     q_mu_u, q_logvar_u, alpha_u = latent
@@ -394,7 +394,7 @@ def main():
                                           dim=1) + num_classes * np.log(sigma_prior))
 
                     recon_loss_u = []
-                    ps = torch.softmax(y_u_full, dim=1)
+                    ps = torch.sigmoid(y_u_full)
                     for cat in range(num_classes):
                         true_labels = torch.zeros_like(preds)
                         true_labels[:, cat] = 1
