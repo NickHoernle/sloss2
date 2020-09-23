@@ -44,9 +44,9 @@ parser.add_argument('--lr', default=0.1, type=float)
 parser.add_argument('--epochs', default=200, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--weight_decay', default=0.0005, type=float)
-parser.add_argument('--epoch_step', default='[20, 60, 100, 140]', type=str,
+parser.add_argument('--epoch_step', default='[10,20,30,40,50,60,70,80,90,100,110,120,130,140,150,160,170,180,190]', type=str,
                     help='json list with epochs to drop lr on')
-parser.add_argument('--lr_decay_ratio', default=0.2, type=float)
+parser.add_argument('--lr_decay_ratio', default=0.8, type=float)
 parser.add_argument('--resume', default='', type=str)
 parser.add_argument('--note', default='', type=str)
 parser.add_argument("--no_augment", action="store_false",
@@ -392,8 +392,17 @@ def main():
                     KLD_u = 0.5 * (
                                 torch.sum((1 / sigma_prior) * q_logvar_u.exp() + q_mu_u.pow(2) / sigma_prior - 1 - q_logvar_u,
                                           dim=1) + num_classes * np.log(sigma_prior))
+
+                    recon_loss_u = []
+                    for cat in range(num_classes):
+                        true_labels = torch.zeros_like(preds)
+                        true_labels[:, cat] = 1
+                        recon_loss_u.append(F.binary_cross_entropy_with_logits(y_u_full, true_labels, reduction="none").sum(dim=-1))
+
+                    recon_loss_u = alpha_u.exp()*torch.stack(recon_loss_u, dim=1)
                     # KLD_u = -0.5 * torch.sum(1 + q_logvar_u - q_mu_u.pow(2) - q_logvar_u.exp())
-                    loss_u = (-preds*preds.log()).sum(dim=1).mean() + weight*KLD_u.mean()
+                    # loss_u = (-(preds*preds.log()+(1-preds)*(1-preds).log()).sum(dim=1).mean()) + weight*KLD_u.mean()
+                    loss_u = recon_loss_u.sum(dim=1).mean() + weight*KLD_u.mean()
                     loss += args.unl_weight*loss_u
 
                 return loss, y_l_full
