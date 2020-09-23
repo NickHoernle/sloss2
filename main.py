@@ -399,10 +399,10 @@ def main():
                         true_labels[:, cat] = 1
                         recon_loss_u.append(F.binary_cross_entropy_with_logits(y_u_full, true_labels, reduction="none").sum(dim=-1))
 
-                    recon_loss_u = alpha_u.exp()*torch.stack(recon_loss_u, dim=1)
+                    recon_loss_u = torch.stack(recon_loss_u, dim=1).logsumexp(dim=1).mean()
                     # KLD_u = -0.5 * torch.sum(1 + q_logvar_u - q_mu_u.pow(2) - q_logvar_u.exp())
                     # loss_u = (-(preds*preds.log()+(1-preds)*(1-preds).log()).sum(dim=1).mean()) + weight*KLD_u.mean()
-                    loss_u = recon_loss_u.sum(dim=1).mean() + weight*KLD_u.mean()
+                    loss_u = recon_loss_u + weight*KLD_u.mean()
                     loss += args.unl_weight*loss_u
 
                 return loss, y_l_full
