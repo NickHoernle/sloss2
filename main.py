@@ -385,7 +385,7 @@ def main():
                 # KLD = -0.5 * torch.sum(1 + q_logvar - q_mu.pow(2) - q_logvar.exp())
                 loss += weight*KLD.mean()
 
-                if counter > 30:
+                if counter > 20:
                     y_u_full, latent_u = model_y(y_u)
                     preds = torch.sigmoid(y_u_full)
                     q_mu_u, q_logvar_u, alpha_u = latent
@@ -397,7 +397,8 @@ def main():
                     for cat in range(num_classes):
                         true_labels = torch.zeros_like(preds)
                         true_labels[:, cat] = 1
-                        recon_loss_u.append(F.binary_cross_entropy_with_logits(y_u_full, true_labels, reduction="none").sum(dim=-1))
+                        weights = torch.sigmoid(y_u_full)
+                        recon_loss_u.append((F.binary_cross_entropy_with_logits(y_u_full, true_labels, reduction="none")*weights).sum(dim=-1))
 
                     recon_loss_u = torch.stack(recon_loss_u, dim=1).logsumexp(dim=1).mean()
                     # KLD_u = -0.5 * torch.sum(1 + q_logvar_u - q_mu_u.pow(2) - q_logvar_u.exp())
