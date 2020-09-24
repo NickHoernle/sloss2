@@ -182,11 +182,11 @@ def init_weights(m):
 class DecoderModel(nn.Module):
     def __init__(self, num_classes, z_dim=2):
         super().__init__()
-        self.q_mu = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, num_classes))
-        self.q_logvar = nn.Sequential(nn.ReLU(), nn.Linear(num_classes, num_classes))
+        self.mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
+        self.logvars = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
 
         self.net = nn.Sequential(
-            nn.Linear(num_classes, 100),
+            nn.Linear(z_dim, 100),
             nn.ReLU(),
             nn.Linear(100, 100),
             nn.ReLU(),
@@ -194,21 +194,25 @@ class DecoderModel(nn.Module):
         )
 
         self.nc = num_classes
-        self.scale_param = nn.Parameter(torch.randn(1, num_classes), requires_grad=True)
 
         self.apply(init_weights)
 
     def forward(self, x):
         # encoding step
-        q_mu = self.q_mu(x)
-        q_logvar = self.q_logvar(x)
+        log_alpha = torch.log_softmax(x, dim=1)
+
+        mus = self.mus.unsqueeze(0).repeat(len(x), 1, 1)
+        logvar = self.logvars.unsqueeze(0).repeat(len(x), 1, 1)
 
         # stochastic step
-        z = reparameterise(q_mu, q_logvar)
-        alpha = torch.log_softmax(z, dim=1)
+        z = reparameterise(mus, logvar)
 
-        output = self.net(alpha) + alpha
-        return output, (q_mu, q_logvar, alpha)
+        # mixture_step step
+        mg = (log_alpha.exp().unsqueeze(-1)*z).sum(dim=1)
+
+        # decoder step
+        output = self.net(mg)
+        return output, (self.mus, self.logvars, log_alpha)
 
 
 def main():
@@ -375,36 +379,45 @@ def main():
                 weight = np.min([1., 0.05 * (counter+1)])
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 y_l_full, latent = model_y(y_l)
-                q_mu, q_logvar, alpha = latent
+
+                q_mu, q_logvar, log_alpha = latent
 
                 # recon_loss = F.cross_entropy(y_l_full, targets_l)
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
                 loss = recon_loss.mean()
 
-                KLD = 0.5*(torch.sum((1/sigma_prior)*q_logvar.exp() + q_mu.pow(2)/sigma_prior - 1 - q_logvar, dim=1) + num_classes*np.log(sigma_prior))
-                # KLD = -0.5 * torch.sum(1 + q_logvar - q_mu.pow(2) - q_logvar.exp())
-                loss += weight*KLD.mean()
+                # add prediction loss
+                loss += F.nll_loss(log_alpha, targets_l)
 
-                if counter > 20:
-                    y_u_full, latent_u = model_y(y_u)
-                    preds = torch.sigmoid(y_u_full)
-                    q_mu_u, q_logvar_u, alpha_u = latent
-                    KLD_u = 0.5 * (
-                                torch.sum((1 / sigma_prior) * q_logvar_u.exp() + q_mu_u.pow(2) / sigma_prior - 1 - q_logvar_u,
-                                          dim=1) + num_classes * np.log(sigma_prior))
+                # add KL term
+                kl_cat = -((log_alpha.exp()*log_alpha).sum(dim=1) - np.log(num_classes)).mean()
 
-                    recon_loss_u = []
-                    ps = torch.softmax(y_u_full, dim=1)
-                    for cat in range(num_classes):
-                        true_labels = torch.zeros_like(preds)
-                        true_labels[:, cat] = 1
-                        recon_loss_u.append(F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1))
+                loss += kl_cat
 
-                    recon_loss_u = (ps*torch.stack(recon_loss_u, dim=1)).sum(dim=1).mean()
-                    # KLD_u = -0.5 * torch.sum(1 + q_logvar_u - q_mu_u.pow(2) - q_logvar_u.exp())
-                    # loss_u = (-(preds*preds.log()+(1-preds)*(1-preds).log()).sum(dim=1).mean()) + weight*KLD_u.mean()
-                    loss_u = recon_loss_u + weight*KLD_u.mean()
-                    loss += args.unl_weight*loss_u
+                # KLD = 0.5*(torch.sum((1/sigma_prior)*q_logvar.exp() + q_mu.pow(2)/sigma_prior - 1 - q_logvar, dim=1) + num_classes*np.log(sigma_prior))
+                # # KLD = -0.5 * torch.sum(1 + q_logvar - q_mu.pow(2) - q_logvar.exp())
+                # loss += weight*KLD.mean()
+                #
+                # if counter > 20:
+                #     y_u_full, latent_u = model_y(y_u)
+                #     preds = torch.sigmoid(y_u_full)
+                #     q_mu_u, q_logvar_u, alpha_u = latent
+                #     KLD_u = 0.5 * (
+                #                 torch.sum((1 / sigma_prior) * q_logvar_u.exp() + q_mu_u.pow(2) / sigma_prior - 1 - q_logvar_u,
+                #                           dim=1) + num_classes * np.log(sigma_prior))
+                #
+                #     recon_loss_u = []
+                #     ps = torch.softmax(y_u_full, dim=1)
+                #     for cat in range(num_classes):
+                #         true_labels = torch.zeros_like(preds)
+                #         true_labels[:, cat] = 1
+                #         recon_loss_u.append(F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1))
+                #
+                #     recon_loss_u = (ps*torch.stack(recon_loss_u, dim=1)).sum(dim=1).mean()
+                #     # KLD_u = -0.5 * torch.sum(1 + q_logvar_u - q_mu_u.pow(2) - q_logvar_u.exp())
+                #     # loss_u = (-(preds*preds.log()+(1-preds)*(1-preds).log()).sum(dim=1).mean()) + weight*KLD_u.mean()
+                #     loss_u = recon_loss_u + weight*KLD_u.mean()
+                #     loss += args.unl_weight*loss_u
 
                 return loss, y_l_full
 
