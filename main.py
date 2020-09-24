@@ -46,7 +46,7 @@ parser.add_argument('--epochs', default=200, type=int, metavar='N',
 parser.add_argument('--weight_decay', default=0.0005, type=float)
 parser.add_argument('--epoch_step', default='[10,20,30,40,50,60,70,80,90,100,110,120,130,140,150,160,170,180,190]', type=str,
                     help='json list with epochs to drop lr on')
-parser.add_argument('--lr_decay_ratio', default=0.8, type=float)
+parser.add_argument('--lr_decay_ratio', default=0.7, type=float)
 parser.add_argument('--resume', default='', type=str)
 parser.add_argument('--note', default='', type=str)
 parser.add_argument("--no_augment", action="store_false",
@@ -385,7 +385,7 @@ def main():
                 # KLD = -0.5 * torch.sum(1 + q_logvar - q_mu.pow(2) - q_logvar.exp())
                 loss += weight*KLD.mean()
 
-                if counter > -1:
+                if counter > 20:
                     y_u_full, latent_u = model_y(y_u)
                     preds = torch.sigmoid(y_u_full)
                     q_mu_u, q_logvar_u, alpha_u = latent
