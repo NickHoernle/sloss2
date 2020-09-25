@@ -218,13 +218,13 @@ class DecoderModel(nn.Module):
     def forward(self, x):
         z, latent = self.encode(x)
         # mixture_step step
-        output = [self.net(z[:, cat, :]) for cat in range(self.nc)]
+        output = torch.stack([self.net(z[:, cat, :]) for cat in range(self.nc)], dim=1)
         return output, latent
 
 
 def main():
-    # device = "cuda:0"
-    device = "cpu"
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    # device = "cpu"
 
     args = parser.parse_args()
     print('parsed options:', vars(args))
@@ -386,9 +386,9 @@ def main():
                 weight = np.min([1., 0.05 * (counter+1)])
 
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
-                y_l_full, latent = model_y.forward_labeled(y_l, targets_l)
+                y_l_full, latent_l = model_y.forward_labeled(y_l, targets_l)
 
-                q_mu, q_logvar, log_alpha = latent
+                q_mu, q_logvar, log_alpha = latent_l
 
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
                 loss = recon_loss.mean()
@@ -414,10 +414,11 @@ def main():
                 # # # KLD = -0.5 * torch.sum(1 + q_logvar - q_mu.pow(2) - q_logvar.exp())
                 # # loss += weight*KLD.mean()
                 # #
-                # if counter > 20:
-                #     y_u_full, latent_u = model_y(y_u)
-                #     q_mu, q_logvar, log_alpha = latent
-                #
+                if counter > -1:
+                    y_u_full, latent_u = model_y(y_u)
+                    q_mu, q_logvar, log_alpha = latent_u
+
+                    preds = (log_alpha.exp().unsqueeze(-1)*y_u_full).sum(dim=1)
                 #     ps = torch.softmax(y_u_full, dim=1)
                 #     recon_loss_u = []
                 #     for cat in range(num_classes):
@@ -444,10 +445,13 @@ def main():
         if args.lp:
             y_full, latent = model_y(y)
 
-            tgts = one_hot_embedding(targets, num_classes, device=device)
-            recon_loss = F.binary_cross_entropy_with_logits(y_full, tgts)
+            q_mu, q_logvar, log_alpha = latent
+            preds = (log_alpha.exp().unsqueeze(-1) * y_full).sum(dim=1)
 
-            return recon_loss.mean(), y_full
+            tgts = one_hot_embedding(targets, num_classes, device=device)
+            recon_loss = F.binary_cross_entropy_with_logits(preds, tgts)
+
+            return recon_loss.mean(), preds
 
         if args.dataset == "awa2":
             return F.binary_cross_entropy_with_logits(y, targets.float()), y
