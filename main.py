@@ -275,7 +275,7 @@ def main():
         num_workers=args.n_workers,
         worker_init_fn=_init_fn
     )
-    z_dim = 2
+    z_dim = 10
     model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
 
     if args.lp:
@@ -391,8 +391,11 @@ def main():
                 q_mu, q_logvar, log_alpha = latent_l
 
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
+                kl_cat_l = -((log_alpha.exp() * log_alpha).sum(dim=1) - np.log(num_classes)).mean()
                 loss = recon_loss.mean()
                 loss += F.nll_loss(log_alpha, targets_l)
+                loss += kl_cat_l
+
 
                 # import pdb
                 # pdb.set_trace()
@@ -418,7 +421,12 @@ def main():
                     y_u_full, latent_u = model_y(y_u)
                     q_mu, q_logvar, log_alpha = latent_u
 
-                    preds = (log_alpha.exp().unsqueeze(-1)*y_u_full).sum(dim=1)
+                    # preds = (log_alpha.exp().unsqueeze(-1)*y_u_full).sum(dim=1).mean()
+
+                    kl_cat_u = -((log_alpha.exp() * log_alpha).sum(dim=1) - np.log(num_classes)).mean()
+
+                    loss_u = kl_cat_u
+                    loss += loss_u
                 #     ps = torch.softmax(y_u_full, dim=1)
                 #     recon_loss_u = []
                 #     for cat in range(num_classes):
