@@ -421,26 +421,18 @@ def main():
                     y_u_full, latent_u = model_y(y_u)
                     q_mu, q_logvar, log_alpha = latent_u
 
-                    # preds = (log_alpha.exp().unsqueeze(-1)*y_u_full).sum(dim=1).mean()
+                    recon_loss_u = []
+                    for cat in range(num_classes):
+                        fake_labels = torch.zeros_like(log_alpha)
+                        fake_labels[:, cat] = 1
+                        recon_loss_u.append(F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1))
 
-                    kl_cat_u = -((log_alpha.exp() * log_alpha).sum(dim=1) - np.log(num_classes)).mean()
+                    kl_cat_u = -((log_alpha.exp() * log_alpha).sum(dim=1)).mean()
+                    recon_loss_u = (log_alpha.exp() * torch.stack(recon_loss_u, dim=1)).sum(dim=1).mean()
 
-                    loss_u = kl_cat_u
-                    loss += loss_u
-                #     ps = torch.softmax(y_u_full, dim=1)
-                #     recon_loss_u = []
-                #     for cat in range(num_classes):
-                #         true_labels = torch.zeros_like(log_alpha)
-                #         true_labels[:, cat] = 1
-                #         recon_loss_u.append(F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1))
-                #
-                #     recon_loss_u = (ps*torch.stack(recon_loss_u, dim=1)).sum(dim=1).mean()
-                #     kl_cat = -((log_alpha.exp() * log_alpha).sum(dim=1) - np.log(num_classes)).mean()
-                #
-                #     loss_u = recon_loss_u + kl_cat.mean()
-                #     # loss_u = kl_cat
-                #     loss += args.unl_weight*loss_u
-
+                    loss_u = kl_cat_u + recon_loss_u
+                    loss += args.unl_weight*loss_u
+                    
                 return loss, y_l_full
 
             return loss, y_l
