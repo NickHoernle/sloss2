@@ -23,6 +23,7 @@ from torch.distributions import MultivariateNormal
 import itertools
 from torch.distributions.dirichlet import Dirichlet
 from torch.distributions.categorical import Categorical
+from torch.distributions.bernoulli import Bernoulli
 from torch.distributions.beta import Beta
 
 cudnn.benchmark = True
@@ -183,33 +184,18 @@ def init_weights(m):
 class DecoderModel(nn.Module):
     def __init__(self, num_classes, z_dim=2):
         super().__init__()
-        self.mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
-        self.logvars = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
 
-        self.net = nn.Sequential(
-            nn.Linear(z_dim, 100),
-            nn.ReLU(),
-            nn.Linear(100, 100),
-            nn.ReLU(),
-            nn.Linear(100, num_classes)
-        )
+        self.mu = nn.Sequential(nn.Linear(num_classes, 50), nn.ReLU(), nn.Linear(50, num_classes))
+        self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.ReLU(), nn.Linear(50, num_classes))
 
-        self.nc = num_classes
-
+        self.net = nn.Sequential(nn.Linear(num_classes, 50), nn.ReLU(), nn.Linear(50, num_classes))
         self.apply(init_weights)
 
     def forward(self, x):
-        alphas = F.softplus(x)
-
-        cat = Categorical(alphas)
-        label = cat.sample()
-
-        mus = self.mus.unsqueeze(0).repeat(len(x), 1, 1)[np.arange(len(x)), label]
-        logvars = self.logvars.unsqueeze(0).repeat(len(x), 1, 1)[np.arange(len(x)), label]
-        z = reparameterise(mus, logvars)
-
-        predictions = self.net(z)
-        return predictions, (label, alphas, cat)
+        mu = self.mu(x)
+        logvar = self.logvar(x)
+        z = reparameterise(mu, logvar)
+        return self.net(z), (mu, logvar)
 
 
 def main():
@@ -272,13 +258,11 @@ def main():
         model_y = DecoderModel(num_classes, z_dim)
         model_y.to(device)
         model_y.apply(init_weights)
+        optimizer_y = Adam(model_y.parameters(), lr=1e-3, weight_decay=1e-5)
 
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
         params_ = [v for v in params.values() if v.requires_grad]
-        if args.lp:
-            params_ += list(model_y.parameters())
-        # return Adam(params_, lr)
         return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
 
     optimizer = create_optimizer(args, args.lr)
@@ -322,6 +306,7 @@ def main():
         alpha = 1./num_classes**2
         # mu_prior = (np.log(alpha) - 1 / np.log(alpha)) * num_classes ** 2
         sigma_prior = (1. / alpha * (1 - 2. / num_classes) + 1 / (num_classes ** 2) * num_classes / alpha)
+        all_labels = torch.eye(num_classes).to(device)
 
         model_y.train()
         if not args.ssl:
@@ -375,43 +360,24 @@ def main():
             elif args.lp:
                 weight = np.min([1., 0.05 * (counter+1)])
 
+                optimizer_y.train()
+                y_preds, latent = model_y(y_l)
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
-                y_l_full, latent_l = model_y(y_l)
+                loss = F.binary_cross_entropy_with_logits(y_preds, targets)
+                optimizer_y.zero_grad()
+                loss.backward()
+                optimizer_y.step()
 
-                (label, alphas, cat_obj) = latent_l
-                prior = -np.log(num_classes)
 
-                # recon loss
-                recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
+                optimizer_y.eval()
+                y_preds, latent = model_y(y_l)
+                targets = one_hot_embedding(targets_l, num_classes, device=device)
+                loss = F.binary_cross_entropy_with_logits(y_preds, targets)
+                mu, logvar = latent
+                kld =  -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+                loss += kld
 
-                # KLD
-                # kld = -(prior - cat_obj.log_prob(label))
-
-                # Score function
-                score = (-cat_obj.log_prob(label))
-
-                loss = (score * recon_loss).mean()
-
-                #
-                #
-                # if counter > 50:
-                #     y_u_full, latent_u = model_y(y_u)
-                #     q_mu, q_logvar, log_alpha = latent_u
-                #
-                #     recon_loss_u = []
-                #     for cat in range(num_classes):
-                #         fake_labels = torch.zeros_like(log_alpha)
-                #         fake_labels[:, cat] = 1
-                #         recon_loss_u.append(F.binary_cross_entropy_with_logits(y_u_full[:, cat, :], targets, reduction="none").sum(dim=-1))
-                #
-                #     kl_cat_u = ((log_alpha.exp() * log_alpha).sum(dim=1)).mean()
-                #     KLD_cont_u = (-0.5 * torch.mean(torch.sum(1 + q_logvar - q_mu.pow(2) - q_logvar.exp(), dim=1)))*(10/len(u[0]))
-                #     recon_loss_u = (log_alpha.exp() * torch.stack(recon_loss_u, dim=1)).sum(dim=1).mean()
-                #
-                #     loss_u = kl_cat_u + recon_loss_u + KLD_cont_u
-                #     loss += args.unl_weight*loss_u
-
-                return loss, y_l_full
+                return loss, y_preds
 
             return loss, y_l
 
