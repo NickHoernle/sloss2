@@ -402,7 +402,7 @@ def main():
                     for cat in range(num_classes):
                         fake_labels = torch.zeros_like(log_alpha)
                         fake_labels[:, cat] = 1
-                        recon_loss_u.append(F.binary_cross_entropy_with_logits(y_u_full, targets, reduction="none").sum(dim=-1))
+                        recon_loss_u.append(F.binary_cross_entropy_with_logits(y_u_full[:, cat, :], targets, reduction="none").sum(dim=-1))
 
                     kl_cat_u = ((log_alpha.exp() * log_alpha).sum(dim=1)).mean()
                     recon_loss_u = (log_alpha.exp() * torch.stack(recon_loss_u, dim=1)).sum(dim=1).mean()
