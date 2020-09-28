@@ -361,7 +361,7 @@ def main():
                 weight = np.min([1., 0.05 * (counter+1)])
 
                 model_y.train()
-                y_preds, latent = model_y(y_l)
+                y_preds, latent = model_y(y_l.detach())
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 loss = F.binary_cross_entropy_with_logits(y_preds, targets)
                 optimizer_y.zero_grad()
