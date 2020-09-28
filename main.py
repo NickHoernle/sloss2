@@ -391,11 +391,8 @@ def main():
                 q_mu, q_logvar, log_alpha = latent_l
 
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
-                # recon_loss = F.cross_entropy(y_l_full, targets_l)
-                kl_cat_l = ((log_alpha.exp() * log_alpha).sum(dim=1)).mean()
                 loss = recon_loss.mean()
                 loss += F.nll_loss(log_alpha, targets_l)
-                loss += kl_cat_l
 
                 if counter > -1:
                     y_u_full, latent_u = model_y(y_u)
