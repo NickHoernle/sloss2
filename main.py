@@ -44,9 +44,9 @@ parser.add_argument('--lr', default=0.1, type=float)
 parser.add_argument('--epochs', default=200, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--weight_decay', default=0.0005, type=float)
-parser.add_argument('--epoch_step', default='[10,20,30,40,50,60,70,80,90,100,110,120,130,140,150,160,170,180,190]', type=str,
+parser.add_argument('--epoch_step', default='[60, 120, 160]', type=str,
                     help='json list with epochs to drop lr on')
-parser.add_argument('--lr_decay_ratio', default=0.7, type=float)
+parser.add_argument('--lr_decay_ratio', default=0.2, type=float)
 parser.add_argument('--resume', default='', type=str)
 parser.add_argument('--note', default='', type=str)
 parser.add_argument("--no_augment", action="store_false",
@@ -394,7 +394,7 @@ def main():
                 loss = recon_loss.mean()
                 loss += F.nll_loss(log_alpha, targets_l)
 
-                if counter > -1:
+                if counter > 10:
                     y_u_full, latent_u = model_y(y_u)
                     q_mu, q_logvar, log_alpha = latent_u
 
