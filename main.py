@@ -22,6 +22,7 @@ from spline_flows import NSF_CL
 from torch.distributions import MultivariateNormal
 import itertools
 from torch.distributions.dirichlet import Dirichlet
+from torch.distributions.categorical import Categorical
 from torch.distributions.beta import Beta
 
 cudnn.benchmark = True
@@ -197,29 +198,18 @@ class DecoderModel(nn.Module):
 
         self.apply(init_weights)
 
-    def encode(self, x):
-        # encoding step
-        log_alpha = torch.log_softmax(x, dim=1)
-
-        mus = self.mus.unsqueeze(0).repeat(len(x), 1, 1)
-        logvar = self.logvars.unsqueeze(0).repeat(len(x), 1, 1)
-
-        # stochastic step
-        z = reparameterise(mus, logvar)
-        return z, (self.mus, self.logvars, log_alpha)
-
-    def forward_labeled(self, x, labels):
-        z, latent = self.encode(x)
-        # decoder step
-        output = self.net(z[np.arange(len(x)), labels, :])
-
-        return output, latent
-
     def forward(self, x):
-        z, latent = self.encode(x)
-        # mixture_step step
-        output = torch.stack([self.net(z[:, cat, :]) for cat in range(self.nc)], dim=1)
-        return output, latent
+        alphas = F.softplus(x)
+
+        cat = Categorical(alphas)
+        label = cat.sample()
+
+        mus = self.mus.unsqueeze(0).repeat(len(x), 1, 1)[np.arange(len(x)), label]
+        logvars = self.logvars.unsqueeze(0).repeat(len(x), 1, 1)[np.arange(len(x)), label]
+        z = reparameterise(mus, logvars)
+
+        predictions = self.net(z)
+        return predictions, (label, alphas, cat)
 
 
 def main():
@@ -386,32 +376,40 @@ def main():
                 weight = np.min([1., 0.05 * (counter+1)])
 
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
-                y_l_full, latent_l = model_y.forward_labeled(y_l, targets_l)
+                y_l_full, latent_l = model_y(y_l)
 
-                q_mu, q_logvar, log_alpha = latent_l
+                (label, alphas, cat_obj) = latent_l
+                prior = -np.log(num_classes)
 
+                # recon loss
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
-                loss = recon_loss.mean()
-                KLD_cont_l = (-0.5 * torch.mean(torch.sum(1 + q_logvar - q_mu.pow(2) - q_logvar.exp(), dim=1)))*(10/len(u[0]))
-                loss += F.nll_loss(log_alpha, targets_l)
-                loss += KLD_cont_l
 
-                if counter > 50:
-                    y_u_full, latent_u = model_y(y_u)
-                    q_mu, q_logvar, log_alpha = latent_u
+                # KLD
+                kld = -(prior - cat_obj.log_prob(label))
 
-                    recon_loss_u = []
-                    for cat in range(num_classes):
-                        fake_labels = torch.zeros_like(log_alpha)
-                        fake_labels[:, cat] = 1
-                        recon_loss_u.append(F.binary_cross_entropy_with_logits(y_u_full[:, cat, :], targets, reduction="none").sum(dim=-1))
+                # Score function
+                score = (-cat_obj.log_prob(label))
 
-                    kl_cat_u = ((log_alpha.exp() * log_alpha).sum(dim=1)).mean()
-                    KLD_cont_u = (-0.5 * torch.mean(torch.sum(1 + q_logvar - q_mu.pow(2) - q_logvar.exp(), dim=1)))*(10/len(u[0]))
-                    recon_loss_u = (log_alpha.exp() * torch.stack(recon_loss_u, dim=1)).sum(dim=1).mean()
+                loss = (score*(recon_loss + kld)).mean()
 
-                    loss_u = kl_cat_u + recon_loss_u + KLD_cont_u
-                    loss += args.unl_weight*loss_u
+                #
+                #
+                # if counter > 50:
+                #     y_u_full, latent_u = model_y(y_u)
+                #     q_mu, q_logvar, log_alpha = latent_u
+                #
+                #     recon_loss_u = []
+                #     for cat in range(num_classes):
+                #         fake_labels = torch.zeros_like(log_alpha)
+                #         fake_labels[:, cat] = 1
+                #         recon_loss_u.append(F.binary_cross_entropy_with_logits(y_u_full[:, cat, :], targets, reduction="none").sum(dim=-1))
+                #
+                #     kl_cat_u = ((log_alpha.exp() * log_alpha).sum(dim=1)).mean()
+                #     KLD_cont_u = (-0.5 * torch.mean(torch.sum(1 + q_logvar - q_mu.pow(2) - q_logvar.exp(), dim=1)))*(10/len(u[0]))
+                #     recon_loss_u = (log_alpha.exp() * torch.stack(recon_loss_u, dim=1)).sum(dim=1).mean()
+                #
+                #     loss_u = kl_cat_u + recon_loss_u + KLD_cont_u
+                #     loss += args.unl_weight*loss_u
 
                 return loss, y_l_full
 
