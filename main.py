@@ -385,12 +385,12 @@ def main():
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
 
                 # KLD
-                kld = -(prior - cat_obj.log_prob(label))
+                # kld = -(prior - cat_obj.log_prob(label))
 
                 # Score function
                 score = (-cat_obj.log_prob(label))
 
-                loss = (score*(recon_loss + kld)).mean()
+                loss = (score * recon_loss).mean()
 
                 #
                 #
