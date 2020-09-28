@@ -194,7 +194,7 @@ class DecoderModel(nn.Module):
     def forward(self, x):
         mu = self.mu(x)
         logvar = self.logvar(x)
-        z = reparameterise(mu, logvar)
+        z = F.logsigmoid(reparameterise(mu, logvar))
         return self.net(z), (mu, logvar)
 
 
@@ -363,16 +363,15 @@ def main():
                 model_y.train()
                 y_preds, latent = model_y(y_l.detach())
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
-                loss = F.binary_cross_entropy_with_logits(y_preds, targets)
+                loss = F.cross_entropy(y_preds, targets)
                 optimizer_y.zero_grad()
                 loss.backward()
                 optimizer_y.step()
 
-
                 model_y.eval()
                 y_preds, latent = model_y(y_l)
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
-                loss = F.binary_cross_entropy_with_logits(y_preds, targets)
+                loss = F.cross_entropy(y_preds, targets)
                 mu, logvar = latent
                 kld = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
                 loss += kld
