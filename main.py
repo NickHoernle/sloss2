@@ -375,7 +375,7 @@ def main():
                 # loss = F.cross_entropy(y_preds, targets_l)
                 loss = F.binary_cross_entropy_with_logits(y_preds, targets, reduction="none").sum(dim=-1).mean()
                 mu, logvar = latent
-                kld = -0.5 * (torch.sum((1/sigma_prior) * logvar.exp() + mu.pow(2) * (1/sigma_prior) - 1 - logvar, axis=-1) + log_det_sigma)
+                kld = -0.5 * (torch.mean((1/sigma_prior) * logvar.exp() + mu.pow(2) * (1/sigma_prior) - 1 - logvar) + log_det_sigma)
                 # kld = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
                 loss += kld
 
