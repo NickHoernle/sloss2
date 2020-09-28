@@ -363,7 +363,7 @@ def main():
                 model_y.train()
                 y_preds, latent = model_y(y_l.detach())
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
-                loss = F.cross_entropy(y_preds, targets)
+                loss = F.cross_entropy(y_preds, targets_l)
                 optimizer_y.zero_grad()
                 loss.backward()
                 optimizer_y.step()
@@ -371,7 +371,7 @@ def main():
                 model_y.eval()
                 y_preds, latent = model_y(y_l)
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
-                loss = F.cross_entropy(y_preds, targets)
+                loss = F.cross_entropy(y_preds, targets_l)
                 mu, logvar = latent
                 kld = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
                 loss += kld
