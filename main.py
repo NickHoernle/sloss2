@@ -306,7 +306,7 @@ def main():
         alpha = 1./num_classes**2
         # mu_prior = (np.log(alpha) - 1 / np.log(alpha)) * num_classes ** 2
         sigma_prior = (1. / alpha * (1 - 2. / num_classes) + 1 / (num_classes ** 2) * num_classes / alpha)
-        all_labels = torch.eye(num_classes).to(device)
+        log_det_sigma = num_classes * np.log(sigma_prior)
 
         model_y.train()
         if not args.ssl:
@@ -375,7 +375,8 @@ def main():
                 # loss = F.cross_entropy(y_preds, targets_l)
                 loss = F.binary_cross_entropy_with_logits(y_preds, targets, reduction="none").sum(dim=-1).mean()
                 mu, logvar = latent
-                kld = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+                kld = -0.5 * (torch.sum((1/sigma_prior) * logvar.exp() + mu.pow(2) * (1/sigma_prior) - 1 - logvar, axis=-1) + log_det_sigma)
+                # kld = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
                 loss += kld
 
                 return loss, y_preds
