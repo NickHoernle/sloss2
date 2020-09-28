@@ -423,13 +423,13 @@ def main():
         if args.lp:
             y_full, latent = model_y(y)
 
-            q_mu, q_logvar, log_alpha = latent
-            preds = (log_alpha.exp().unsqueeze(-1) * y_full).sum(dim=1)
-
+            # q_mu, q_logvar, log_alpha = latent
+            # preds = (log_alpha.exp().unsqueeze(-1) * y_full).sum(dim=1)
+            #
             tgts = one_hot_embedding(targets, num_classes, device=device)
-            recon_loss = F.binary_cross_entropy_with_logits(preds, tgts)
+            recon_loss = F.binary_cross_entropy_with_logits(y_full, tgts)
 
-            return recon_loss.mean(), preds
+            return recon_loss.mean(), y_full
 
         if args.dataset == "awa2":
             return F.binary_cross_entropy_with_logits(y, targets.float()), y
