@@ -360,7 +360,7 @@ def main():
             elif args.lp:
                 weight = np.min([1., 0.05 * (counter+1)])
 
-                optimizer_y.train()
+                model_y.train()
                 y_preds, latent = model_y(y_l)
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 loss = F.binary_cross_entropy_with_logits(y_preds, targets)
@@ -369,12 +369,12 @@ def main():
                 optimizer_y.step()
 
 
-                optimizer_y.eval()
+                model_y.eval()
                 y_preds, latent = model_y(y_l)
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 loss = F.binary_cross_entropy_with_logits(y_preds, targets)
                 mu, logvar = latent
-                kld =  -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+                kld = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
                 loss += kld
 
                 return loss, y_preds
