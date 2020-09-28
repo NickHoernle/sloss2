@@ -263,6 +263,8 @@ def main():
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
         params_ = [v for v in params.values() if v.requires_grad]
+        if args.lp:
+            params_ += list(model_y.parameters())
         return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
 
     optimizer = create_optimizer(args, args.lr)
@@ -360,22 +362,22 @@ def main():
             elif args.lp:
                 weight = np.min([1., 0.05 * (counter+1)])
 
-                model_y.train()
-                y_preds, latent = model_y(y_l.detach())
-                targets = one_hot_embedding(targets_l, num_classes, device=device)
-                # loss = F.cross_entropy(y_preds, targets_l)
-                loss = F.binary_cross_entropy_with_logits(y_preds, targets, reduction="none").sum(dim=-1).mean()
-                optimizer_y.zero_grad()
-                loss.backward()
-                optimizer_y.step()
+                # model_y.train()
+                # y_preds, latent = model_y(y_l.detach())
+                # targets = one_hot_embedding(targets_l, num_classes, device=device)
+                # # loss = F.cross_entropy(y_preds, targets_l)
+                # loss = F.binary_cross_entropy_with_logits(y_preds, targets, reduction="none").sum(dim=-1).mean()
+                # optimizer_y.zero_grad()
+                # loss.backward()
+                # optimizer_y.step()
 
-                model_y.eval()
+                # model_y.eval()
                 y_preds, latent = model_y(y_l)
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
                 # loss = F.cross_entropy(y_preds, targets_l)
                 loss = F.binary_cross_entropy_with_logits(y_preds, targets, reduction="none").sum(dim=-1).mean()
                 mu, logvar = latent
-                kld = -0.5 * (torch.mean((1/sigma_prior) * logvar.exp() + mu.pow(2) * (1/sigma_prior) - 1 - logvar) + log_det_sigma)
+                kld = 0.5 * (torch.mean((1/sigma_prior) * logvar.exp() + mu.pow(2) * (1/sigma_prior) - 1 - logvar))
                 # kld = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
                 loss += kld
 
