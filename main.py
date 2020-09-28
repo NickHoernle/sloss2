@@ -392,7 +392,9 @@ def main():
 
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
                 loss = recon_loss.mean()
+                KLD_cont_l = (-0.5 * torch.mean(torch.sum(1 + q_logvar - q_mu.pow(2) - q_logvar.exp(), dim=1)))*(10/len(u))
                 loss += F.nll_loss(log_alpha, targets_l)
+                loss += KLD_cont_l
 
                 if counter > 10:
                     y_u_full, latent_u = model_y(y_u)
@@ -405,9 +407,10 @@ def main():
                         recon_loss_u.append(F.binary_cross_entropy_with_logits(y_u_full[:, cat, :], targets, reduction="none").sum(dim=-1))
 
                     kl_cat_u = ((log_alpha.exp() * log_alpha).sum(dim=1)).mean()
+                    KLD_cont_u = (-0.5 * torch.mean(torch.sum(1 + q_logvar - q_mu.pow(2) - q_logvar.exp(), dim=1)))*(10/len(u))
                     recon_loss_u = (log_alpha.exp() * torch.stack(recon_loss_u, dim=1)).sum(dim=1).mean()
 
-                    loss_u = kl_cat_u + recon_loss_u
+                    loss_u = kl_cat_u + recon_loss_u + KLD_cont_u
                     loss += args.unl_weight*loss_u
 
                 return loss, y_l_full
