@@ -391,32 +391,12 @@ def main():
                 q_mu, q_logvar, log_alpha = latent_l
 
                 recon_loss = F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1)
-                kl_cat_l = -((log_alpha.exp() * log_alpha).sum(dim=1) - np.log(num_classes)).mean()
+                # recon_loss = F.cross_entropy(y_l_full, targets_l)
+                kl_cat_l = ((log_alpha.exp() * log_alpha).sum(dim=1)).mean()
                 loss = recon_loss.mean()
                 loss += F.nll_loss(log_alpha, targets_l)
                 loss += kl_cat_l
 
-
-                # import pdb
-                # pdb.set_trace()
-                # q_mu, q_logvar, log_alpha = latent
-                #
-                # # recon_loss = F.cross_entropy(y_l_full, targets_l)
-                #
-                # loss = recon_loss.mean()
-                #
-                # # add prediction loss
-                # loss += F.nll_loss(log_alpha, targets_l)
-                #
-                # # add KL term
-                # # kl_cat = -((log_alpha.exp()*log_alpha).sum(dim=1) - np.log(num_classes)).mean()
-                #
-                # # loss += kl_cat
-                #
-                # # KLD = 0.5*(torch.sum((1/sigma_prior)*q_logvar.exp() + q_mu.pow(2)/sigma_prior - 1 - q_logvar, dim=1) + num_classes*np.log(sigma_prior))
-                # # # KLD = -0.5 * torch.sum(1 + q_logvar - q_mu.pow(2) - q_logvar.exp())
-                # # loss += weight*KLD.mean()
-                # #
                 if counter > -1:
                     y_u_full, latent_u = model_y(y_u)
                     q_mu, q_logvar, log_alpha = latent_u
@@ -427,12 +407,12 @@ def main():
                         fake_labels[:, cat] = 1
                         recon_loss_u.append(F.binary_cross_entropy_with_logits(y_l_full, targets, reduction="none").sum(dim=-1))
 
-                    kl_cat_u = -((log_alpha.exp() * log_alpha).sum(dim=1)).mean()
+                    kl_cat_u = ((log_alpha.exp() * log_alpha).sum(dim=1)).mean()
                     recon_loss_u = (log_alpha.exp() * torch.stack(recon_loss_u, dim=1)).sum(dim=1).mean()
 
                     loss_u = kl_cat_u + recon_loss_u
                     loss += args.unl_weight*loss_u
-                    
+
                 return loss, y_l_full
 
             return loss, y_l
