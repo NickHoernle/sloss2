@@ -46,9 +46,9 @@ parser.add_argument('--lr', default=0.1, type=float)
 parser.add_argument('--epochs', default=200, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--weight_decay', default=0.0005, type=float)
-parser.add_argument('--epoch_step', default='[10,20,30,40,50,60,70,80,90,100,110,120,130,140,150,160]', type=str,
+parser.add_argument('--epoch_step', default='[60, 120, 160]', type=str,
                     help='json list with epochs to drop lr on')
-parser.add_argument('--lr_decay_ratio', default=0.7, type=float)
+parser.add_argument('--lr_decay_ratio', default=0.2, type=float)
 parser.add_argument('--resume', default='', type=str)
 parser.add_argument('--note', default='', type=str)
 parser.add_argument("--no_augment", action="store_false",
@@ -195,7 +195,7 @@ class DecoderModel(nn.Module):
         mu = self.mu(x)
         logvar = self.logvar(x)
         z = F.logsigmoid(reparameterise(mu, logvar))
-        return self.net(z), (mu, logvar)
+        return z + self.net(z), (mu, logvar)
 
 
 def main():
