@@ -382,8 +382,8 @@ def main():
                 # mu, logvar = latent
                 kld = 0.5 * (torch.mean(logvar.exp()/c_lv_select.exp() + (mu-c_mu_select).pow(2)/c_lv_select.exp() - 1 - logvar + c_lv_select))
                 kl2 = -0.5 * torch.mean(1 + c_lv[0] - c_mu[0].pow(2) - c_lv[0].exp()) * (10/len(mu))
-                loss += kld
-                loss += kl2
+                # loss += kld
+                # loss += kl2
                 # # kld = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
                 # loss += kld
 
