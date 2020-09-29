@@ -80,6 +80,8 @@ parser.add_argument("--unl_weight", type=float, default=0.1,
                     help="Weight for unlabelled regularizer loss")
 parser.add_argument("--unl2_weight", type=float, default=0.1,
                     help="Weight for unlabelled regularizer loss")
+parser.add_argument("--num_hidden", type=int, default=10,
+                    help="Dim of the latent dimension used")
 
 
 def one_hot_embedding(labels, num_classes, device="cuda:0"):
@@ -262,7 +264,7 @@ def main():
         num_workers=args.n_workers,
         worker_init_fn=_init_fn
     )
-    z_dim = 10
+    z_dim = args.num_hidden
     model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
 
     if args.lp:
