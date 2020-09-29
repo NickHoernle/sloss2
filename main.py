@@ -364,8 +364,8 @@ def main():
 
                 y_preds, latent = model_y(y_l)
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
-                # loss = F.cross_entropy(y_preds, targets_l)
-                loss = F.binary_cross_entropy_with_logits(y_preds, targets, reduction="none").sum(dim=-1).mean()
+                loss = F.cross_entropy(y_preds, targets_l)
+                # loss = F.binary_cross_entropy_with_logits(y_preds, targets, reduction="none").sum(dim=-1).mean()
                 mu, logvar = latent
                 kld = 0.5 * (torch.mean((1/sigma_prior) * logvar.exp() + mu.pow(2) * (1/sigma_prior) - 1 - logvar))
                 # kld = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
@@ -374,12 +374,12 @@ def main():
                 if counter > 50:
                     y_preds_u, latent_u = model_y(y_l)
                     unsup_pred = torch.softmax(y_preds_u, dim=1)
-                    losses = []
-                    for cat in range(num_classes):
-                        fake_labels = torch.zeros_like(y_preds_u)
-                        fake_labels[:, cat] = 1
-                        losses.append(F.binary_cross_entropy_with_logits(y_preds_u, fake_labels, reduction="none").sum(dim=-1))
-                    recon_unsup = ((unsup_pred*torch.stack(losses, dim=1)).sum(dim=1)).mean()
+                    # losses = []
+                    # for cat in range(num_classes):
+                    #     fake_labels = torch.zeros_like(y_preds_u)
+                    #     fake_labels[:, cat] = 1
+                    #     losses.append(F.binary_cross_entropy_with_logits(y_preds_u, fake_labels, reduction="none").sum(dim=-1))
+                    recon_unsup = ((unsup_pred*unsup_pred.log()).sum(dim=1)).mean()
                     mu, logvar = latent_u
                     kld_u = 0.5 * (torch.mean((1 / sigma_prior) * logvar.exp() + mu.pow(2) * (1 / sigma_prior) - 1 - logvar))
                     loss += args.unl_weight*(recon_unsup + kld_u)
