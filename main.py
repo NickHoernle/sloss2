@@ -378,7 +378,8 @@ def main():
                     for cat in range(num_classes):
                         fake_labels = torch.zeros_like(y_preds_u)
                         fake_labels[:, cat] = 1
-                        losses.append(F.binary_cross_entropy_with_logits(y_preds_u, fake_labels, reduction="none").sum(dim=-1))
+                        F.binary_cross_entropy()
+                        losses.append(F.binary_cross_entropy(F.softmax(y_preds_u, dim=1), fake_labels, reduction="none").sum(dim=-1))
                     recon_unsup = (torch.stack(losses, dim=1).logsumexp(dim=1)).mean()
                     mu, logvar = latent_u
                     kld_u = 0.5 * (torch.mean((1 / sigma_prior) * logvar.exp() + mu.pow(2) * (1 / sigma_prior) - 1 - logvar))
