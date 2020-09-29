@@ -199,7 +199,7 @@ class DecoderModel(nn.Module):
         logvar = self.logvar(x)
 
         c_ms = self.cluster_mus.unsqueeze(0).repeat(len(x), 1, 1)
-        c_lv = self.cluster_mus.unsqueeze(0).repeat(len(x), 1, 1)
+        c_lv = self.cluster_logvars.unsqueeze(0).repeat(len(x), 1, 1)
 
         z = reparameterise(mu, logvar)
 
