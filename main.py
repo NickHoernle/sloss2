@@ -185,17 +185,28 @@ class DecoderModel(nn.Module):
     def __init__(self, num_classes, z_dim=2):
         super().__init__()
 
-        self.mu = nn.Sequential(nn.Linear(num_classes, 50), nn.ReLU(), nn.Linear(50, num_classes))
-        self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.ReLU(), nn.Linear(50, num_classes))
+        self.mu = nn.Sequential(nn.Linear(num_classes, 50), nn.ReLU(), nn.Linear(50, z_dim))
+        self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.ReLU(), nn.Linear(50, z_dim))
 
-        self.net = nn.Sequential(nn.Linear(num_classes, 50), nn.ReLU(), nn.Linear(50, num_classes))
+        self.cluster_mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
+        self.cluster_logvars = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
+
+        self.nc = num_classes
         self.apply(init_weights)
 
     def forward(self, x):
         mu = self.mu(x)
         logvar = self.logvar(x)
-        z = F.logsigmoid(reparameterise(mu, logvar))
-        return z + self.net(z), (mu, logvar)
+
+        c_ms = self.cluster_mus.unsqueeze(0).repeat(len(x), 1, 1)
+        c_lv = self.cluster_mus.unsqueeze(0).repeat(len(x), 1, 1)
+
+        z = reparameterise(mu, logvar)
+
+        target = log_normal(z.unsqueeze(1).repeat(1, self.nc, 1), c_ms, c_lv)
+        predictions = target - target.logsumexp(dim=1).unsqueeze(1)
+
+        return predictions, (mu, logvar, c_ms, c_lv)
 
 
 def main():
@@ -258,7 +269,6 @@ def main():
         model_y = DecoderModel(num_classes, z_dim)
         model_y.to(device)
         model_y.apply(init_weights)
-        optimizer_y = Adam(model_y.parameters(), lr=1e-3, weight_decay=1e-5)
 
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
@@ -364,25 +374,31 @@ def main():
 
                 y_preds, latent = model_y(y_l)
                 targets = one_hot_embedding(targets_l, num_classes, device=device)
-                loss = F.cross_entropy(y_preds, targets_l)
-                # loss = F.binary_cross_entropy_with_logits(y_preds, targets, reduction="none").sum(dim=-1).mean()
-                mu, logvar = latent
-                kld = 0.5 * (torch.mean((1/sigma_prior) * logvar.exp() + mu.pow(2) * (1/sigma_prior) - 1 - logvar))
-                # kld = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
-                loss += kld
+                loss = F.nll_loss(y_preds, targets_l)
 
-                if counter > 50:
-                    y_preds_u, latent_u = model_y(y_l)
-                    # unsup_pred = torch.softmax(y_preds_u, dim=1)
-                    losses = []
-                    for cat in range(num_classes):
-                        fake_labels = torch.zeros_like(y_preds_u)
-                        fake_labels[:, cat] = 1
-                        losses.append(F.binary_cross_entropy(F.softmax(y_preds_u, dim=1), fake_labels, reduction="none").sum(dim=-1))
-                    recon_unsup = (torch.stack(losses, dim=1).logsumexp(dim=1)).mean()
-                    mu, logvar = latent_u
-                    kld_u = 0.5 * (torch.mean((1 / sigma_prior) * logvar.exp() + mu.pow(2) * (1 / sigma_prior) - 1 - logvar))
-                    loss += args.unl_weight*(recon_unsup + kld_u)
+                mu, logvar, c_mu, c_lv = latent
+                c_mu_select, c_lv_select = c_mu[np.arange(len(mu)), targets_l], c_lv[np.arange(len(mu)), targets_l]
+                # loss = F.binary_cross_entropy_with_logits(y_preds, targets, reduction="none").sum(dim=-1).mean()
+                # mu, logvar = latent
+                kld = 0.5 * (torch.mean(logvar.exp()/c_lv_select.exp() + (mu-c_mu_select).pow(2)/c_lv_select.exp() - 1 - logvar + c_lv_select))
+                kl2 = -0.5 * torch.mean(1 + c_lv[0] - c_mu[0].pow(2) - c_lv[0].exp()) * (10/len(mu))
+                loss += kld
+                loss += kl2
+                # # kld = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+                # loss += kld
+
+                # if counter > 50:
+                #     y_preds_u, latent_u = model_y(y_l)
+                #     # unsup_pred = torch.softmax(y_preds_u, dim=1)
+                #     losses = []
+                #     for cat in range(num_classes):
+                #         fake_labels = torch.zeros_like(y_preds_u)
+                #         fake_labels[:, cat] = 1
+                #         losses.append(F.binary_cross_entropy(F.softmax(y_preds_u, dim=1), fake_labels, reduction="none").sum(dim=-1))
+                #     recon_unsup = (torch.stack(losses, dim=1).logsumexp(dim=1)).mean()
+                #     mu, logvar = latent_u
+                #     kld_u = 0.5 * (torch.mean((1 / sigma_prior) * logvar.exp() + mu.pow(2) * (1 / sigma_prior) - 1 - logvar))
+                #     loss += args.unl_weight*(recon_unsup + kld_u)
 
                 return loss, y_preds
 
