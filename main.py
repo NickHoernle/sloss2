@@ -373,13 +373,13 @@ def main():
 
                 if counter > 50:
                     y_preds_u, latent_u = model_y(y_l)
-                    unsup_pred = torch.softmax(y_preds_u, dim=1)
-                    # losses = []
-                    # for cat in range(num_classes):
-                    #     fake_labels = torch.zeros_like(y_preds_u)
-                    #     fake_labels[:, cat] = 1
-                    #     losses.append(F.binary_cross_entropy_with_logits(y_preds_u, fake_labels, reduction="none").sum(dim=-1))
-                    recon_unsup = ((unsup_pred*unsup_pred.log()).sum(dim=1)).mean()
+                    # unsup_pred = torch.softmax(y_preds_u, dim=1)
+                    losses = []
+                    for cat in range(num_classes):
+                        fake_labels = torch.zeros_like(y_preds_u)
+                        fake_labels[:, cat] = 1
+                        losses.append(F.binary_cross_entropy_with_logits(y_preds_u, fake_labels, reduction="none").sum(dim=-1))
+                    recon_unsup = (torch.stack(losses, dim=1).logsumexp(dim=1)).mean()
                     mu, logvar = latent_u
                     kld_u = 0.5 * (torch.mean((1 / sigma_prior) * logvar.exp() + mu.pow(2) * (1 / sigma_prior) - 1 - logvar))
                     loss += args.unl_weight*(recon_unsup + kld_u)
