@@ -262,7 +262,7 @@ def main():
         num_workers=args.n_workers,
         worker_init_fn=_init_fn
     )
-    z_dim = 4
+    z_dim = 10
     model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
 
     if args.lp:
