@@ -390,7 +390,7 @@ def main():
                 c_lv_select = c_lv.unsqueeze(0).repeat(len(mu), 1, 1)[np.arange(len(mu)), targets_l]
 
                 kld = 0.5 * (torch.sum(logvar.exp()/c_lv_select.exp() + (mu-c_mu_select).pow(2)/c_lv_select.exp() - 1 - logvar + c_lv_select, dim=1)).mean()
-                loss += kld
+                loss += args.unl2_weight*kld
 
                 # kl2 = -0.5 * torch.mean(1 + c_lv[0] - c_mu[0].pow(2) - c_lv[0].exp()) * (10/len(mu))
                 # loss += kld
