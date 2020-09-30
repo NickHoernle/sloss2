@@ -383,7 +383,7 @@ def main():
                 weight = np.min([1., 0.05 * (counter+1)])
 
                 y_preds, latent = model_y(y_l)
-                loss = F.nll_loss(y_preds, targets_l)
+                loss = F.cross_entropy(y_preds, targets_l)
 
                 # mu, logvar, c_mu, c_lv = latent
                 # c_mu_select, c_lv_select = c_mu[np.arange(len(mu)), targets_l], c_lv[np.arange(len(mu)), targets_l]
