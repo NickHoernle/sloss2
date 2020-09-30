@@ -207,11 +207,11 @@ class DecoderModel(nn.Module):
         )
 
         self.nc = num_classes
+        self.zdim = z_dim
         self.apply(init_weights)
 
     def forward(self, x):
-        mu = self.mu(x)
-        logvar = self.logvar(x)
+        mu, logvar = x[:, :self.zdim], x[:, self.zdim:]
 
         z = reparameterise(mu, logvar)
         predictions = self.net(z)
@@ -273,7 +273,7 @@ def main():
         worker_init_fn=_init_fn
     )
     z_dim = args.num_hidden
-    model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
+    model, params = resnet(args.depth, args.width, z_dim*2, image_shape[0])
 
     if args.lp:
         model_y = DecoderModel(num_classes, z_dim)
