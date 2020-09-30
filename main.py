@@ -186,10 +186,6 @@ def init_weights(m):
 class DecoderModel(nn.Module):
     def __init__(self, num_classes, z_dim=2):
         super().__init__()
-        nh = 50
-
-        self.mu = nn.Sequential(nn.Linear(num_classes, nh), nn.LeakyReLU(0.2), nn.Linear(nh, z_dim))
-        self.logvar = nn.Sequential(nn.Linear(num_classes, nh), nn.LeakyReLU(0.2), nn.Linear(nh, z_dim))
 
         self.cluster_mus = nn.Parameter(
             torch.randn(num_classes, z_dim), requires_grad=True
@@ -198,28 +194,23 @@ class DecoderModel(nn.Module):
             torch.randn(num_classes, z_dim), requires_grad=True
         )
 
-        self.net = nn.Sequential(
-            nn.Linear(z_dim, nh),
-            nn.LeakyReLU(0.2),
-            nn.Linear(nh, nh),
-            nn.LeakyReLU(0.2),
-            nn.Linear(nh, nh),
-            nn.LeakyReLU(0.2),
-            nn.Linear(nh, num_classes),
-        )
+        nh = 50
 
         self.nc = num_classes
         self.zdim = z_dim
         self.apply(init_weights)
 
     def forward(self, x):
-        mu = self.mu(x)
-        logvar = self.logvar(x)
+        mu, logvar = x[:, :self.zdim], x[:, self.zdim:]
 
+        c_ms = self.cluster_mus.unsqueeze(0).repeat(len(x), 1, 1)
+        c_lv = self.cluster_logvars.unsqueeze(0).repeat(len(x), 1, 1)
+
+        # resample
         z = reparameterise(mu, logvar)
-        predictions = self.net(z)
+        predictions = log_normal(z.unsqueeze(1).repeat(1, self.nc, 1), c_ms, c_lv)
 
-        return predictions, (mu, logvar, self.cluster_mus, self.cluster_logvars)
+        return predictions, (mu, logvar, c_ms, c_lv)
 
 
 def main():
@@ -276,7 +267,7 @@ def main():
         worker_init_fn=_init_fn
     )
     z_dim = args.num_hidden
-    model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
+    model, params = resnet(args.depth, args.width, z_dim*2, image_shape[0])
 
     if args.lp:
         model_y = DecoderModel(num_classes, z_dim)
@@ -388,28 +379,36 @@ def main():
                 y_preds, latent = model_y(y_l)
                 loss = F.cross_entropy(y_preds, targets_l)
 
-                mu, logvar, c_mu, c_lv = latent
-                c_mu_select = c_mu.unsqueeze(0).repeat(len(mu), 1, 1)[np.arange(len(mu)), targets_l]
-                c_lv_select = c_lv.unsqueeze(0).repeat(len(mu), 1, 1)[np.arange(len(mu)), targets_l]
+                ixs = np.arange(len(y_preds))
+                mu1, lv1, mu2_, lv2_ = latent
+                mu2 = mu2_[ixs, targets_l]
+                lv2 = lv2_[ixs, targets_l]
 
-                kld = 0.5 * (torch.sum(logvar.exp()/c_lv_select.exp() + (mu-c_mu_select).pow(2)/c_lv_select.exp() - 1 - logvar + c_lv_select, dim=1)).mean()
-                loss += args.unl2_weight*kld
+                kld = weight*(0.5*((lv2-lv1) + (lv1.exp() + (mu1 - mu2).pow(2))/(lv2.exp()) - 1).sum(dim=1))
+                loss += kld.mean()
 
-                # now the unsupervised part
-                y_preds_u, latent_u = model_y(y_u)
-                log_pred = F.log_softmax(y_preds_u, dim=1)
-
-                if counter > 50:
-                    # kld
-                    mu_u, logvar_u, c_mu_u, c_lv_u = latent_u
-                    # expand variables
-                    mu_u_ = mu_u.unsqueeze(1).repeat(1, num_classes, 1)
-                    logvar_u_ = logvar_u.unsqueeze(1).repeat(1, num_classes, 1)
-                    c_mu_u_ = c_mu_u.unsqueeze(0).repeat(len(mu_u), 1, 1)
-                    c_lv_u_ = c_lv_u.unsqueeze(0).repeat(len(mu_u), 1, 1)
-                    kld = (0.5 * (logvar_u_.exp()/c_lv_u_.exp() + (mu_u_-c_mu_u_).pow(2) / c_lv_u_.exp() - 1 - logvar_u_ + c_lv_u_)).sum(dim=-1)
-                    unsup_loss = (log_pred.exp()*(-log_pred + args.unl2_weight*kld)).sum(dim=1).mean()
-                    loss += args.unl_weight*unsup_loss
+                # mu, logvar, c_mu, c_lv = latent
+                # c_mu_select = c_mu.unsqueeze(0).repeat(len(mu), 1, 1)[np.arange(len(mu)), targets_l]
+                # c_lv_select = c_lv.unsqueeze(0).repeat(len(mu), 1, 1)[np.arange(len(mu)), targets_l]
+                #
+                # kld = 0.5 * (torch.sum(logvar.exp()/c_lv_select.exp() + (mu-c_mu_select).pow(2)/c_lv_select.exp() - 1 - logvar + c_lv_select, dim=1)).mean()
+                # loss += args.unl2_weight*kld
+                #
+                # # now the unsupervised part
+                # y_preds_u, latent_u = model_y(y_u)
+                # log_pred = F.log_softmax(y_preds_u, dim=1)
+                #
+                # if counter > 50:
+                #     # kld
+                #     mu_u, logvar_u, c_mu_u, c_lv_u = latent_u
+                #     # expand variables
+                #     mu_u_ = mu_u.unsqueeze(1).repeat(1, num_classes, 1)
+                #     logvar_u_ = logvar_u.unsqueeze(1).repeat(1, num_classes, 1)
+                #     c_mu_u_ = c_mu_u.unsqueeze(0).repeat(len(mu_u), 1, 1)
+                #     c_lv_u_ = c_lv_u.unsqueeze(0).repeat(len(mu_u), 1, 1)
+                #     kld = (0.5 * (logvar_u_.exp()/c_lv_u_.exp() + (mu_u_-c_mu_u_).pow(2) / c_lv_u_.exp() - 1 - logvar_u_ + c_lv_u_)).sum(dim=-1)
+                #     unsup_loss = (log_pred.exp()*(-log_pred + args.unl2_weight*kld)).sum(dim=1).mean()
+                #     loss += args.unl_weight*unsup_loss
 
                 return loss, y_preds
 
