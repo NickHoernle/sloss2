@@ -187,6 +187,9 @@ class DecoderModel(nn.Module):
     def __init__(self, num_classes, z_dim=2):
         super().__init__()
 
+        self.mu = nn.Sequential(nn.Linear(num_classes, 50), nn.ReLU(), nn.Linear(50, z_dim))
+        self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.ReLU(), nn.Linear(50, z_dim))
+
         self.cluster_mus = nn.Parameter(
             torch.randn(num_classes, z_dim), requires_grad=True
         )
@@ -201,7 +204,8 @@ class DecoderModel(nn.Module):
         self.apply(init_weights)
 
     def forward(self, x):
-        mu, logvar = x[:, :self.zdim], x[:, self.zdim:]
+        mu = self.mu(x)
+        logvar = self.logvar(x)
 
         c_ms = self.cluster_mus.unsqueeze(0).repeat(len(x), 1, 1)
         c_lv = self.cluster_logvars.unsqueeze(0).repeat(len(x), 1, 1)
@@ -267,7 +271,7 @@ def main():
         worker_init_fn=_init_fn
     )
     z_dim = args.num_hidden
-    model, params = resnet(args.depth, args.width, z_dim*2, image_shape[0])
+    model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
 
     if args.lp:
         model_y = DecoderModel(num_classes, z_dim)
@@ -385,30 +389,21 @@ def main():
                 lv2 = lv2_[ixs, targets_l]
 
                 kld = weight*(0.5*((lv2-lv1) + (lv1.exp() + (mu1 - mu2).pow(2))/(lv2.exp()) - 1).sum(dim=1))
-                loss += kld.mean()
+                loss += args.unl2_weight*kld.mean()
 
-                # mu, logvar, c_mu, c_lv = latent
-                # c_mu_select = c_mu.unsqueeze(0).repeat(len(mu), 1, 1)[np.arange(len(mu)), targets_l]
-                # c_lv_select = c_lv.unsqueeze(0).repeat(len(mu), 1, 1)[np.arange(len(mu)), targets_l]
-                #
-                # kld = 0.5 * (torch.sum(logvar.exp()/c_lv_select.exp() + (mu-c_mu_select).pow(2)/c_lv_select.exp() - 1 - logvar + c_lv_select, dim=1)).mean()
-                # loss += args.unl2_weight*kld
-                #
-                # # now the unsupervised part
-                # y_preds_u, latent_u = model_y(y_u)
-                # log_pred = F.log_softmax(y_preds_u, dim=1)
-                #
-                # if counter > 50:
-                #     # kld
-                #     mu_u, logvar_u, c_mu_u, c_lv_u = latent_u
-                #     # expand variables
-                #     mu_u_ = mu_u.unsqueeze(1).repeat(1, num_classes, 1)
-                #     logvar_u_ = logvar_u.unsqueeze(1).repeat(1, num_classes, 1)
-                #     c_mu_u_ = c_mu_u.unsqueeze(0).repeat(len(mu_u), 1, 1)
-                #     c_lv_u_ = c_lv_u.unsqueeze(0).repeat(len(mu_u), 1, 1)
-                #     kld = (0.5 * (logvar_u_.exp()/c_lv_u_.exp() + (mu_u_-c_mu_u_).pow(2) / c_lv_u_.exp() - 1 - logvar_u_ + c_lv_u_)).sum(dim=-1)
-                #     unsup_loss = (log_pred.exp()*(-log_pred + args.unl2_weight*kld)).sum(dim=1).mean()
-                #     loss += args.unl_weight*unsup_loss
+                # now do the unsup part
+                if counter > 50:
+                    y_preds_u, latent_u = model_y(y_u)
+                    log_prob = torch.log_softmax(y_preds_u, dim=1)
+
+                    # evaluate the kl for each cluster
+                    mu1u_, lv1u_, mu2u, lv2u = latent_u
+                    mu1u = mu1u_.unsqueeze(1).repeat(1, num_classes, 1)
+                    lv1u = lv1u_.unsqueeze(1).repeat(1, num_classes, 1)
+
+                    kldu = weight * (0.5 * ((lv2u - lv1u) + (lv1u.exp() + (mu1u - mu2u).pow(2)) / (lv2u.exp()) - 1).sum(dim=-1))
+                    unsup_loss = (log_prob.exp()*(-log_prob + args.unl2_weight*kldu)).sum(dim=1).mean()
+                    loss += args.unl_weight * unsup_loss
 
                 return loss, y_preds
 
