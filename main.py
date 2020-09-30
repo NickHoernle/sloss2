@@ -186,6 +186,10 @@ def init_weights(m):
 class DecoderModel(nn.Module):
     def __init__(self, num_classes, z_dim=2):
         super().__init__()
+        nh = 50
+
+        self.mu = nn.Sequential(nn.Linear(num_classes, nh), nn.LeakyReLU(0.2), nn.Linear(nh, z_dim))
+        self.logvar = nn.Sequential(nn.Linear(num_classes, nh), nn.LeakyReLU(0.2), nn.Linear(nh, z_dim))
 
         self.cluster_mus = nn.Parameter(
             torch.randn(num_classes, z_dim), requires_grad=True
@@ -193,8 +197,6 @@ class DecoderModel(nn.Module):
         self.cluster_logvars = nn.Parameter(
             torch.randn(num_classes, z_dim), requires_grad=True
         )
-
-        nh = 50
 
         self.net = nn.Sequential(
             nn.Linear(z_dim, nh),
@@ -211,7 +213,8 @@ class DecoderModel(nn.Module):
         self.apply(init_weights)
 
     def forward(self, x):
-        mu, logvar = x[:, :self.zdim], x[:, self.zdim:]
+        mu = self.mu(x)
+        logvar = self.logvar(x)
 
         z = reparameterise(mu, logvar)
         predictions = self.net(z)
@@ -273,7 +276,7 @@ def main():
         worker_init_fn=_init_fn
     )
     z_dim = args.num_hidden
-    model, params = resnet(args.depth, args.width, z_dim*2, image_shape[0])
+    model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
 
     if args.lp:
         model_y = DecoderModel(num_classes, z_dim)
@@ -392,24 +395,21 @@ def main():
                 kld = 0.5 * (torch.sum(logvar.exp()/c_lv_select.exp() + (mu-c_mu_select).pow(2)/c_lv_select.exp() - 1 - logvar + c_lv_select, dim=1)).mean()
                 loss += args.unl2_weight*kld
 
-                # kl2 = -0.5 * torch.mean(1 + c_lv[0] - c_mu[0].pow(2) - c_lv[0].exp()) * (10/len(mu))
-                # loss += kld
-                # loss += kl2
-                # # kld = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
-                # loss += kld
+                # now the unsupervised part
+                y_preds_u, latent_u = model_y(y_u)
+                log_pred = F.log_softmax(y_preds_u, dim=1)
 
-                # if counter > 50:
-                #     y_preds_u, latent_u = model_y(y_l)
-                #     # unsup_pred = torch.softmax(y_preds_u, dim=1)
-                #     losses = []
-                #     for cat in range(num_classes):
-                #         fake_labels = torch.zeros_like(y_preds_u)
-                #         fake_labels[:, cat] = 1
-                #         losses.append(F.binary_cross_entropy(F.softmax(y_preds_u, dim=1), fake_labels, reduction="none").sum(dim=-1))
-                #     recon_unsup = (torch.stack(losses, dim=1).logsumexp(dim=1)).mean()
-                #     mu, logvar = latent_u
-                #     kld_u = 0.5 * (torch.mean((1 / sigma_prior) * logvar.exp() + mu.pow(2) * (1 / sigma_prior) - 1 - logvar))
-                #     loss += args.unl_weight*(recon_unsup + kld_u)
+                if counter > 50:
+                    # kld
+                    mu_u, logvar_u, c_mu_u, c_lv_u = latent_u
+                    # expand variables
+                    mu_u_ = mu_u.unsqueeze(1).repeat(1, num_classes, 1)
+                    logvar_u_ = logvar_u.unsqueeze(1).repeat(1, num_classes, 1)
+                    c_mu_u_ = c_mu_u.unsqueeze(0).repeat(len(mu_u), 1, 1)
+                    c_lv_u_ = c_lv_u.unsqueeze(0).repeat(len(mu_u), 1, 1)
+                    kld = (0.5 * (logvar_u_.exp()/c_lv_u_.exp() + (mu_u_-c_mu_u_).pow(2) / c_lv_u_.exp() - 1 - logvar_u_ + c_lv_u_)).sum(dim=-1)
+                    unsup_loss = (log_pred.exp()*(-log_pred + args.unl2_weight*kld)).sum(dim=1).mean()
+                    loss += args.unl_weight*unsup_loss
 
                 return loss, y_preds
 
@@ -426,8 +426,9 @@ def main():
             # q_mu, q_logvar, log_alpha = latent
             # preds = (log_alpha.exp().unsqueeze(-1) * y_full).sum(dim=1)
             #
-            tgts = one_hot_embedding(targets, num_classes, device=device)
-            recon_loss = F.binary_cross_entropy_with_logits(y_full, tgts)
+            # tgts = one_hot_embedding(targets, num_classes, device=device)
+            # recon_loss = F.binary_cross_entropy_with_logits(y_full, tgts)\
+            recon_loss = F.cross_entropy(y_full, targets)
 
             return recon_loss.mean(), y_full
 
