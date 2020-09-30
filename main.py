@@ -187,11 +187,24 @@ class DecoderModel(nn.Module):
     def __init__(self, num_classes, z_dim=2):
         super().__init__()
 
-        self.mu = nn.Sequential(nn.Linear(num_classes, 50), nn.ReLU(), nn.Linear(50, z_dim))
-        self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.ReLU(), nn.Linear(50, z_dim))
+        self.cluster_mus = nn.Parameter(
+            torch.randn(num_classes, z_dim), requires_grad=True
+        )
+        self.cluster_logvars = nn.Parameter(
+            torch.randn(num_classes, z_dim), requires_grad=True
+        )
 
-        self.cluster_mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
-        self.cluster_logvars = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
+        nh = 50
+
+        self.net = nn.Sequential(
+            nn.Linear(z_dim, nh),
+            nn.LeakyReLU(0.2),
+            nn.Linear(nh, nh),
+            nn.LeakyReLU(0.2),
+            nn.Linear(nh, nh),
+            nn.LeakyReLU(0.2),
+            nn.Linear(nh, num_classes),
+        )
 
         self.nc = num_classes
         self.apply(init_weights)
@@ -200,15 +213,10 @@ class DecoderModel(nn.Module):
         mu = self.mu(x)
         logvar = self.logvar(x)
 
-        c_ms = self.cluster_mus.unsqueeze(0).repeat(len(x), 1, 1)
-        c_lv = self.cluster_logvars.unsqueeze(0).repeat(len(x), 1, 1)
-
         z = reparameterise(mu, logvar)
+        predictions = self.net(z)
 
-        target = log_normal(z.unsqueeze(1).repeat(1, self.nc, 1), c_ms, c_lv)
-        predictions = target - target.logsumexp(dim=1).unsqueeze(1)
-
-        return predictions, (mu, logvar, c_ms, c_lv)
+        return predictions, (mu, logvar, self.cluster_mus, self.cluster_logvars)
 
 
 def main():
@@ -375,16 +383,15 @@ def main():
                 weight = np.min([1., 0.05 * (counter+1)])
 
                 y_preds, latent = model_y(y_l)
-                targets = one_hot_embedding(targets_l, num_classes, device=device)
                 loss = F.nll_loss(y_preds, targets_l)
 
-                mu, logvar, c_mu, c_lv = latent
-                c_mu_select, c_lv_select = c_mu[np.arange(len(mu)), targets_l], c_lv[np.arange(len(mu)), targets_l]
-                # loss = F.binary_cross_entropy_with_logits(y_preds, targets, reduction="none").sum(dim=-1).mean()
-                # mu, logvar = latent
-                kld = 0.5 * (torch.mean(logvar.exp()/c_lv_select.exp() + (mu-c_mu_select).pow(2)/c_lv_select.exp() - 1 - logvar + c_lv_select))
-                kl2 = -0.5 * torch.mean(1 + c_lv[0] - c_mu[0].pow(2) - c_lv[0].exp()) * (10/len(mu))
-                loss += kld
+                # mu, logvar, c_mu, c_lv = latent
+                # c_mu_select, c_lv_select = c_mu[np.arange(len(mu)), targets_l], c_lv[np.arange(len(mu)), targets_l]
+                # # loss = F.binary_cross_entropy_with_logits(y_preds, targets, reduction="none").sum(dim=-1).mean()
+                # # mu, logvar = latent
+                # kld = 0.5 * (torch.mean(logvar.exp()/c_lv_select.exp() + (mu-c_mu_select).pow(2)/c_lv_select.exp() - 1 - logvar + c_lv_select))
+                # kl2 = -0.5 * torch.mean(1 + c_lv[0] - c_mu[0].pow(2) - c_lv[0].exp()) * (10/len(mu))
+                # loss += kld
                 # loss += kl2
                 # # kld = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
                 # loss += kld
