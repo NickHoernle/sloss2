@@ -187,8 +187,8 @@ class DecoderModel(nn.Module):
     def __init__(self, num_classes, z_dim=2):
         super().__init__()
 
-        self.mu = nn.Sequential(nn.Linear(num_classes, 50), nn.Tanh(), nn.Linear(50, z_dim))
-        self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.Tanh(), nn.Linear(50, z_dim))
+        self.mu = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
+        self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
 
         self.cluster_mus = nn.Parameter(
             torch.randn(num_classes, z_dim), requires_grad=True
