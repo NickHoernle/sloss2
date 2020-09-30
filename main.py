@@ -385,11 +385,13 @@ def main():
                 y_preds, latent = model_y(y_l)
                 loss = F.cross_entropy(y_preds, targets_l)
 
-                # mu, logvar, c_mu, c_lv = latent
-                # c_mu_select, c_lv_select = c_mu[np.arange(len(mu)), targets_l], c_lv[np.arange(len(mu)), targets_l]
-                # # loss = F.binary_cross_entropy_with_logits(y_preds, targets, reduction="none").sum(dim=-1).mean()
-                # # mu, logvar = latent
-                # kld = 0.5 * (torch.mean(logvar.exp()/c_lv_select.exp() + (mu-c_mu_select).pow(2)/c_lv_select.exp() - 1 - logvar + c_lv_select))
+                mu, logvar, c_mu, c_lv = latent
+                c_mu_select = c_mu.unsqueeze(0).repeat(len(mu), 1, 1)[np.arange(len(mu)), targets_l]
+                c_lv_select = c_lv.unsqueeze(0).repeat(len(mu), 1, 1)[np.arange(len(mu)), targets_l]
+
+                kld = 0.5 * (torch.mean(logvar.exp()/c_lv_select.exp() + (mu-c_mu_select).pow(2)/c_lv_select.exp() - 1 - logvar + c_lv_select))
+                loss += kld
+                
                 # kl2 = -0.5 * torch.mean(1 + c_lv[0] - c_mu[0].pow(2) - c_lv[0].exp()) * (10/len(mu))
                 # loss += kld
                 # loss += kl2
