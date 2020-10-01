@@ -283,7 +283,7 @@ def main():
         model_y = DecoderModel(num_classes, z_dim)
         model_y.to(device)
         model_y.apply(init_weights)
-        optimizer_y = Adam(model_y.get_decoder_params(), lr=1e-3, weight_decay=1e-5)
+        # optimizer_y = Adam(model_y.get_decoder_params(), lr=1e-3, weight_decay=1e-5)
 
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
@@ -388,13 +388,14 @@ def main():
                 weight = np.min([1., 0.05 * (counter+1)])
                 # weight = 1.
 
-                # model_y.train()
-                # y_preds, latent = model_y(y_l.detach())
-                # loss = F.cross_entropy(y_preds, targets_l)
-                # optimizer_y.zero_grad()
-                # loss.backward()
-                # optimizer_y.step()
-                # model_y.eval()
+                # if np.random.uniform(0, 1) >= 0.8:
+                #     model_y.train()
+                #     y_preds, latent = model_y(y_l.detach())
+                #     loss = F.cross_entropy(y_preds, targets_l)
+                #     optimizer_y.zero_grad()
+                #     loss.backward()
+                #     optimizer_y.step()
+                #     model_y.eval()
                 #
                 # optimizer.zero_grad()
 
@@ -423,7 +424,7 @@ def main():
 
                     kldu = weight * (0.5 * ((lv2u - lv1u) + (lv1u.exp() + (mu1u - mu2u).pow(2)) / (lv2u.exp()) - 1).sum(dim=-1))
                     kld2u = -0.5 * torch.sum(1 + lv2u[0] - mu2u[0].pow(2) - lv2u[0].exp(), dim=-1).sum() / len(mu1u_)
-                    unsup_loss = (log_prob.exp()*(args.unl2_weight*(kldu + kld2u)).sum(dim=1)).mean()
+                    unsup_loss = (log_prob.exp()*(-log_prob + args.unl2_weight*(kldu + kld2u)).sum(dim=1)).mean()
                     loss += args.unl_weight * unsup_loss
 
                 return loss, y_preds
