@@ -203,6 +203,12 @@ class DecoderModel(nn.Module):
         self.zdim = z_dim
         self.apply(init_weights)
 
+    def get_decoder_params(self):
+        return list(self.cluster_mus) + list(self.cluster_logvars)
+
+    def get_encoder_params(self):
+        return list(self.mu.parameters()) + list(self.logvar.parameters())
+
     def forward(self, x):
         mu = self.mu(x)
         logvar = self.logvar(x)
@@ -277,12 +283,14 @@ def main():
         model_y = DecoderModel(num_classes, z_dim)
         model_y.to(device)
         model_y.apply(init_weights)
+        import pdb
+        pdb.set_trace()
+        optimizer_y = Adam(model_y.get_decoder_params(), lr=1e-3, weight_decay=1e-5)
 
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
         params_ = [v for v in params.values() if v.requires_grad]
-        if args.lp:
-            params_ += list(model_y.parameters())
+        params_ += model_y.get_encoder_params()
         return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
 
     optimizer = create_optimizer(args, args.lr)
@@ -379,6 +387,14 @@ def main():
 
             elif args.lp:
                 weight = np.min([1., 0.05 * (counter+1)])
+
+                model_y.train()
+                y_preds, latent = model_y(y_l.detach())
+                loss = F.cross_entropy(y_preds, targets_l)
+                optimizer_y.zero_grad()
+                loss.backward()
+                optimizer_y.step()
+                model_y.eval()
 
                 y_preds, latent = model_y(y_l)
                 loss = F.cross_entropy(y_preds, targets_l)
