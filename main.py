@@ -385,7 +385,7 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                weight = np.min([1., 0.05 * (counter+1)])
+                weight = np.min([1., 0.05 * (counter)])
                 # weight = 1.
 
                 # if np.random.uniform(0, 1) >= 0.8:
