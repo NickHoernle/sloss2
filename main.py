@@ -197,6 +197,8 @@ class DecoderModel(nn.Module):
             torch.randn(num_classes, z_dim), requires_grad=True
         )
 
+        self.net = nn.Sequential(nn.Linear(z_dim, 50), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
+
         nh = 50
 
         self.nc = num_classes
@@ -218,7 +220,8 @@ class DecoderModel(nn.Module):
 
         # resample
         z = reparameterise(mu, logvar)
-        predictions = log_normal(z.unsqueeze(1).repeat(1, self.nc, 1), c_ms, c_lv)
+        predictions = self.net(z)
+        # predictions = log_normal(z.unsqueeze(1).repeat(1, self.nc, 1), c_ms, c_lv)
 
         return predictions, (mu, logvar, c_ms, c_lv)
 
@@ -424,7 +427,7 @@ def main():
 
                     kldu = weight * (0.5 * ((lv2u - lv1u) + (lv1u.exp() + (mu1u - mu2u).pow(2)) / (lv2u.exp()) - 1).sum(dim=-1))
                     kld2u = -0.5 * (1 + lv2u[0] - mu2u[0].pow(2) - lv2u[0].exp()).sum(dim=-1).sum() / len(mu1u_)
-                    unsup_loss = (log_prob.exp()*(args.unl2_weight*kldu)).sum(dim=1).mean() + args.unl2_weight*kld2u
+                    unsup_loss = (log_prob.exp()*(-log_prob + args.unl2_weight*kldu)).sum(dim=1).mean() + args.unl2_weight*kld2u
                     loss += args.unl_weight * unsup_loss
 
                 return loss, y_preds
