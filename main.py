@@ -385,7 +385,7 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                weight = np.min([1., np.max([0, 0.05 * (counter - 5)])])
+                weight = np.min([1., np.max([0, 0.05 * (counter - 20)])])
                 # weight = 1.
 
                 # if np.random.uniform(0, 1) >= 0.8:
@@ -423,8 +423,8 @@ def main():
                     lv1u = lv1u_.unsqueeze(1).repeat(1, num_classes, 1)
 
                     kldu = weight * (0.5 * ((lv2u - lv1u) + (lv1u.exp() + (mu1u - mu2u).pow(2)) / (lv2u.exp()) - 1).sum(dim=-1))
-                    kld2u = -0.5 * torch.sum(1 + lv2u[0] - mu2u[0].pow(2) - lv2u[0].exp(), dim=-1).sum() / len(mu1u_)
-                    unsup_loss = (log_prob.exp()*(-log_prob + args.unl2_weight*(kldu + kld2u)).sum(dim=1)).mean()
+                    kld2u = -0.5 * (1 + lv2u[0] - mu2u[0].pow(2) - lv2u[0].exp()).sum(dim=-1).sum() / len(mu1u_)
+                    unsup_loss = (log_prob.exp()*(-log_prob + args.unl2_weight*kldu)).sum(dim=1).mean() + args.unl2_weight*kld2u
                     loss += args.unl_weight * unsup_loss
 
                 return loss, y_preds
