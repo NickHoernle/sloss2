@@ -288,7 +288,8 @@ def main():
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
         params_ = [v for v in params.values() if v.requires_grad]
-        params_ += model_y.get_encoder_params()
+        # params_ += model_y.get_encoder_params()
+        params_ += list(model_y.parameters())
         return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
 
     optimizer = create_optimizer(args, args.lr)
@@ -384,23 +385,18 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                weight = np.min([1., 0.01 * (counter+1)])
+                # weight = np.min([1., 0.01 * (counter+1)])
+                weight = 1.
 
-                model_y.train()
-                y_preds, latent = model_y(y_l.detach())
-                loss = F.cross_entropy(y_preds, targets_l)
-
-                # samples = torch.randn(100, num_classes, args.num_hidden)
-                # c_mus = model_y.cluster_mus.unsqueeze(0).repeat(len(samples), 1, 1)
-                # c_logvars = model_y.cluster_logvars.unsqueeze(0).repeat(len(samples), 1, 1)
-                # samples =  + samples *
-
-                optimizer_y.zero_grad()
-                loss.backward()
-                optimizer_y.step()
-                model_y.eval()
-
-                optimizer.zero_grad()
+                # model_y.train()
+                # y_preds, latent = model_y(y_l.detach())
+                # loss = F.cross_entropy(y_preds, targets_l)
+                # optimizer_y.zero_grad()
+                # loss.backward()
+                # optimizer_y.step()
+                # model_y.eval()
+                #
+                # optimizer.zero_grad()
 
                 y_preds, latent = model_y(y_l)
                 loss = F.cross_entropy(y_preds, targets_l)
@@ -411,7 +407,9 @@ def main():
                 lv2 = lv2_[ixs, targets_l]
 
                 kld = weight*(0.5*((lv2-lv1) + (lv1.exp() + (mu1 - mu2).pow(2))/(lv2.exp()) - 1).sum(dim=1))
-                loss += args.unl2_weight*kld.mean()
+                kld2 = -0.5 * torch.sum(1 + lv2_[0] - mu2_[0].pow(2) - lv2_[0].exp(), dim=-1).sum()/len(mu1)
+
+                loss += args.unl2_weight*kld.mean() + args.unl2_weight*kld2
 
                 # now do the unsup part
                 if counter > 50:
