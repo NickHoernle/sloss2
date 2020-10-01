@@ -385,8 +385,8 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                # weight = np.min([1., 0.01 * (counter+1)])
-                weight = 1.
+                weight = np.min([1., 0.05 * (counter+1)])
+                # weight = 1.
 
                 # model_y.train()
                 # y_preds, latent = model_y(y_l.detach())
