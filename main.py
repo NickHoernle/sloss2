@@ -187,8 +187,8 @@ class DecoderModel(nn.Module):
     def __init__(self, num_classes, z_dim=2):
         super().__init__()
 
-        self.mu = nn.Sequential(nn.Linear(num_classes, 50), nn.Tanh(), nn.Linear(50, z_dim))
-        self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.Tanh(), nn.Linear(50, z_dim))
+        self.mu = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
+        self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
 
         self.cluster_mus = nn.Parameter(
             torch.randn(num_classes, z_dim), requires_grad=True
@@ -402,7 +402,7 @@ def main():
                     lv1u = lv1u_.unsqueeze(1).repeat(1, num_classes, 1)
 
                     kldu = weight * (0.5 * ((lv2u - lv1u) + (lv1u.exp() + (mu1u - mu2u).pow(2)) / (lv2u.exp()) - 1).sum(dim=-1))
-                    unsup_loss = (log_prob.exp()*(-log_prob + args.unl2_weight*kldu)).sum(dim=1).mean()
+                    unsup_loss = (log_prob.exp()*args.unl2_weight*kldu).sum(dim=1).mean()
                     loss += args.unl_weight * unsup_loss
 
                 return loss, y_preds
