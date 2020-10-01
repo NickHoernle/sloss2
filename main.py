@@ -406,10 +406,10 @@ def main():
                 mu2 = mu2_[ixs, targets_l]
                 lv2 = lv2_[ixs, targets_l]
 
-                kld = weight*(0.5*((lv2-lv1) + (lv1.exp() + (mu1 - mu2).pow(2))/(lv2.exp()) - 1).sum(dim=1))
+                kld = weight*(0.5*((lv2-lv1) + (lv1.exp() + (mu1 - mu2).pow(2))/(lv2.exp()) - 1).sum(dim=1)).mean()
                 kld2 = -0.5 * torch.sum(1 + lv2_[0] - mu2_[0].pow(2) - lv2_[0].exp(), dim=-1).sum()/len(mu1)
 
-                loss += args.unl2_weight*kld.mean() + args.unl2_weight*kld2
+                loss += args.unl2_weight*(kld + kld2)
 
                 # now do the unsup part
                 if counter > 50:
@@ -422,7 +422,8 @@ def main():
                     lv1u = lv1u_.unsqueeze(1).repeat(1, num_classes, 1)
 
                     kldu = weight * (0.5 * ((lv2u - lv1u) + (lv1u.exp() + (mu1u - mu2u).pow(2)) / (lv2u.exp()) - 1).sum(dim=-1))
-                    unsup_loss = (log_prob.exp()*(-log_prob + args.unl2_weight*kldu)).sum(dim=1).mean()
+                    kld2u = -0.5 * torch.sum(1 + lv2u[0] - mu2u[0].pow(2) - lv2u[0].exp(), dim=-1).sum() / len(mu1u_)
+                    unsup_loss = (log_prob.exp()*(args.unl2_weight*(kldu + kld2u)).sum(dim=1)).mean()
                     loss += args.unl_weight * unsup_loss
 
                 return loss, y_preds
