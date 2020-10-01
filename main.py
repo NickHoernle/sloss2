@@ -174,7 +174,7 @@ def check_manual_seed(seed):
 def reparameterise(mu, logvar):
     std = torch.exp(0.5 * logvar)
     eps = torch.randn_like(std)
-    return mu + eps
+    return mu + eps*std
 
 
 def init_weights(m):
@@ -384,11 +384,17 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                weight = np.min([1., 0.05 * (counter+1)])
+                weight = np.min([1., 0.01 * (counter+1)])
 
                 model_y.train()
                 y_preds, latent = model_y(y_l.detach())
                 loss = F.cross_entropy(y_preds, targets_l)
+
+                # samples = torch.randn(100, num_classes, args.num_hidden)
+                # c_mus = model_y.cluster_mus.unsqueeze(0).repeat(len(samples), 1, 1)
+                # c_logvars = model_y.cluster_logvars.unsqueeze(0).repeat(len(samples), 1, 1)
+                # samples =  + samples *
+
                 optimizer_y.zero_grad()
                 loss.backward()
                 optimizer_y.step()
@@ -418,7 +424,7 @@ def main():
                     lv1u = lv1u_.unsqueeze(1).repeat(1, num_classes, 1)
 
                     kldu = weight * (0.5 * ((lv2u - lv1u) + (lv1u.exp() + (mu1u - mu2u).pow(2)) / (lv2u.exp()) - 1).sum(dim=-1))
-                    unsup_loss = (log_prob.exp()*args.unl2_weight*kldu).sum(dim=1).mean()
+                    unsup_loss = (log_prob.exp()*(-log_prob + args.unl2_weight*kldu)).sum(dim=1).mean()
                     loss += args.unl_weight * unsup_loss
 
                 return loss, y_preds
