@@ -204,7 +204,8 @@ class DecoderModel(nn.Module):
         self.apply(init_weights)
 
     def get_decoder_params(self):
-        return list(self.cluster_mus) + list(self.cluster_logvars)
+        return [p for k, p in self.named_parameters() if k in ("cluster_mus", "cluster_logvars")]
+        # return list(self.cluster_mus) + list(self.cluster_logvars)
 
     def get_encoder_params(self):
         return list(self.mu.parameters()) + list(self.logvar.parameters())
@@ -283,8 +284,6 @@ def main():
         model_y = DecoderModel(num_classes, z_dim)
         model_y.to(device)
         model_y.apply(init_weights)
-        import pdb
-        pdb.set_trace()
         optimizer_y = Adam(model_y.get_decoder_params(), lr=1e-3, weight_decay=1e-5)
 
     def create_optimizer(args, lr):
