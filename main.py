@@ -424,7 +424,7 @@ def main():
 
                     kldu = weight * (0.5 * ((lv2u - lv1u) + (lv1u.exp() + (mu1u - mu2u).pow(2)) / (lv2u.exp()) - 1).sum(dim=-1))
                     kld2u = -0.5 * (1 + lv2u[0] - mu2u[0].pow(2) - lv2u[0].exp()).sum(dim=-1).sum() / len(mu1u_)
-                    unsup_loss = (log_prob.exp()*(-log_prob + args.unl2_weight*kldu)).sum(dim=1).mean() + args.unl2_weight*kld2u
+                    unsup_loss = (log_prob.exp()*(args.unl2_weight*kldu)).sum(dim=1).mean() + args.unl2_weight*kld2u
                     loss += args.unl_weight * unsup_loss
 
                 return loss, y_preds
