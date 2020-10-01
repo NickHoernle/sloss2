@@ -205,7 +205,6 @@ class DecoderModel(nn.Module):
 
     def get_decoder_params(self):
         return [p for k, p in self.named_parameters() if k in ("cluster_mus", "cluster_logvars")]
-        # return list(self.cluster_mus) + list(self.cluster_logvars)
 
     def get_encoder_params(self):
         return list(self.mu.parameters()) + list(self.logvar.parameters())
@@ -394,6 +393,8 @@ def main():
                 loss.backward()
                 optimizer_y.step()
                 model_y.eval()
+
+                optimizer.zero_grad()
 
                 y_preds, latent = model_y(y_l)
                 loss = F.cross_entropy(y_preds, targets_l)
