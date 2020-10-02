@@ -421,7 +421,7 @@ def main():
 
                 gen_preds = model_y.generate_samples(128)
                 predictions = torch.softmax(gen_preds, dim=-1)
-                true_logic = ((predictions > 0.95) | (predictions > 0.05)).all(dim=-1).float()
+                true_logic = ((predictions > 0.95) | (predictions < 0.05)).all(dim=-1).float()
                 pred_logic = logic_net(predictions).squeeze()
                 logic_loss = F.binary_cross_entropy_with_logits(pred_logic, true_logic)
                 logic_opt.zero_grad()
@@ -461,7 +461,7 @@ def main():
 
                     gen_preds = model_y.generate_samples(500)
                     predictions = torch.softmax(gen_preds, dim=-1)
-                    true_logic = ((predictions > 0.95) | (predictions > 0.05)).all(dim=-1)
+                    true_logic = ((predictions > 0.95) | (predictions < 0.05)).all(dim=-1)
                     pred_logic = logic_net(predictions).squeeze()
                     logic_loss2 = F.binary_cross_entropy_with_logits(pred_logic, torch.ones_like(pred_logic), reduction="none")
                     logic_loss2 = logic_loss2[~true_logic].sum() / (len(pred_logic)*len(pred_logic[0]))
