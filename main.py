@@ -414,7 +414,7 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                weight = np.min([1., np.max([0, 0.05 * (counter - 0)])])
+                weight = np.min([1., np.max([0, 0.05 * (counter - 5)])])
 
                 model_y.eval()
                 logic_net.train()
