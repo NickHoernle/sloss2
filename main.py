@@ -401,9 +401,10 @@ def main():
                 #     model_y.eval()
                 #
                 # optimizer.zero_grad()
-
-                y_preds, latent = model_y(y_l)
-                loss = F.cross_entropy(y_preds, targets_l)
+                loss = 0
+                for i in range(10):
+                    y_preds, latent = model_y(y_l)
+                    loss += F.cross_entropy(y_preds, targets_l)
 
                 ixs = np.arange(len(y_preds))
                 mu1, lv1, mu2_, lv2_ = latent
