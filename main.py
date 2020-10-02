@@ -406,7 +406,7 @@ def main():
                     y_preds, latent = model_y(y_l)
                     loss += F.cross_entropy(y_preds, targets_l)
                 loss /= 10
-                
+
                 ixs = np.arange(len(y_preds))
                 mu1, lv1, mu2_, lv2_ = latent
                 mu2 = mu2_[ixs, targets_l]
@@ -415,7 +415,7 @@ def main():
                 kld = weight*(0.5*((lv2-lv1) + (lv1.exp() + (mu1 - mu2).pow(2))/(lv2.exp()) - 1).sum(dim=1)).mean()
                 kld2 = -0.5 * torch.sum(1 + lv2_[0] - mu2_[0].pow(2) - lv2_[0].exp(), dim=-1).sum()/len(mu1)
 
-                loss += args.unl2_weight*(kld + kld2)
+                loss += args.unl2_weight*(kld) #+ kld2)
 
                 # now do the unsup part
                 if counter > 50:
@@ -429,7 +429,7 @@ def main():
 
                     kldu = weight * (0.5 * ((lv2u - lv1u) + (lv1u.exp() + (mu1u - mu2u).pow(2)) / (lv2u.exp()) - 1).sum(dim=-1))
                     kld2u = -0.5 * (1 + lv2u[0] - mu2u[0].pow(2) - lv2u[0].exp()).sum(dim=-1).sum() / len(mu1u_)
-                    unsup_loss = (log_prob.exp()*(-log_prob + args.unl2_weight*kldu)).sum(dim=1).mean() + args.unl2_weight*kld2u
+                    unsup_loss = (log_prob.exp()*(-log_prob + args.unl2_weight*kldu)).sum(dim=1).mean() #+ args.unl2_weight*kld2u
                     loss += args.unl_weight * unsup_loss
 
                 return loss, y_preds
