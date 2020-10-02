@@ -405,7 +405,8 @@ def main():
                 for i in range(10):
                     y_preds, latent = model_y(y_l)
                     loss += F.cross_entropy(y_preds, targets_l)
-
+                loss /= 10
+                
                 ixs = np.arange(len(y_preds))
                 mu1, lv1, mu2_, lv2_ = latent
                 mu2 = mu2_[ixs, targets_l]
