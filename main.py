@@ -459,13 +459,13 @@ def main():
                     unsup_loss = (log_prob.exp()*(-log_prob + args.unl2_weight*kldu)).sum(dim=1).mean() #+ args.unl2_weight*kld2u
                     loss += args.unl_weight * unsup_loss
 
-                    gen_preds = model_y.generate_samples(500)
-                    predictions = torch.softmax(gen_preds, dim=-1)
-                    true_logic = ((predictions > 0.95) | (predictions < 0.05)).all(dim=-1)
-                    pred_logic = logic_net(predictions).squeeze()
-                    logic_loss2 = F.binary_cross_entropy_with_logits(pred_logic, torch.ones_like(pred_logic), reduction="none")
-                    logic_loss2 = logic_loss2[~true_logic].sum() / (len(pred_logic)*len(pred_logic[0]))
-                    loss += logic_loss2
+                gen_preds = model_y.generate_samples(500)
+                predictions = torch.softmax(gen_preds, dim=-1)
+                true_logic = ((predictions > 0.95) | (predictions < 0.05)).all(dim=-1)
+                pred_logic = logic_net(predictions).squeeze()
+                logic_loss2 = F.binary_cross_entropy_with_logits(pred_logic, torch.ones_like(pred_logic), reduction="none")
+                logic_loss2 = logic_loss2[~true_logic].sum() / (len(pred_logic)*len(pred_logic[0]))
+                loss += logic_loss2
 
                 return loss, y_preds
 
