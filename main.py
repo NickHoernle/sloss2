@@ -445,7 +445,7 @@ def main():
                 loss += args.unl2_weight*(kld) #+ kld2)
 
                 # now do the unsup part
-                if counter > -1:
+                if counter > 50:
                     y_preds_u, latent_u = model_y(y_u)
                     log_prob = torch.log_softmax(y_preds_u, dim=1)
 
