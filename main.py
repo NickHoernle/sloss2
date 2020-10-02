@@ -311,7 +311,7 @@ def main():
         model_y.to(device)
 
         logic_net = LogicNet(n_dim=num_classes)
-        model_y.to(device)
+        logic_net.to(device)
         logic_opt = Adam(logic_net.parameters(), lr=1e-3, weight_decay=1e-5)
 
     def create_optimizer(args, lr):
