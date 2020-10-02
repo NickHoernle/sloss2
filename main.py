@@ -225,6 +225,30 @@ class DecoderModel(nn.Module):
 
         return predictions, (mu, logvar, c_ms, c_lv)
 
+    def generate_samples(self, n):
+        c_ms = self.cluster_mus.unsqueeze(0).repeat(n, 1, 1)
+        c_lv = self.cluster_logvars.unsqueeze(0).repeat(n, 1, 1)
+        z = reparameterise(c_ms, c_lv)
+        return self.net(z)
+
+
+class LogicNet(nn.Module):
+
+    def __init__(self, *, n_dim=2):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(n_dim, 50),
+            nn.ReLU(True),
+            nn.Linear(50, 50),
+            nn.ReLU(True),
+            nn.Linear(50, 50),
+            nn.ReLU(True),
+            nn.Linear(50, 1)
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
 
 def main():
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -285,8 +309,10 @@ def main():
     if args.lp:
         model_y = DecoderModel(num_classes, z_dim)
         model_y.to(device)
-        model_y.apply(init_weights)
-        # optimizer_y = Adam(model_y.get_decoder_params(), lr=1e-3, weight_decay=1e-5)
+
+        logic_net = LogicNet(n_dim=num_classes)
+        model_y.to(device)
+        logic_opt = Adam(logic_net.parameters(), lr=1e-3, weight_decay=1e-5)
 
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
@@ -389,23 +415,24 @@ def main():
 
             elif args.lp:
                 weight = np.min([1., np.max([0, 0.05 * (counter - 20)])])
-                # weight = 1.
 
-                # if np.random.uniform(0, 1) >= 0.8:
-                #     model_y.train()
-                #     y_preds, latent = model_y(y_l.detach())
-                #     loss = F.cross_entropy(y_preds, targets_l)
-                #     optimizer_y.zero_grad()
-                #     loss.backward()
-                #     optimizer_y.step()
-                #     model_y.eval()
-                #
-                # optimizer.zero_grad()
-                loss = 0
-                for i in range(10):
-                    y_preds, latent = model_y(y_l)
-                    loss += F.cross_entropy(y_preds, targets_l)
-                loss /= 10
+                model_y.eval()
+                logic_net.train()
+
+                gen_preds = model_y.generate_samples(128)
+                predictions = torch.softmax(gen_preds, dim=-1)
+                true_logic = ((predictions > 0.95) | (predictions > 0.05)).all(dim=-1).float()
+                pred_logic = logic_net(predictions).squeeze()
+                logic_loss = F.binary_cross_entropy_with_logits(pred_logic, true_logic)
+                logic_opt.zero_grad()
+                logic_loss.backward()
+                logic_opt.step()
+
+                model_y.train()
+                logic_net.eval()
+
+                y_preds, latent = model_y(y_l)
+                loss = F.cross_entropy(y_preds, targets_l)
 
                 ixs = np.arange(len(y_preds))
                 mu1, lv1, mu2_, lv2_ = latent
@@ -418,7 +445,7 @@ def main():
                 loss += args.unl2_weight*(kld) #+ kld2)
 
                 # now do the unsup part
-                if counter > 50:
+                if counter > -1:
                     y_preds_u, latent_u = model_y(y_u)
                     log_prob = torch.log_softmax(y_preds_u, dim=1)
 
@@ -431,6 +458,14 @@ def main():
                     kld2u = -0.5 * (1 + lv2u[0] - mu2u[0].pow(2) - lv2u[0].exp()).sum(dim=-1).sum() / len(mu1u_)
                     unsup_loss = (log_prob.exp()*(-log_prob + args.unl2_weight*kldu)).sum(dim=1).mean() #+ args.unl2_weight*kld2u
                     loss += args.unl_weight * unsup_loss
+
+                    gen_preds = model_y.generate_samples(500)
+                    predictions = torch.softmax(gen_preds, dim=-1)
+                    true_logic = ((predictions > 0.95) | (predictions > 0.05)).all(dim=-1)
+                    pred_logic = logic_net(predictions).squeeze()
+                    logic_loss2 = F.binary_cross_entropy_with_logits(pred_logic, torch.ones_like(pred_logic), reduction="none")
+                    logic_loss2 = logic_loss2[~true_logic].sum() / (len(pred_logic)*len(pred_logic[0]))
+                    loss += logic_loss2
 
                 return loss, y_preds
 
