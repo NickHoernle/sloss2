@@ -6,6 +6,7 @@ import random
 from tqdm import tqdm
 import torch
 from torch.optim import SGD, Adam
+from torch.optim.lr_scheduler import StepLR
 import torch.utils.data as data
 from torch.utils.data import DataLoader, Subset
 import torch.nn.functional as F
@@ -281,7 +282,8 @@ def main():
         model_y = DecoderModel(num_classes, z_dim)
         model_y.to(device)
         model_y.apply(init_weights)
-        optimizer_y = Adam(model_y.get_decoder_params(), lr=1e-3, weight_decay=1e-5)
+        optimizer_y = Adam(model_y.get_decoder_params(), lr=1e-2)
+        scheduler = StepLR(optimizer_y, step_size=10, gamma=0.7)
 
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
@@ -518,6 +520,8 @@ def main():
 
         global counter
         counter += 1
+
+        scheduler.step()
 
     engine = Engine()
     engine.hooks['on_sample'] = on_sample
