@@ -190,10 +190,7 @@ class DecoderModel(nn.Module):
 
         # random variable
         self.cluster_mean_mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
-        self.cluster_mean_logvars = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
-
-        # train by maximum likelihood
-        self.cluster_logvars = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
+        self.net = nn.Sequential(nn.Linear(z_dim, 50), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
 
         self.nc = num_classes
         self.zdim = z_dim
@@ -201,16 +198,13 @@ class DecoderModel(nn.Module):
 
     def forward(self, x):
 
-        mus = self.cluster_mean_mus.unsqueeze(0).repeat(len(x), 1, 1)
-        logvars = self.cluster_mean_logvars.unsqueeze(0).repeat(len(x), 1, 1)
+        log_pis = torch.log_softmax(x, dim=1)
 
-        sample_mus = reparameterise(mus, logvars)
-        sample_logvars = self.cluster_logvars.unsqueeze(0).repeat(len(x), 1, 1)
+        cluster_mus = self.cluster_mean_mus.unsqueeze(0).repeat(len(x), 1, 1)
+        cluster_logvars = torch.zeros_like(cluster_mus)
 
-        log_probs = log_normal(x.unsqueeze(1).repeat(1, self.nc, 1), sample_mus, sample_logvars)
-
-        predictions = log_probs
-        return predictions, (self.cluster_mean_mus, self.cluster_mean_logvars)
+        zs = reparameterise(cluster_mus, cluster_logvars).split(1, dim=1)
+        return torch.stack([self.net(z.squeeze(1)) for z in zs], dim=1), (log_pis)
 
 
 def main():
@@ -379,24 +373,28 @@ def main():
                 # weight = 1.
 
                 y_preds, latent = model_y(y_l)
-                loss = F.cross_entropy(y_preds, targets_l).mean()
-                mu, logvar = latent
-                kld = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)).sum()/len(y_l)
-                loss += kld
+                log_pis = latent
+
+                tgts = one_hot_embedding(targets_l, num_classes, device=device)
+                idxs = np.arange(len(y_l))
+                predictions = y_preds[idxs, targets_l]
+
+                loss = F.binary_cross_entropy_with_logits(predictions, tgts, reduction="none").sum(dim=1).mean()
+                loss += F.nll_loss(log_pis, targets_l)
 
                 # now do the unsup part
-                if counter > 50:
-                    y_preds_u, latent_u = model_y(y_u)
-                    log_prob = torch.log_softmax(y_preds_u, dim=1)
+                # if counter > 50:
+                #     y_preds_u, latent_u = model_y(y_u)
+                #     log_prob = torch.log_softmax(y_preds_u, dim=1)
+                #
+                #     # evaluate the kl for each cluster
+                #     mu_u, logvar_u = latent_u
+                #     kld_u = (-0.5 * torch.sum(1 + logvar_u - mu_u.pow(2) - logvar_u.exp(), dim=1)).sum()/len(y_l)
+                #
+                #     unsup_loss = (log_prob.exp() * (-log_prob)).sum(dim=1).mean() + kld_u
+                #     loss += args.unl_weight * unsup_loss
 
-                    # evaluate the kl for each cluster
-                    mu_u, logvar_u = latent_u
-                    kld_u = (-0.5 * torch.sum(1 + logvar_u - mu_u.pow(2) - logvar_u.exp(), dim=1)).sum()/len(y_l)
-
-                    unsup_loss = (log_prob.exp() * (-log_prob)).sum(dim=1).mean() + kld_u
-                    loss += args.unl_weight * unsup_loss
-
-                return loss, y_preds
+                return loss, predictions
 
             return loss, y_l
 
