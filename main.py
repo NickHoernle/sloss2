@@ -372,7 +372,7 @@ def main():
                 recon_losses = []
 
                 y_preds, latent = model_y(y_l)
-                loss = F.nll_loss(y_preds, targets_l, reduction="none")
+                loss = F.cross_entropy(y_preds, targets_l, reduction="none").mean()
                 # loss = torch.stack(recon_losses, dim=1).sum(dim=1).mean()
 
                 mu1, lv1 = latent
