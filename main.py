@@ -199,8 +199,8 @@ class DecoderModel(nn.Module):
         logvar = self.logvar(x)
 
         z = reparameterise(mu, logvar)
-
-        predictions = z + self.net(z)
+        predictions = self.net(z)
+        
         return predictions, (mu, logvar)
 
 
