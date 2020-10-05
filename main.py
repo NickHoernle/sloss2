@@ -192,6 +192,9 @@ class DecoderModel(nn.Module):
         self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
 
         self.cluster_mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
+        self.cluster_logvars = nn.Parameter(
+            torch.randn(num_classes, z_dim), requires_grad=True
+        )
 
         self.net = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
 
@@ -219,12 +222,13 @@ class DecoderModel(nn.Module):
         z = reparameterise(mu, logvar)
 
         cluster_mus = self.cluster_mus.unsqueeze(0).repeat(len(mu), 1, 1)
-        cluster_logvars = torch.ones_like(cluster_mus)
+        cluster_logvars = self.cluster_logvars.unsqueeze(0).repeat(len(mu), 1, 1)
+
         log_probs = log_normal(z.unsqueeze(1).repeat(1, self.nc, 1), cluster_mus, cluster_logvars)
 
         predictions = log_probs + self.net(log_probs)
 
-        return predictions, (mu, logvar, self.cluster_mus)
+        return predictions, (mu, logvar, cluster_mus, cluster_logvars)
 
 
 def main():
@@ -287,7 +291,7 @@ def main():
         model_y = DecoderModel(num_classes, z_dim)
         model_y.to(device)
         model_y.apply(init_weights)
-        optimizer_y = Adam(model_y.get_decoder_params(), lr=1e-2)
+        optimizer_y = Adam(model_y.get_decoder_params(), lr=1e-3)
         scheduler = StepLR(optimizer_y, step_size=10, gamma=0.7)
 
     def create_optimizer(args, lr):
@@ -406,14 +410,14 @@ def main():
                 y_preds, latent = model_y(y_l)
                 loss = F.cross_entropy(y_preds, targets_l).mean()
 
-                mu, logvar, mu_cluster = latent
-                mu_diff = (mu_cluster.unsqueeze(0).repeat(len(mu), 1, 1) - mu.unsqueeze(1).repeat(1, num_classes, 1))
-                lv = logvar.unsqueeze(1).repeat(1, num_classes, 1)
-
                 ixs = np.arange(len(y_preds))
-                KLD = -0.5 * (1 + lv - mu_diff.pow(2) - lv.exp())
+                mu1, lv1, mu2_, lv2_ = latent
+                mu2 = mu2_[ixs, targets_l]
+                lv2 = lv2_[ixs, targets_l]
 
-                loss += weight*KLD[ixs, targets_l].sum(dim=1).mean()
+                kld = weight * (0.5 * ((lv2 - lv1) + (lv1.exp() + (mu1 - mu2).pow(2)) / (lv2.exp()) - 1).sum(dim=1)).mean()
+                # kld2 = -0.5 * torch.sum(1 + lv2_[0] - mu2_[0].pow(2) - lv2_[0].exp(), dim=-1).sum() / len(mu1)
+                loss += kld  # + kld2)
 
                 # now do the unsup part
                 if counter > 50:
