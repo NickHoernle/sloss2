@@ -191,7 +191,7 @@ class DecoderModel(nn.Module):
         self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
 
         # self.net = nn.Sequential(nn.Linear(num_classes, 100), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
-        self.net = nn.Parameter(torch.randn(num_classes, num_classes), requires_grad=True)
+        self.net = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
         self.apply(init_weights)
 
     def forward(self, x):
@@ -201,8 +201,8 @@ class DecoderModel(nn.Module):
         z = reparameterise(mu, logvar)
         dir_sample = torch.log_softmax(z, dim=1)
 
-        predictions = dir_sample.exp().mm(self.net.softmax(dim=1))
-        return predictions.log(), (mu, logvar)
+        predictions = dir_sample + self.net(z)
+        return predictions, (mu, logvar)
 
 
 def main():
@@ -368,13 +368,12 @@ def main():
 
             elif args.lp:
                 weight = np.min([1., np.max([0, 0.05 * (counter - 20)])])
-                # weight = 1.
 
                 recon_losses = []
-                for i in range(10):
-                    y_preds, latent = model_y(y_l)
-                    recon_losses.append(F.nll_loss(y_preds, targets_l, reduction="none"))
-                loss = torch.stack(recon_losses, dim=1).mean(dim=1).mean()
+
+                y_preds, latent = model_y(y_l)
+                loss = F.nll_loss(y_preds, targets_l, reduction="none")
+                # loss = torch.stack(recon_losses, dim=1).sum(dim=1).mean()
 
                 mu1, lv1 = latent
                 mu2, lv2 = mu_prior, np.log(sigma_prior)
