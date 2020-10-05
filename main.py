@@ -192,9 +192,7 @@ class DecoderModel(nn.Module):
         self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
 
         self.cluster_mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
-        self.cluster_logvars = nn.Parameter(
-            torch.randn(num_classes, z_dim), requires_grad=True
-        )
+        self.cluster_logvars = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
 
         self.net = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
 
@@ -218,7 +216,6 @@ class DecoderModel(nn.Module):
         mu = self.mu(x)
         logvar = self.logvar(x)
 
-        # resample
         z = reparameterise(mu, logvar)
 
         cluster_mus = self.cluster_mus.unsqueeze(0).repeat(len(mu), 1, 1)
@@ -298,7 +295,6 @@ def main():
         print('creating optimizer with lr = ', lr)
         params_ = [v for v in params.values() if v.requires_grad]
         params_ += model_y.get_encoder_params()
-        # params_ += list(model_y.parameters())
         return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
 
     optimizer = create_optimizer(args, args.lr)
@@ -416,7 +412,7 @@ def main():
                 lv2 = lv2_[ixs, targets_l]
 
                 kld = weight * (0.5 * ((lv2 - lv1) + (lv1.exp() + (mu1 - mu2).pow(2)) / (lv2.exp()) - 1).sum(dim=1)).mean()
-                kld2 = weight * (-0.5 * torch.sum(1 + lv2_[0] - mu2_[0].pow(2) - lv2_[0].exp(), dim=-1).sum() / len(mu1))
+                kld2 = (-0.5 * torch.sum(1 + lv2_[0] - mu2_[0].pow(2) - lv2_[0].exp(), dim=-1)).mean()
                 loss += kld + kld2
 
                 # now do the unsup part
