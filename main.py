@@ -190,12 +190,7 @@ class DecoderModel(nn.Module):
         self.mu = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
         self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
 
-        self.cluster_mus = nn.Parameter(
-            torch.randn(num_classes, z_dim), requires_grad=True
-        )
-        self.cluster_logvars = nn.Parameter(
-            torch.randn(num_classes, z_dim), requires_grad=True
-        )
+        self.cluster_mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
 
         self.net = nn.Sequential(nn.Linear(z_dim, 50), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
 
@@ -215,15 +210,11 @@ class DecoderModel(nn.Module):
         mu = self.mu(x)
         logvar = self.logvar(x)
 
-        c_ms = self.cluster_mus.unsqueeze(0).repeat(len(x), 1, 1)
-        c_lv = self.cluster_logvars.unsqueeze(0).repeat(len(x), 1, 1)
-
         # resample
         z = reparameterise(mu, logvar)
-        predictions = self.net(z)
-        # predictions = log_normal(z.unsqueeze(1).repeat(1, self.nc, 1), c_ms, c_lv)
+        predictions = z + self.net(z)
 
-        return predictions, (mu, logvar, c_ms, c_lv)
+        return predictions, (mu, logvar, self.cluster_mus)
 
 
 def main():
@@ -402,32 +393,41 @@ def main():
                 #
                 # optimizer.zero_grad()
                 y_preds, latent = model_y(y_l)
-                loss = F.binary_cross_entropy(y_preds, targets_l, reduction="none").sum(dim=1).mean()
+                loss = F.cross_entropy(y_preds, targets_l).mean()
+
+                mu, logvar, mu_cluster = latent
+                mu_diff = (mu_cluster.unsqueeze(0).repeat(len(mu), 1, 1) - mu.unsqueeze(1).repeat(1, num_classes, 1))
+                lv = logvar.unsqueeze(1).repeat(1, num_classes, 1)
 
                 ixs = np.arange(len(y_preds))
-                mu1, lv1, mu2_, lv2_ = latent
-                mu2 = mu2_[ixs, targets_l]
-                lv2 = lv2_[ixs, targets_l]
+                KLD = -0.5 * (1 + lv - mu_diff.pow(2) - lv.exp())
 
-                kld = weight*(0.5*((lv2-lv1) + (lv1.exp() + (mu1 - mu2).pow(2))/(lv2.exp()) - 1).sum(dim=1)).mean()
-                kld2 = -0.5 * torch.sum(1 + lv2_[0] - mu2_[0].pow(2) - lv2_[0].exp(), dim=-1).sum()/len(mu1)
+                loss += KLD[ixs, targets_l].sum(dim=1).mean()
 
-                loss += args.unl2_weight*(kld) #+ kld2)
+                # ixs = np.arange(len(y_preds))
+                # mu1, lv1, mu2_, lv2_ = latent
+                # mu2 = mu2_[ixs, targets_l]
+                # lv2 = lv2_[ixs, targets_l]
+
+                # kld = weight*(0.5*((lv2-lv1) + (lv1.exp() + (mu1 - mu2).pow(2))/(lv2.exp()) - 1).sum(dim=1)).mean()
+                # kld2 = -0.5 * torch.sum(1 + lv2_[0] - mu2_[0].pow(2) - lv2_[0].exp(), dim=-1).sum()/len(mu1)
+                #
+                # loss += args.unl2_weight*(kld) #+ kld2)
 
                 # now do the unsup part
-                if counter > 50:
-                    y_preds_u, latent_u = model_y(y_u)
-                    log_prob = torch.log_softmax(y_preds_u, dim=1)
-
-                    # evaluate the kl for each cluster
-                    mu1u_, lv1u_, mu2u, lv2u = latent_u
-                    mu1u = mu1u_.unsqueeze(1).repeat(1, num_classes, 1)
-                    lv1u = lv1u_.unsqueeze(1).repeat(1, num_classes, 1)
-
-                    kldu = weight * (0.5 * ((lv2u - lv1u) + (lv1u.exp() + (mu1u - mu2u).pow(2)) / (lv2u.exp()) - 1).sum(dim=-1))
-                    kld2u = -0.5 * (1 + lv2u[0] - mu2u[0].pow(2) - lv2u[0].exp()).sum(dim=-1).sum() / len(mu1u_)
-                    unsup_loss = (log_prob.exp()*(-log_prob + args.unl2_weight*kldu)).sum(dim=1).mean() #+ args.unl2_weight*kld2u
-                    loss += args.unl_weight * unsup_loss
+                # if counter > 50:
+                #     y_preds_u, latent_u = model_y(y_u)
+                #     log_prob = torch.log_softmax(y_preds_u, dim=1)
+                #
+                #     # evaluate the kl for each cluster
+                #     mu1u_, lv1u_, mu2u, lv2u = latent_u
+                #     mu1u = mu1u_.unsqueeze(1).repeat(1, num_classes, 1)
+                #     lv1u = lv1u_.unsqueeze(1).repeat(1, num_classes, 1)
+                #
+                #     kldu = weight * (0.5 * ((lv2u - lv1u) + (lv1u.exp() + (mu1u - mu2u).pow(2)) / (lv2u.exp()) - 1).sum(dim=-1))
+                #     kld2u = -0.5 * (1 + lv2u[0] - mu2u[0].pow(2) - lv2u[0].exp()).sum(dim=-1).sum() / len(mu1u_)
+                #     unsup_loss = (log_prob.exp()*(-log_prob + args.unl2_weight*kldu)).sum(dim=1).mean() #+ args.unl2_weight*kld2u
+                #     loss += args.unl_weight * unsup_loss
 
                 return loss, y_preds
 
