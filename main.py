@@ -384,21 +384,17 @@ def main():
                 kld = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)).sum()/len(y_l)
                 loss += kld
 
-                # # now do the unsup part
-                # if counter > 50:
-                #     y_preds_u, latent_u = model_y(y_u)
-                #     log_prob = torch.log_softmax(y_preds_u, dim=1)
-                #
-                #     # evaluate the kl for each cluster
-                #     mu1u_, lv1u_, mu2u, lv2u = latent_u
-                #     mu1u = mu1u_.unsqueeze(1).repeat(1, num_classes, 1)
-                #     lv1u = lv1u_.unsqueeze(1).repeat(1, num_classes, 1)
-                #
-                #     kldu = weight * (0.5 * ((lv2u - lv1u) + (lv1u.exp() + (mu1u - mu2u).pow(2)) / (lv2u.exp()) - 1).sum(dim=-1))
-                #     KLD_u = weight * (-0.5 * torch.sum(1 + lv2u[0] - mu2u[0].pow(2) - lv2u[0].exp(), dim=-1)).mean()
-                #     unsup_loss = (log_prob.exp() * (-log_prob + kldu)).sum(dim=1).mean()
-                #
-                #     loss += args.unl_weight * (unsup_loss + KLD_u)
+                # now do the unsup part
+                if counter > -1:
+                    y_preds_u, latent_u = model_y(y_u)
+                    log_prob = torch.log_softmax(y_preds_u, dim=1)
+
+                    # evaluate the kl for each cluster
+                    mu_u, logvar_u = latent_u
+                    kld_u = (-0.5 * torch.sum(1 + logvar_u - mu_u.pow(2) - logvar_u.exp(), dim=1)).sum()/len(y_l)
+
+                    unsup_loss = (log_prob.exp() * (-log_prob)).sum(dim=1).mean() + kld_u
+                    loss += args.unl_weight * unsup_loss
 
                 return loss, y_preds
 
