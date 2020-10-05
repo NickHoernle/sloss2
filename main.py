@@ -383,15 +383,23 @@ def main():
                 loss += F.nll_loss(log_pis, targets_l)
 
                 # now do the unsup part
-                # if counter > 50:
-                #     y_preds_u, latent_u = model_y(y_u)
-                #     log_prob = torch.log_softmax(y_preds_u, dim=1)
-                #     log_pis_u = latent_u
-                #     cluster_probs = torch.log_softmax(log_pis_u, dim=1)
+                if counter > 50:
+                    y_preds_u, latent_u = model_y(y_u)
+                    log_pis_u = latent_u
+                    unsup_loss = []
+                    for tgt in range(num_classes):
+                        target = torch.zeros_like(log_pis_u)
+                        target[:, tgt] = 1.0
+                        unsup_loss.append(F.binary_cross_entropy_with_logits(y_preds_u[:,tgt], target, reduction="none").sum(dim=1))
+
+                    unsup_loss_ = torch.stack(unsup_loss, dim=1)
+                    unsup_losses = (log_pis_u.exp()*unsup_loss_).sum(dim=1).mean() + (log_pis_u.exp()*log_pis_u).sum(dim=1).mean()
+                #     # cluster_probs = torch.log_softmax(log_pis_u, dim=1)
                 #
+                #     log_prob = torch.log_softmax(y_preds_u, dim=1)
                 #     # evaluate the kl for each cluster
                 #     unsup_loss = (log_prob.exp() * (-log_prob)).sum(dim=1).mean()
-                #     loss += args.unl_weight * unsup_loss
+                    loss += args.unl_weight * unsup_losses
 
                 return loss, predictions
 
