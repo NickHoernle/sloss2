@@ -188,42 +188,29 @@ class DecoderModel(nn.Module):
     def __init__(self, num_classes, z_dim=2):
         super().__init__()
 
-        self.mu = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
-        self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
+        # random variable
+        self.cluster_mean_mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
+        self.cluster_mean_logvars = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
 
-        self.cluster_mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
-
-        self.net = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
-
-        nh = 50
+        # train by maximum likelihood
+        self.cluster_logvars = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
 
         self.nc = num_classes
         self.zdim = z_dim
         self.apply(init_weights)
 
-    @property
-    def decoder_params(self):
-        return [k for k, v in self.named_parameters() if ("net" in k) or ("cluster_mus" in k)]
-
-    def get_decoder_params(self):
-        return [p for k, p in self.named_parameters() if k in self.decoder_params]
-
-    def get_encoder_params(self):
-        return [p for k, p in self.named_parameters() if k not in self.decoder_params]
-
     def forward(self, x):
-        mu = self.mu(x)
-        logvar = self.logvar(x)
 
-        z = reparameterise(mu, logvar)
+        mus = self.cluster_mean_mus.unsqueeze(0).repeat(len(x), 1, 1)
+        logvars = self.cluster_mean_logvars.unsqueeze(0).repeat(len(x), 1, 1)
 
-        cluster_mus = self.cluster_mus.unsqueeze(0).repeat(len(mu), 1, 1)
-        cluster_logvars = torch.zeros_like(cluster_mus)
+        sample_mus = reparameterise(mus, logvars)
+        sample_logvars = self.cluster_logvars.unsqueeze(0).repeat(len(x), 1, 1)
 
-        log_probs = log_normal(z.unsqueeze(1).repeat(1, self.nc, 1), cluster_mus, cluster_logvars)
+        log_probs = log_normal(x.unsqueeze(1).repeat(1, self.nc, 1), sample_mus, sample_logvars)
 
-        predictions = log_probs #+ self.net(log_probs)
-        return predictions, (mu, logvar, cluster_mus)
+        predictions = log_probs
+        return predictions, (self.cluster_mean_mus, self.cluster_mean_logvars)
 
 
 def main():
@@ -286,13 +273,13 @@ def main():
         model_y = DecoderModel(num_classes, z_dim)
         model_y.to(device)
         model_y.apply(init_weights)
-        optimizer_y = Adam(model_y.get_decoder_params(), lr=1e-3)
-        scheduler = StepLR(optimizer_y, step_size=10, gamma=0.7)
+        # optimizer_y = Adam(model_y.get_decoder_params(), lr=1e-3)
+        # scheduler = StepLR(optimizer_y, step_size=10, gamma=0.7)
 
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
         params_ = [v for v in params.values() if v.requires_grad]
-        params_ += model_y.get_encoder_params()
+        params_ += model_y.parameters()
         return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
 
     optimizer = create_optimizer(args, args.lr)
@@ -388,28 +375,13 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                weight = np.min([1., np.max([0, 0.05 * (counter)])])
+                # weight = np.min([1., np.max([0, 0.05 * (counter)])])
                 # weight = 1.
 
-                model_y.train()
-                # do decoder first
-                y_preds, latent = model_y(y_l.detach())
-                loss = F.cross_entropy(y_preds, targets_l).mean()
-
-                optimizer_y.zero_grad()
-                loss.backward()
-                optimizer_y.step()
-
-                model_y.eval()
                 y_preds, latent = model_y(y_l)
                 loss = F.cross_entropy(y_preds, targets_l).mean()
-
-                ixs = np.arange(len(y_preds))
-                mu1, lv1, mu2_ = latent
-                mu2 = mu2_[ixs, targets_l]
-                mu_diff = mu1 - mu2
-
-                kld = weight * (-0.5 * torch.sum(1 + lv1 - mu_diff.pow(2) - lv1.exp(), dim=1)).mean()
+                mu, logvar = latent
+                kld = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)).sum()/len(y_l)
                 loss += kld
 
                 # # now do the unsup part
