@@ -386,12 +386,11 @@ def main():
                 # if counter > 50:
                 #     y_preds_u, latent_u = model_y(y_u)
                 #     log_prob = torch.log_softmax(y_preds_u, dim=1)
+                #     log_pis_u = latent_u
+                #     cluster_probs = torch.log_softmax(log_pis_u, dim=1)
                 #
                 #     # evaluate the kl for each cluster
-                #     mu_u, logvar_u = latent_u
-                #     kld_u = (-0.5 * torch.sum(1 + logvar_u - mu_u.pow(2) - logvar_u.exp(), dim=1)).sum()/len(y_l)
-                #
-                #     unsup_loss = (log_prob.exp() * (-log_prob)).sum(dim=1).mean() + kld_u
+                #     unsup_loss = (log_prob.exp() * (-log_prob)).sum(dim=1).mean()
                 #     loss += args.unl_weight * unsup_loss
 
                 return loss, predictions
@@ -405,15 +404,16 @@ def main():
         y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
         if args.lp:
             y_full, latent = model_y(y)
+            log_pis = latent
 
             # q_mu, q_logvar, log_alpha = latent
             # preds = (log_alpha.exp().unsqueeze(-1) * y_full).sum(dim=1)
             #
             # tgts = one_hot_embedding(targets, num_classes, device=device)
             # recon_loss = F.binary_cross_entropy_with_logits(y_full, tgts)\
-            recon_loss = F.cross_entropy(y_full, targets)
+            recon_loss = F.cross_entropy(log_pis, targets)
 
-            return recon_loss.mean(), y_full
+            return recon_loss.mean(), log_pis
 
         if args.dataset == "awa2":
             return F.binary_cross_entropy_with_logits(y, targets.float()), y
