@@ -200,11 +200,15 @@ class DecoderModel(nn.Module):
         self.zdim = z_dim
         self.apply(init_weights)
 
+    @property
+    def decoder_params(self):
+        return [k for k, v in self.named_parameters() if ("net" in k) or ("cluster_mus" in k)]
+
     def get_decoder_params(self):
-        return [p for k, p in self.named_parameters() if k in ("cluster_mus", "cluster_logvars")]
+        return [p for k, p in self.named_parameters() if k in self.decoder_params]
 
     def get_encoder_params(self):
-        return list(self.mu.parameters()) + list(self.logvar.parameters())
+        return [p for k, p in self.named_parameters() if k not in self.decoder_params]
 
     def forward(self, x):
         mu = self.mu(x)
@@ -277,13 +281,13 @@ def main():
         model_y = DecoderModel(num_classes, z_dim)
         model_y.to(device)
         model_y.apply(init_weights)
-        # optimizer_y = Adam(model_y.get_decoder_params(), lr=1e-3, weight_decay=1e-5)
+        optimizer_y = Adam(model_y.get_decoder_params(), lr=1e-3, weight_decay=1e-5)
 
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
         params_ = [v for v in params.values() if v.requires_grad]
-        # params_ += model_y.get_encoder_params()
-        params_ += list(model_y.parameters())
+        params_ += model_y.get_encoder_params()
+        # params_ += list(model_y.parameters())
         return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
 
     optimizer = create_optimizer(args, args.lr)
@@ -382,16 +386,16 @@ def main():
                 weight = np.min([1., np.max([0, 0.05 * (counter - 20)])])
                 # weight = 1.
 
-                # if np.random.uniform(0, 1) >= 0.8:
-                #     model_y.train()
-                #     y_preds, latent = model_y(y_l.detach())
-                #     loss = F.cross_entropy(y_preds, targets_l)
-                #     optimizer_y.zero_grad()
-                #     loss.backward()
-                #     optimizer_y.step()
-                #     model_y.eval()
-                #
-                # optimizer.zero_grad()
+                model_y.train()
+                # do decoder first
+                y_preds, latent = model_y(y_l.detach())
+                loss = F.cross_entropy(y_preds, targets_l).mean()
+
+                optimizer_y.zero_grad()
+                loss.backward()
+                optimizer_y.step()
+
+                model_y.eval()
                 y_preds, latent = model_y(y_l)
                 loss = F.cross_entropy(y_preds, targets_l).mean()
 
@@ -403,6 +407,7 @@ def main():
                 KLD = -0.5 * (1 + lv - mu_diff.pow(2) - lv.exp())
 
                 loss += KLD[ixs, targets_l].sum(dim=1).mean()
+
 
                 # ixs = np.arange(len(y_preds))
                 # mu1, lv1, mu2_, lv2_ = latent
