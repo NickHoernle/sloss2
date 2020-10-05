@@ -201,7 +201,7 @@ class DecoderModel(nn.Module):
         z = reparameterise(mu, logvar)
         dir_sample = torch.log_softmax(z, dim=1)
 
-        predictions = dir_sample + self.net(dir_sample)
+        predictions = dir_sample + self.net(z)
         return predictions, (mu, logvar)
 
 
