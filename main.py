@@ -312,8 +312,8 @@ def main():
 
     def compute_loss(sample):
 
-        alpha = 1./num_classes**2
-        mu_prior = (np.log(alpha) - 1 / np.log(alpha)) * num_classes ** 2
+        alpha = 1./num_classes
+        mu_prior = np.log(alpha) - 1/num_classes*num_classes*np.log(alpha)
         sigma_prior = (1. / alpha * (1 - 2. / num_classes) + 1 / (num_classes ** 2) * num_classes / alpha)
         log_det_sigma = num_classes * np.log(sigma_prior)
 
@@ -370,15 +370,14 @@ def main():
                 weight = np.min([1., np.max([0, 0.05 * (counter - 20)])])
 
                 recon_losses = []
+                for i in range(10):
+                    y_preds, latent = model_y(y_l)
+                    recon_losses.append(F.cross_entropy(y_preds, targets_l, reduction="none"))
 
-                y_preds, latent = model_y(y_l)
-                loss = F.cross_entropy(y_preds, targets_l, reduction="none").mean()
-                # loss = torch.stack(recon_losses, dim=1).sum(dim=1).mean()
-
+                loss = torch.stack(recon_losses, dim=1).mean(dim=1).mean()
                 mu1, lv1 = latent
                 mu2, lv2 = mu_prior, np.log(sigma_prior)
                 kld = weight * (0.5 * ((lv2 - lv1) + (lv1.exp() + (mu1 - mu2).pow(2)) / (sigma_prior) - 1).sum(dim=1)).mean()
-
                 loss += kld
 
                 # now do the unsup part
