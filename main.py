@@ -192,7 +192,6 @@ class DecoderModel(nn.Module):
         self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
 
         self.cluster_mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
-        self.cluster_logvars = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
 
         self.net = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
 
@@ -204,7 +203,7 @@ class DecoderModel(nn.Module):
 
     @property
     def decoder_params(self):
-        return [k for k, v in self.named_parameters() if ("net" in k) or ("cluster_mus" in k) or ("cluster_logvars" in k)]
+        return [k for k, v in self.named_parameters() if ("net" in k) or ("cluster_mus" in k)]
 
     def get_decoder_params(self):
         return [p for k, p in self.named_parameters() if k in self.decoder_params]
@@ -219,13 +218,12 @@ class DecoderModel(nn.Module):
         z = reparameterise(mu, logvar)
 
         cluster_mus = self.cluster_mus.unsqueeze(0).repeat(len(mu), 1, 1)
-        cluster_logvars = self.cluster_logvars.unsqueeze(0).repeat(len(mu), 1, 1)
+        cluster_logvars = torch.zeros_like(cluster_mus)
 
         log_probs = log_normal(z.unsqueeze(1).repeat(1, self.nc, 1), cluster_mus, cluster_logvars)
 
-        predictions = log_probs + self.net(log_probs)
-
-        return predictions, (mu, logvar, cluster_mus, cluster_logvars)
+        predictions = log_probs #+ self.net(log_probs)
+        return predictions, (mu, logvar, cluster_mus)
 
 
 def main():
@@ -390,7 +388,7 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                weight = np.min([1., np.max([0, 0.05 * (counter - 20)])])
+                weight = np.min([1., np.max([0, 0.05 * (counter)])])
                 # weight = 1.
 
                 model_y.train()
@@ -407,29 +405,28 @@ def main():
                 loss = F.cross_entropy(y_preds, targets_l).mean()
 
                 ixs = np.arange(len(y_preds))
-                mu1, lv1, mu2_, lv2_ = latent
+                mu1, lv1, mu2_ = latent
                 mu2 = mu2_[ixs, targets_l]
-                lv2 = lv2_[ixs, targets_l]
+                mu_diff = mu1 - mu2
 
-                kld = weight * (0.5 * ((lv2 - lv1) + (lv1.exp() + (mu1 - mu2).pow(2)) / (lv2.exp()) - 1).sum(dim=1)).mean()
-                kld2 = weight * (-0.5 * torch.sum(1 + lv2_[0] - mu2_[0].pow(2) - lv2_[0].exp(), dim=-1)).mean()
-                loss += kld + kld2
+                kld = weight * (-0.5 * torch.sum(1 + lv1 - mu_diff.pow(2) - lv1.exp(), dim=1)).mean()
+                loss += kld
 
-                # now do the unsup part
-                if counter > 50:
-                    y_preds_u, latent_u = model_y(y_u)
-                    log_prob = torch.log_softmax(y_preds_u, dim=1)
-
-                    # evaluate the kl for each cluster
-                    mu1u_, lv1u_, mu2u, lv2u = latent_u
-                    mu1u = mu1u_.unsqueeze(1).repeat(1, num_classes, 1)
-                    lv1u = lv1u_.unsqueeze(1).repeat(1, num_classes, 1)
-
-                    kldu = weight * (0.5 * ((lv2u - lv1u) + (lv1u.exp() + (mu1u - mu2u).pow(2)) / (lv2u.exp()) - 1).sum(dim=-1))
-                    KLD_u = weight * (-0.5 * torch.sum(1 + lv2u[0] - mu2u[0].pow(2) - lv2u[0].exp(), dim=-1)).mean()
-                    unsup_loss = (log_prob.exp() * (-log_prob + kldu)).sum(dim=1).mean()
-
-                    loss += args.unl_weight * (unsup_loss + KLD_u)
+                # # now do the unsup part
+                # if counter > 50:
+                #     y_preds_u, latent_u = model_y(y_u)
+                #     log_prob = torch.log_softmax(y_preds_u, dim=1)
+                #
+                #     # evaluate the kl for each cluster
+                #     mu1u_, lv1u_, mu2u, lv2u = latent_u
+                #     mu1u = mu1u_.unsqueeze(1).repeat(1, num_classes, 1)
+                #     lv1u = lv1u_.unsqueeze(1).repeat(1, num_classes, 1)
+                #
+                #     kldu = weight * (0.5 * ((lv2u - lv1u) + (lv1u.exp() + (mu1u - mu2u).pow(2)) / (lv2u.exp()) - 1).sum(dim=-1))
+                #     KLD_u = weight * (-0.5 * torch.sum(1 + lv2u[0] - mu2u[0].pow(2) - lv2u[0].exp(), dim=-1)).mean()
+                #     unsup_loss = (log_prob.exp() * (-log_prob + kldu)).sum(dim=1).mean()
+                #
+                #     loss += args.unl_weight * (unsup_loss + KLD_u)
 
                 return loss, y_preds
 
