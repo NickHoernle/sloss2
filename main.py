@@ -425,10 +425,13 @@ def main():
                     log_prob = torch.log_softmax(y_preds_u, dim=1)
 
                     # evaluate the kl for each cluster
-                    mu_u, logvar_u, mu_cluster_u = latent_u
-                    mu_diff_u = (mu_cluster_u.unsqueeze(0).repeat(len(mu_u), 1, 1) - mu_u.unsqueeze(1).repeat(1, num_classes,1))
-                    KLD_u = (-0.5 * (1 + lv - mu_diff.pow(2) - lv.exp())).sum(dim=-1)
-                    unsup_loss = log_prob.exp() * (-log_prob + KLD_u)
+                    mu1u_, lv1u_, mu2u, lv2u = latent_u
+                    mu1u = mu1u_.unsqueeze(1).repeat(1, num_classes, 1)
+                    lv1u = lv1u_.unsqueeze(1).repeat(1, num_classes, 1)
+
+                    kldu = weight * (0.5 * ((lv2u - lv1u) + (lv1u.exp() + (mu1u - mu2u).pow(2)) / (lv2u.exp()) - 1).sum(dim=-1))
+                    # KLD_u = (-0.5 * (1 + lv - mu_diff.pow(2) - lv.exp())).sum(dim=-1)
+                    unsup_loss = (log_prob.exp() * (-log_prob + kldu)).sum(dim=1).mean()
 
                     loss += args.unl_weight * unsup_loss
 
