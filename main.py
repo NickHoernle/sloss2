@@ -498,7 +498,7 @@ def main():
         global counter
         counter += 1
 
-        scheduler.step()
+        # scheduler.step()
 
     engine = Engine()
     engine.hooks['on_sample'] = on_sample
