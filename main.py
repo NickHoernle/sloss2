@@ -406,7 +406,7 @@ def main():
                 ixs = np.arange(len(y_preds))
                 KLD = -0.5 * (1 + lv - mu_diff.pow(2) - lv.exp())
 
-                loss += KLD[ixs, targets_l].sum(dim=1).mean()
+                loss += weight*KLD[ixs, targets_l].sum(dim=1).mean()
 
 
                 # ixs = np.arange(len(y_preds))
