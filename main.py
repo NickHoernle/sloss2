@@ -193,7 +193,7 @@ class DecoderModel(nn.Module):
 
         self.cluster_mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
 
-        self.net = nn.Sequential(nn.Linear(z_dim, 50), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
+        self.net = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
 
         nh = 50
 
@@ -217,7 +217,12 @@ class DecoderModel(nn.Module):
 
         # resample
         z = reparameterise(mu, logvar)
-        predictions = z + self.net(z)
+
+        cluster_mus = self.cluster_mus.unsqueeze(0).repeat(len(mu), 1, 1)
+        cluster_logvars = torch.ones_like(cluster_mus)
+        log_probs = log_normal(z.unsqueeze(1).repeat(1, self.nc, 1), cluster_mus, cluster_logvars)
+
+        predictions = log_probs + self.net(log_probs)
 
         return predictions, (mu, logvar, self.cluster_mus)
 
