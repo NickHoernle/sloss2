@@ -305,7 +305,7 @@ def main():
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
         params_ = [v for v in params.values() if v.requires_grad]
-        params_ += model_y.parameters()
+        params_ += model_y.get_local_params()
         return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
 
     optimizer = create_optimizer(args, args.lr)
@@ -412,13 +412,16 @@ def main():
                 zs, mu_, logvar_, cluster_mu_, cluseter_logvar_ = latent
                 kld = (-0.5 * torch.sum(1 + cluseter_logvar_ - cluster_mu_.pow(2) - cluseter_logvar_.exp(), dim=-1)).sum()/len(y_l)
                 loss += kld
+                optimizer_y.zero_grad()
+                loss.backward()
+                optimizer_y.step()
 
                 # encoder loss
-                log_preds, latent = model_y.forward_global(y_l.detach())
+                log_preds, latent = model_y.forward_global(y_l)
                 cmu = cluster_mu_.unsqueeze(0).repeat(len(y_l), 1, 1)[ixs, targets_l]
                 clv = cluseter_logvar_.unsqueeze(0).repeat(len(y_l), 1, 1)[ixs, targets_l]
                 nll = weight*-log_normal(zs, cmu, clv).mean()
-                loss += nll
+                loss = nll
 
                 return loss, log_preds[ixs, targets_l]
 
