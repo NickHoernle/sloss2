@@ -194,13 +194,14 @@ class DecoderModel(nn.Module):
 
         # global params
         self.cluster_means = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
+        self.cluster_lvariances = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
 
         self.nc = num_classes
         self.zdim = z_dim
         self.apply(init_weights)
 
     def get_global_params(self):
-        return [v for k, v in self.named_parameters() if ("cluster_means" in k)]
+        return [v for k, v in self.named_parameters() if ("cluster_means" in k) or ("cluster_lvariances" in k)]
 
     def get_local_params(self):
         return [v for k, v in self.named_parameters() if ("mu" in k) or ("logvar" in k)]
@@ -215,7 +216,7 @@ class DecoderModel(nn.Module):
 
         # evaluate cluster params
         cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
-        cluster_logvars = torch.zeros_like(cluster_mus)
+        cluster_logvars = self.cluster_lvariances.unsqueeze(0).repeat(len(x), 1, 1)
 
         # calculate log-prob
         log_probs = log_normal(zs, cluster_mus, cluster_logvars)
@@ -397,10 +398,9 @@ def main():
                 optimizer_y.step()
 
                 log_pis, (mu, logvar, cluster_mus) = model_y(y_l)
-                kld = (-0.5 * torch.sum(1 + logvar - (mu - cluster_mus[idx, targets_l, :]).pow(2) - logvar.exp(),
-                                        dim=-1))
+                kld = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1))
                 pred_loss = F.cross_entropy(log_pis, targets_l)
-                loss = (1-weight)*pred_loss + weight*kld.mean()
+                loss = pred_loss + weight*kld.mean()
 
                 return loss, log_pis
 
