@@ -387,19 +387,19 @@ def main():
             elif args.lp:
                 weight = np.min([1., np.max([0, 0.05 * (counter-20)])])
                 # weight = 1.
-
-                log_pis, (mu, logvar, cluster_mus) = model_y(y_l.detach())
                 idx = np.arange(len(y_l))
-                pred_loss = F.cross_entropy(log_pis, targets_l)
-                loss = pred_loss
-                optimizer_y.zero_grad()
-                loss.backward()
-                optimizer_y.step()
 
                 log_pis, (mu, logvar, cluster_mus) = model_y(y_l)
-                kld = weight*(-0.5 * torch.sum(1 + logvar - (mu - cluster_mus[idx, targets_l]).pow(2) - logvar.exp(), dim=-1))
+                kld = (-0.5 * torch.sum(1 + logvar - (mu - cluster_mus[idx, targets_l, :]).pow(2) - logvar.exp(), dim=-1))
+                # pred_loss = F.cross_entropy(log_pis, targets_l)
+                loss = kld.mean()
+
+                log_pis, (mu, logvar, cluster_mus) = model_y(y_l.detach())
                 pred_loss = F.cross_entropy(log_pis, targets_l)
-                loss = pred_loss + kld.mean()
+                loss_y = pred_loss
+                optimizer_y.zero_grad()
+                loss_y.backward()
+                optimizer_y.step()
 
                 return loss, log_pis
 
