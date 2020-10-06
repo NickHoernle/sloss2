@@ -188,23 +188,52 @@ class DecoderModel(nn.Module):
     def __init__(self, num_classes, z_dim=2):
         super().__init__()
 
-        # random variable
-        self.cluster_mean_mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
-        self.net = nn.Sequential(nn.Linear(z_dim, 50), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
+        # local params
+        self.mu = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
+        self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
+
+        # global params
+        self.logprob = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
+
+        self.cluster_means = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
 
         self.nc = num_classes
         self.zdim = z_dim
         self.apply(init_weights)
 
+    def get_global_params(self):
+        return [v for k, v in self.named_parameters() if ("cluster_means" in k) or ("logprob" in k)]
+
+    def get_local_params(self):
+        return [v for k, v in self.named_parameters() if ("mu" in k) or ("logvar" in k)]
+
+    def forward_global(self, x):
+        # encode
+        log_pis = torch.log_softmax(self.logprob(x), dim=1)
+        mu = self.mu(x).unsqueeze(1).repeat(1, self.nc, 1)
+        logvar = self.logvar(x).unsqueeze(1).repeat(1, self.nc, 1)
+
+        # cluster params
+        cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
+
+        return log_pis, (mu, logvar, cluster_mus)
+
     def forward(self, x):
+        # encode
+        mu = self.mu(x)
+        logvar = self.logvar(x)
 
-        log_pis = torch.log_softmax(x, dim=1)
+        # resample
+        zs = reparameterise(mu, logvar).unsqueeze(1).repeat(1, self.nc, 1)
 
-        cluster_mus = self.cluster_mean_mus.unsqueeze(0).repeat(len(x), 1, 1)
+        # evaluate cluster params
+        cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
         cluster_logvars = torch.zeros_like(cluster_mus)
 
-        zs = reparameterise(cluster_mus, cluster_logvars).split(1, dim=1)
-        return torch.stack([self.net(z.squeeze(1)) for z in zs], dim=1), (log_pis)
+        # calculate log-prob
+        log_probs = log_normal(zs, cluster_mus, cluster_logvars)
+
+        return log_probs, (mu, logvar, cluster_mus)
 
 
 def main():
@@ -267,13 +296,13 @@ def main():
         model_y = DecoderModel(num_classes, z_dim)
         model_y.to(device)
         model_y.apply(init_weights)
-        # optimizer_y = Adam(model_y.get_decoder_params(), lr=1e-3)
-        # scheduler = StepLR(optimizer_y, step_size=10, gamma=0.7)
+        optimizer_y = Adam(model_y.get_global_params(), lr=1e-3)
+        scheduler = StepLR(optimizer_y, step_size=10, gamma=0.7)
 
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
         params_ = [v for v in params.values() if v.requires_grad]
-        params_ += model_y.parameters()
+        params_ += model_y.get_local_params()
         return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
 
     optimizer = create_optimizer(args, args.lr)
@@ -372,36 +401,23 @@ def main():
                 # weight = np.min([1., np.max([0, 0.05 * (counter)])])
                 # weight = 1.
 
-                y_preds, latent = model_y(y_l)
-                log_pis = latent
+                log_pis, (mu, logvar, cluster_mus) = model_y.forward_global(y_l.detach())
+                kld = -0.5 * torch.sum(1 + logvar - (mu-cluster_mus).pow(2) - logvar.exp(), dim=-1)
+                idx = np.arange(len(y_l))
+                weighted_kld = kld[idx, targets_l]
+                pred_loss = F.nll_loss(log_pis, targets_l)
+                loss = pred_loss + weighted_kld.mean()
+                optimizer_y.zero_grad()
+                loss.backward()
+                optimizer_y.step()
 
-                tgts = one_hot_embedding(targets_l, num_classes, device=device)
-                idxs = np.arange(len(y_l))
-                predictions = y_preds[idxs, targets_l]
+                log_pis, (mu, logvar, cluster_mus) = model_y(y_l)
+                idx = np.arange(len(y_l))
+                kld = -0.5 * torch.sum(1 + logvar - (mu - cluster_mus[idx, targets_l]).pow(2) - logvar.exp(), dim=-1)
+                pred_loss = F.cross_entropy(log_pis, targets_l)
+                loss = pred_loss + kld.mean()
 
-                loss = F.binary_cross_entropy_with_logits(predictions, tgts, reduction="none").sum(dim=1).mean()
-                loss += F.nll_loss(log_pis, targets_l)
-
-                # now do the unsup part
-                if counter > 50:
-                    y_preds_u, latent_u = model_y(y_u)
-                    log_pis_u = latent_u
-                    unsup_loss = []
-                    for tgt in range(num_classes):
-                        target = torch.zeros_like(log_pis_u)
-                        target[:, tgt] = 1.0
-                        unsup_loss.append(F.binary_cross_entropy_with_logits(y_preds_u[:,tgt], target, reduction="none").sum(dim=1))
-
-                    unsup_loss_ = torch.stack(unsup_loss, dim=1)
-                    unsup_losses = (log_pis_u.exp()*unsup_loss_).sum(dim=1).mean() + (log_pis_u.exp()*log_pis_u).sum(dim=1).mean()
-                #     # cluster_probs = torch.log_softmax(log_pis_u, dim=1)
-                #
-                #     log_prob = torch.log_softmax(y_preds_u, dim=1)
-                #     # evaluate the kl for each cluster
-                #     unsup_loss = (log_prob.exp() * (-log_prob)).sum(dim=1).mean()
-                    loss += args.unl_weight * unsup_losses
-
-                return loss, predictions
+                return loss, log_pis
 
             return loss, y_l
 
@@ -412,16 +428,15 @@ def main():
         y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
         if args.lp:
             y_full, latent = model_y(y)
-            log_pis = latent
 
             # q_mu, q_logvar, log_alpha = latent
             # preds = (log_alpha.exp().unsqueeze(-1) * y_full).sum(dim=1)
             #
             # tgts = one_hot_embedding(targets, num_classes, device=device)
             # recon_loss = F.binary_cross_entropy_with_logits(y_full, tgts)\
-            recon_loss = F.cross_entropy(log_pis, targets)
+            recon_loss = F.cross_entropy(y_full, targets)
 
-            return recon_loss.mean(), log_pis
+            return recon_loss.mean(), y_full
 
         if args.dataset == "awa2":
             return F.binary_cross_entropy_with_logits(y, targets.float()), y
@@ -500,7 +515,7 @@ def main():
         global counter
         counter += 1
 
-        # scheduler.step()
+        scheduler.step()
 
     engine = Engine()
     engine.hooks['on_sample'] = on_sample
