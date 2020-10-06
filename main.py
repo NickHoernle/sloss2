@@ -193,8 +193,6 @@ class DecoderModel(nn.Module):
         self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
 
         # global params
-        self.logprob = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
-
         self.cluster_means = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
 
         self.nc = num_classes
@@ -202,21 +200,10 @@ class DecoderModel(nn.Module):
         self.apply(init_weights)
 
     def get_global_params(self):
-        return [v for k, v in self.named_parameters() if ("cluster_means" in k) or ("logprob" in k)]
+        return [v for k, v in self.named_parameters() if ("cluster_means" in k)]
 
     def get_local_params(self):
         return [v for k, v in self.named_parameters() if ("mu" in k) or ("logvar" in k)]
-
-    def forward_global(self, x):
-        # encode
-        log_pis = torch.log_softmax(self.logprob(x), dim=1)
-        mu = self.mu(x).unsqueeze(1).repeat(1, self.nc, 1)
-        logvar = self.logvar(x).unsqueeze(1).repeat(1, self.nc, 1)
-
-        # cluster params
-        cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
-
-        return log_pis, (mu, logvar, cluster_mus)
 
     def forward(self, x):
         # encode
@@ -401,18 +388,16 @@ def main():
                 # weight = np.min([1., np.max([0, 0.05 * (counter)])])
                 # weight = 1.
 
-                log_pis, (mu, logvar, cluster_mus) = model_y.forward_global(y_l.detach())
-                kld = -0.5 * torch.sum(1 + logvar - (mu-cluster_mus).pow(2) - logvar.exp(), dim=-1)
+                log_pis, (mu, logvar, cluster_mus) = model_y(y_l.detach())
                 idx = np.arange(len(y_l))
-                weighted_kld = kld[idx, targets_l]
-                pred_loss = F.nll_loss(log_pis, targets_l)
-                loss = pred_loss + weighted_kld.mean()
+                kld = -0.5 * torch.sum(1 + logvar - (mu - cluster_mus[idx, targets_l]).pow(2) - logvar.exp(), dim=-1)
+                pred_loss = F.cross_entropy(log_pis, targets_l)
+                loss = pred_loss + kld.mean()
                 optimizer_y.zero_grad()
                 loss.backward()
                 optimizer_y.step()
 
                 log_pis, (mu, logvar, cluster_mus) = model_y(y_l)
-                idx = np.arange(len(y_l))
                 kld = -0.5 * torch.sum(1 + logvar - (mu - cluster_mus[idx, targets_l]).pow(2) - logvar.exp(), dim=-1)
                 pred_loss = F.cross_entropy(log_pis, targets_l)
                 loss = pred_loss + kld.mean()
