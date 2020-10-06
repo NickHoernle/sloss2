@@ -284,7 +284,7 @@ def main():
         model_y = DecoderModel(num_classes, z_dim)
         model_y.to(device)
         model_y.apply(init_weights)
-        optimizer_y = SGD(model_y.get_global_params(), lr=1e-1)
+        optimizer_y = SGD(model_y.get_global_params(), lr=1e-2)
         scheduler = StepLR(optimizer_y, step_size=10, gamma=0.7)
 
     def create_optimizer(args, lr):
@@ -393,11 +393,11 @@ def main():
                 idx = np.arange(len(y_l))
                 tgts = one_hot_embedding(targets_l, num_classes, device=device).unsqueeze(-1)
 
-                # log_pis, (z, mu, logvar, _) = model_y(y_l.detach())
-                # log_probs = -log_pis[idx, targets_l].mean()
-                # optimizer_y.zero_grad()
-                # log_probs.backward()
-                # optimizer_y.step()
+                log_pis, (z, mu, logvar, _) = model_y(y_l.detach())
+                log_probs = -log_pis[idx, targets_l].mean()
+                optimizer_y.zero_grad()
+                log_probs.backward()
+                optimizer_y.step()
 
                 log_pis, (zs, mu, logvar, cluster_mus) = model_y(y_l)
                 kld = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1))
