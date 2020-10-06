@@ -81,7 +81,7 @@ parser.add_argument("--unl_weight", type=float, default=0.1,
                     help="Weight for unlabelled regularizer loss")
 parser.add_argument("--unl2_weight", type=float, default=0.1,
                     help="Weight for unlabelled regularizer loss")
-parser.add_argument("--num_hidden", type=int, default=2,
+parser.add_argument("--num_hidden", type=int, default=10,
                     help="Dim of the latent dimension used")
 
 
@@ -411,10 +411,11 @@ def main():
                 loss = pred_loss + weight*kld.mean()
 
                 log_preds, log_pis = model_y.forward_global(y_l)
-                loss += F.cross_entropy(log_pis, targets_l)
+                loss = F.cross_entropy(log_pis, targets_l)
+
                 for k in range(10):
                     tgts = torch.ones_like(targets_l)*k
-                    loss += F.cross_entropy(log_preds[k], tgts)
+                    loss += F.cross_entropy(log_preds[k], tgts)/10
 
                 return loss, log_pis
 
