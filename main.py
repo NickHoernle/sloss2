@@ -394,11 +394,10 @@ def main():
                 tgts = one_hot_embedding(targets_l, num_classes, device=device).unsqueeze(-1)
 
                 log_pis, (z, mu, logvar, _) = model_y(y_l.detach())
-
-                weighted_mu = (z * tgts).mean(dim=0)
-                weighted_logvar = (((z - model_y.cluster_means.unsqueeze(0)).pow(2)) * tgts).mean(dim=0).log()
-                model_y.cluster_means.data = (1-alpha)*model_y.cluster_means.data + alpha*weighted_mu
-                model_y.cluster_lvariances.data = (1-alpha)*model_y.cluster_lvariances.data + alpha*weighted_logvar
+                log_probs = -log_pis[idx, targets_l].mean()
+                optimizer_y.zero_grad()
+                log_probs.backward()
+                optimizer_y.step()
 
                 log_pis, (zs, mu, logvar, cluster_mus) = model_y(y_l)
                 kld = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1))
