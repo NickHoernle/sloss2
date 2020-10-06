@@ -227,7 +227,6 @@ class DecoderModel(nn.Module):
     def forward_global(self, x):
         mu = self.mu(x)
         logvar = self.logvar(x)
-        log_pis = self.logpis(x)
 
         cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
         cluster_logvars = self.cluster_lvariances.unsqueeze(0).repeat(len(x), 1, 1)
@@ -236,7 +235,7 @@ class DecoderModel(nn.Module):
 
         log_probs = torch.stack([log_normal(zs[:, i, :], mu, logvar) for i in range(self.nc)], dim=1)
 
-        return log_probs, log_pis
+        return log_probs, (self.cluster_means, self.cluster_lvariances)
 
 
 def main():
@@ -413,11 +412,10 @@ def main():
                 # pred_loss = F.cross_entropy(log_pis, targets_l)
                 # loss = pred_loss + weight*kld.mean()
 
-                log_preds, log_pis = model_y.forward_global(y_l)
-                loss += F.cross_entropy(log_pis, targets_l)
-                loss += F.cross_entropy(log_preds, targets_l)
+                log_preds, latent = model_y.forward_global(y_l)
+                loss = F.cross_entropy(log_preds, targets_l)
 
-                return loss, log_pis
+                return loss, log_preds
 
             return loss, y_l
 
