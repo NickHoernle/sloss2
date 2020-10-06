@@ -189,6 +189,7 @@ class DecoderModel(nn.Module):
         super().__init__()
 
         # local params
+        self.logpis = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
         self.mu = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
         self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
 
@@ -222,6 +223,19 @@ class DecoderModel(nn.Module):
         log_probs = log_normal(zs, cluster_mus, cluster_logvars)
 
         return log_probs, (zs, mu, logvar, cluster_mus)
+
+    def forward_global(self, x):
+        log_pis = self.logpis(x)
+
+        cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
+        cluster_logvars = self.cluster_lvariances.unsqueeze(0).repeat(len(x), 1, 1)
+
+        zs = reparameterise(cluster_mus, cluster_logvars)
+
+        log_probs = [log_normal(zs[:, i, :].unsqueeze(1).repeat(1, self.nc, 1), cluster_mus, cluster_logvars)
+                                        for i in range(self.nc)]
+
+        return log_probs, log_pis
 
 
 def main():
@@ -391,16 +405,16 @@ def main():
                 # weight = 1.
                 alpha = 0.001
 
-                # log_pis, (z, mu, logvar, _) = model_y(y_l.detach())
-                # pred_loss_1 = F.cross_entropy(log_pis, targets_l)
-                # optimizer_y.zero_grad()
-                # pred_loss_1.backward()
-                # optimizer_y.step()
-
                 log_pis, (zs, mu, logvar, cluster_mus) = model_y(y_l)
                 kld = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1))
                 pred_loss = F.cross_entropy(log_pis, targets_l)
                 loss = pred_loss + weight*kld.mean()
+
+                log_preds, log_pis = model_y.forward_global(y_l)
+                loss += F.cross_entropy(log_pis, targets_l)
+                for k in range(10):
+                    tgts = torch.ones_like(targets_l)*k
+                    loss += F.cross_entropy(log_preds[k], tgts)
 
                 return loss, log_pis
 
