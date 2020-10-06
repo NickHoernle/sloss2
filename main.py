@@ -409,7 +409,7 @@ def main():
                 z, mu_, logvar_, cluster_mu_, cluseter_logvar_ = latent
 
                 # encoder loss
-                log_p = log_normal(z, cluster_mu_, cluseter_logvar_).logsumexp(dim=1)
+                log_p = log_normal(z[:, 0, :], cluster_mu_[ixs, targets_l], cluseter_logvar_[ixs, targets_l])
                 log_q = log_normal(z[:, 0, :], mu_, logvar_)
                 kld = -(log_p - log_q).mean()
                 loss += kld
@@ -419,7 +419,7 @@ def main():
                 # loss += args.unl2_weight*nll
 
                 # unsupervised part
-                if counter > -1:
+                if counter > 50:
                     log_preds_u, latent_u = model_y(y_u)
                     log_probs = torch.log_softmax(log_preds_u, dim=1)
                     unsup_loss = -(log_probs.exp()*log_probs).sum(dim=1).mean()
