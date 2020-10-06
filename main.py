@@ -283,7 +283,7 @@ def main():
         model_y = DecoderModel(num_classes, z_dim)
         model_y.to(device)
         model_y.apply(init_weights)
-        optimizer_y = Adam(model_y.get_global_params(), lr=1e-3)
+        optimizer_y = SGD(model_y.get_global_params(), lr=1e-1)
         scheduler = StepLR(optimizer_y, step_size=10, gamma=0.7)
 
     def create_optimizer(args, lr):
