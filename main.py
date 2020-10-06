@@ -425,7 +425,7 @@ def main():
                 cmu = cluster_mu_.unsqueeze(0).repeat(len(y_l), 1, 1)[ixs, targets_l]
                 clv = cluseter_logvar_.unsqueeze(0).repeat(len(y_l), 1, 1)[ixs, targets_l]
                 nll = -log_normal(zs, cmu, clv).mean()/100
-                # loss += nll
+                loss += nll
 
                 return loss, log_preds[ixs, targets_l]
 
