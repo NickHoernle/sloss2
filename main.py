@@ -221,7 +221,7 @@ class DecoderModel(nn.Module):
         # calculate log-prob
         log_probs = log_normal(zs, cluster_mus, cluster_logvars)
 
-        return log_probs, (mu, logvar, cluster_mus)
+        return log_probs, (zs, mu, logvar, cluster_mus)
 
 
 def main():
@@ -389,18 +389,19 @@ def main():
                 weight = np.min([1., np.max([0, 0.05 * (counter-20)])])
                 # weight = 1.
                 idx = np.arange(len(y_l))
+                tgts = one_hot_embedding(targets_l, num_classes, device=device).unsqueeze(-1)
 
-                log_pis, (mu, logvar, cluster_mus) = model_y(y_l.detach())
-                pred_loss = F.cross_entropy(log_pis, targets_l)
-                loss_y = pred_loss
-                optimizer_y.zero_grad()
-                loss_y.backward()
-                optimizer_y.step()
+                log_pis, (z, mu, logvar, _) = model_y(y_l.detach())
 
-                log_pis, (mu, logvar, cluster_mus) = model_y(y_l)
+                weighted_mu = (z * tgts).mean(dim=0)
+                weighted_logvar = (((z - model_y.cluster_means.unsqueeze(0)).pow(2)) * tgts).mean(dim=0).log()
+                model_y.cluster_means.data = (1-0.05)*model_y.cluster_means.data + 0.05*weighted_mu
+                model_y.cluster_lvariances.data = (1-0.05)*model_y.cluster_lvariances.data + 0.05*weighted_logvar
+
+                log_pis, (zs, mu, logvar, cluster_mus) = model_y(y_l)
                 kld = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1))
                 pred_loss = F.cross_entropy(log_pis, targets_l)
-                loss = pred_loss + weight*kld.mean()
+                loss = pred_loss + kld.mean()
 
                 return loss, log_pis
 
