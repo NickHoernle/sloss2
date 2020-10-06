@@ -221,7 +221,7 @@ class DecoderModel(nn.Module):
         # calculate log-prob
         log_probs = log_normal(zs, cluster_mus, cluster_logvars)
 
-        return log_probs, (zs, mu, logvar, cluster_mus)
+        return log_probs, (mu, logvar)
 
     def forward_global(self, x):
         mu = self.mu(x)
@@ -420,6 +420,13 @@ def main():
                 loss += nll
 
                 # unsupervised part
+                if counter > 50:
+                    log_preds_u, latent_u = model_y(y_u)
+                    log_probs = torch.log_softmax(log_preds_u, dim=1)
+                    unsup_loss = -(log_probs.exp()*log_probs).sum(dim=1).mean()
+                    mu, logvar = latent_u
+                    kld_u = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1)).mean()
+                    loss += args.unl_weight*(unsup_loss + kld_u)
 
                 return loss, log_preds[ixs, targets_l]
 
