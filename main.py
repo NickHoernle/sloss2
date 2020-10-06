@@ -291,6 +291,7 @@ def main():
         print('creating optimizer with lr = ', lr)
         params_ = [v for v in params.values() if v.requires_grad]
         params_ += model_y.get_local_params()
+        params_ += model_y.get_global_params()
         return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
 
     optimizer = create_optimizer(args, args.lr)
@@ -393,16 +394,16 @@ def main():
                 idx = np.arange(len(y_l))
                 tgts = one_hot_embedding(targets_l, num_classes, device=device).unsqueeze(-1)
 
-                log_pis, (z, mu, logvar, _) = model_y(y_l.detach())
-                pred_loss_1 = F.cross_entropy(log_pis, targets_l)
-                optimizer_y.zero_grad()
-                pred_loss_1.backward()
-                optimizer_y.step()
+                # log_pis, (z, mu, logvar, _) = model_y(y_l.detach())
+                # pred_loss_1 = F.cross_entropy(log_pis, targets_l)
+                # optimizer_y.zero_grad()
+                # pred_loss_1.backward()
+                # optimizer_y.step()
 
                 log_pis, (zs, mu, logvar, cluster_mus) = model_y(y_l)
                 kld = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1))
                 pred_loss = F.cross_entropy(log_pis, targets_l)
-                loss = pred_loss + kld.mean()
+                loss = pred_loss + weight*kld.mean()
 
                 return loss, log_pis
 
