@@ -401,7 +401,7 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                weight = np.min([1., np.max([0.01, 0.05 * (counter - 20)])])
+                weight = np.min([1., np.max([0.05, 0.05 * (counter - 20)])])
                 # weight = 1.
                 alpha = 0.001
 
