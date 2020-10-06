@@ -402,7 +402,7 @@ def main():
                 log_pis, (zs, mu, logvar, cluster_mus) = model_y(y_l)
                 kld = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1))
                 pred_loss = F.cross_entropy(log_pis, targets_l)
-                loss = pred_loss + weight*kld.mean()
+                loss = pred_loss + kld.mean()
 
                 return loss, log_pis
 
