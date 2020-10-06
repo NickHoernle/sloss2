@@ -388,6 +388,8 @@ def main():
             elif args.lp:
                 weight = np.min([1., np.max([0, 0.05 * (counter-20)])])
                 # weight = 1.
+                alpha = 0.001
+
                 idx = np.arange(len(y_l))
                 tgts = one_hot_embedding(targets_l, num_classes, device=device).unsqueeze(-1)
 
@@ -395,8 +397,8 @@ def main():
 
                 weighted_mu = (z * tgts).mean(dim=0)
                 weighted_logvar = (((z - model_y.cluster_means.unsqueeze(0)).pow(2)) * tgts).mean(dim=0).log()
-                model_y.cluster_means.data = (1-0.05)*model_y.cluster_means.data + 0.05*weighted_mu
-                model_y.cluster_lvariances.data = (1-0.05)*model_y.cluster_lvariances.data + 0.05*weighted_logvar
+                model_y.cluster_means.data = (1-alpha)*model_y.cluster_means.data + alpha*weighted_mu
+                model_y.cluster_lvariances.data = (1-alpha)*model_y.cluster_lvariances.data + alpha*weighted_logvar
 
                 log_pis, (zs, mu, logvar, cluster_mus) = model_y(y_l)
                 kld = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1))
