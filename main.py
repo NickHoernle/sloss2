@@ -411,7 +411,7 @@ def main():
                 loss = pred_loss + weight*kld.mean()
 
                 log_preds, log_pis = model_y.forward_global(y_l)
-                loss = F.cross_entropy(log_pis, targets_l)
+                loss += F.cross_entropy(log_pis, targets_l)
 
                 for k in range(10):
                     tgts = torch.ones_like(targets_l)*k
