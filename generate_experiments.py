@@ -52,7 +52,7 @@ for (lr, unl_, unl2_, lr_decay_ratio_, dataset_, rep) in settings:
     )
     print(expt_call, file=output_file)
 
-baseline = f"{base_call} --lr 0.1 --unl_weight 0 --unl2_weight 0 --lr_decay_ratio 0.7 --dataset cifar10"
+baseline = f"{base_call} --lr 0.1 --unl_weight 0 --unl2_weight 1. --lr_decay_ratio 0.7 --dataset cifar10"
 print(baseline, file=output_file)
 
 output_file.close()
