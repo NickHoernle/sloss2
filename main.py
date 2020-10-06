@@ -81,7 +81,7 @@ parser.add_argument("--unl_weight", type=float, default=0.1,
                     help="Weight for unlabelled regularizer loss")
 parser.add_argument("--unl2_weight", type=float, default=0.1,
                     help="Weight for unlabelled regularizer loss")
-parser.add_argument("--num_hidden", type=int, default=10,
+parser.add_argument("--num_hidden", type=int, default=2,
                     help="Dim of the latent dimension used")
 
 
@@ -284,7 +284,7 @@ def main():
         model_y = DecoderModel(num_classes, z_dim)
         model_y.to(device)
         model_y.apply(init_weights)
-        optimizer_y = Adam(model_y.get_global_params(), lr=1e-3)
+        optimizer_y = Adam(model_y.get_global_params(), lr=1e-1)
         scheduler = StepLR(optimizer_y, step_size=10, gamma=0.7)
 
     def create_optimizer(args, lr):
@@ -390,9 +390,6 @@ def main():
                 weight = np.min([1., np.max([0, 0.05 * (counter-20)])])
                 # weight = 1.
                 alpha = 0.001
-
-                idx = np.arange(len(y_l))
-                tgts = one_hot_embedding(targets_l, num_classes, device=device).unsqueeze(-1)
 
                 # log_pis, (z, mu, logvar, _) = model_y(y_l.detach())
                 # pred_loss_1 = F.cross_entropy(log_pis, targets_l)
