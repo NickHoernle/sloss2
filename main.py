@@ -284,14 +284,14 @@ def main():
         model_y = DecoderModel(num_classes, z_dim)
         model_y.to(device)
         model_y.apply(init_weights)
-        optimizer_y = SGD(model_y.get_global_params(), lr=1e-2)
+        optimizer_y = SGD(model_y.get_global_params(), lr=1e-3)
         scheduler = StepLR(optimizer_y, step_size=10, gamma=0.7)
 
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
         params_ = [v for v in params.values() if v.requires_grad]
         params_ += model_y.get_local_params()
-        return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
+        return SGD(params_, lr/10, momentum=0.9, weight_decay=args.weight_decay)
 
     optimizer = create_optimizer(args, args.lr)
 
@@ -394,7 +394,8 @@ def main():
                 tgts = one_hot_embedding(targets_l, num_classes, device=device).unsqueeze(-1)
 
                 log_pis, (z, mu, logvar, _) = model_y(y_l.detach())
-                log_probs = -log_pis[idx, targets_l].mean()
+                probs = torch.softmax(log_pis, dim=1)
+                log_probs = -(probs[idx, targets_l]*log_pis[idx, targets_l]).mean()
                 optimizer_y.zero_grad()
                 log_probs.backward()
                 optimizer_y.step()
@@ -402,7 +403,7 @@ def main():
                 log_pis, (zs, mu, logvar, cluster_mus) = model_y(y_l)
                 kld = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1))
                 pred_loss = F.cross_entropy(log_pis, targets_l)
-                loss = pred_loss + kld.mean()
+                loss = pred_loss + weight*kld.mean()
 
                 return loss, log_pis
 
