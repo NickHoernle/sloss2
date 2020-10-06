@@ -194,7 +194,7 @@ class DecoderModel(nn.Module):
 
         # global params
         self.cluster_means = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
-        self.cluster_lvariances = nn.Parameter(-torch.ones(num_classes, z_dim), requires_grad=True)
+        self.cluster_lvariances = nn.Parameter(torch.zeros(num_classes, z_dim), requires_grad=True)
 
         self.nc = num_classes
         self.zdim = z_dim
@@ -291,7 +291,7 @@ def main():
         print('creating optimizer with lr = ', lr)
         params_ = [v for v in params.values() if v.requires_grad]
         params_ += model_y.get_local_params()
-        return SGD(params_, lr/10, momentum=0.9, weight_decay=args.weight_decay)
+        return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
 
     optimizer = create_optimizer(args, args.lr)
 
