@@ -194,7 +194,7 @@ class DecoderModel(nn.Module):
 
         # global params
         self.cluster_means = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
-        self.cluster_lvariances = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
+        self.cluster_lvariances = nn.Parameter(-torch.ones(num_classes, z_dim), requires_grad=True)
 
         self.nc = num_classes
         self.zdim = z_dim
@@ -390,15 +390,14 @@ def main():
                 # weight = 1.
                 alpha = 0.001
 
-                if np.random.uniform(0, 1) > 0.9:
-                    idx = np.arange(len(y_l))
-                    tgts = one_hot_embedding(targets_l, num_classes, device=device).unsqueeze(-1)
+                idx = np.arange(len(y_l))
+                tgts = one_hot_embedding(targets_l, num_classes, device=device).unsqueeze(-1)
 
-                    log_pis, (z, mu, logvar, _) = model_y(y_l.detach())
-                    log_probs = -log_pis[idx, targets_l].mean()
-                    optimizer_y.zero_grad()
-                    log_probs.backward()
-                    optimizer_y.step()
+                log_pis, (z, mu, logvar, _) = model_y(y_l.detach())
+                log_probs = -log_pis[idx, targets_l].mean()
+                optimizer_y.zero_grad()
+                log_probs.backward()
+                optimizer_y.step()
 
                 log_pis, (zs, mu, logvar, cluster_mus) = model_y(y_l)
                 kld = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1))
