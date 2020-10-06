@@ -225,6 +225,8 @@ class DecoderModel(nn.Module):
         return log_probs, (zs, mu, logvar, cluster_mus)
 
     def forward_global(self, x):
+        mu = self.mu(x)
+        logvar = self.logvar(x)
         log_pis = self.logpis(x)
 
         cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
@@ -232,8 +234,7 @@ class DecoderModel(nn.Module):
 
         zs = reparameterise(cluster_mus, cluster_logvars)
 
-        log_probs = [log_normal(zs[:, i, :].unsqueeze(1).repeat(1, self.nc, 1), cluster_mus, cluster_logvars)
-                                        for i in range(self.nc)]
+        log_probs = torch.stack([log_normal(zs[:, i, :], mu, logvar) for i in range(self.nc)], dim=1)
 
         return log_probs, log_pis
 
@@ -405,17 +406,16 @@ def main():
                 # weight = 1.
                 alpha = 0.001
 
-                log_pis, (zs, mu, logvar, cluster_mus) = model_y(y_l)
-                kld = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1))
-                pred_loss = F.cross_entropy(log_pis, targets_l)
-                loss = pred_loss + weight*kld.mean()
+                ixs = np.arange(len(y_l))
+
+                # log_pis, (zs, mu, logvar, cluster_mus) = model_y(y_l)
+                # kld = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1))
+                # pred_loss = F.cross_entropy(log_pis, targets_l)
+                # loss = pred_loss + weight*kld.mean()
 
                 log_preds, log_pis = model_y.forward_global(y_l)
                 loss += F.cross_entropy(log_pis, targets_l)
-
-                for k in range(10):
-                    tgts = torch.ones_like(targets_l)*k
-                    loss += F.cross_entropy(log_preds[k], tgts)/10
+                loss += F.cross_entropy(log_preds, targets_l)
 
                 return loss, log_pis
 
