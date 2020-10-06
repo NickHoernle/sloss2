@@ -216,12 +216,12 @@ class DecoderModel(nn.Module):
 
         # evaluate cluster params
         cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
-        cluster_logvars = self.cluster_lvariances.unsqueeze(0).repeat(len(x), 1, 1)
+        cluster_logvars = torch.zeros_like(cluster_mus)
 
         # calculate log-prob
         log_probs = log_normal(zs, cluster_mus, cluster_logvars)
 
-        return log_probs, (mu, logvar)
+        return log_probs, (zs, mu, logvar, cluster_mus, cluster_logvars)
 
     def forward_global(self, x):
         mu = self.mu(x)
@@ -230,13 +230,14 @@ class DecoderModel(nn.Module):
         zs2 = reparameterise(mu, logvar)
 
         cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
-        cluster_logvars = self.cluster_lvariances.unsqueeze(0).repeat(len(x), 1, 1)
+        # cluster_logvars = self.cluster_lvariances.unsqueeze(0).repeat(len(x), 1, 1)
+        cluster_logvars = torch.zeros_like(cluster_mus)
 
         zs = reparameterise(cluster_mus, cluster_logvars)
 
         log_probs = torch.stack([log_normal(zs[:, i, :].unsqueeze(1).repeat(1, self.nc, 1), cluster_mus, cluster_logvars) for i in range(self.nc)], dim=1)
 
-        return log_probs, (zs2, mu, logvar, self.cluster_means, self.cluster_lvariances)
+        return log_probs, (zs2, mu, logvar, cluster_mus, cluster_logvars)
 
 
 def main():
@@ -401,34 +402,38 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                weight = np.min([1., np.max([0.01, 0.05 * (counter - 20)])])
-                # weight = 1.
-                alpha = 0.001
-
                 ixs = np.arange(len(y_l))
 
-                log_preds, latent = model_y.forward_global(y_l)
-                loss = F.cross_entropy(log_preds[ixs, targets_l], targets_l)
-                zs, mu_, logvar_, cluster_mu_, cluseter_logvar_ = latent
-                kld = (-0.5 * torch.sum(1 + cluseter_logvar_ - cluster_mu_.pow(2) - cluseter_logvar_.exp(), dim=-1)).sum()/len(y_l)
-                loss += kld
+                log_preds, latent = model_y(y_l)
+                loss = F.cross_entropy(log_preds, targets_l)
+                z, mu_, logvar_, cluster_mu_, cluseter_logvar_ = latent
 
                 # encoder loss
-                cmu = cluster_mu_.unsqueeze(0).repeat(len(y_l), 1, 1)[ixs, targets_l]
-                clv = cluseter_logvar_.unsqueeze(0).repeat(len(y_l), 1, 1)[ixs, targets_l]
-                nll = args.unl2_weight*weight*-log_normal(zs, cmu, clv).mean()
-                loss += nll
+                log_p = log_normal(z, cluster_mu_, cluseter_logvar_).logsumexp(dim=1)
+                log_q = log_normal(z[:, 0, :], mu_, logvar_)
+                kld = -(log_p - log_q).mean()
+                loss += kld
+                # cmu = cluster_mu_[ixs, targets_l]
+                # clv = cluseter_logvar_[ixs, targets_l]
+                # nll = -log_normal(zs, cmu, clv).mean()
+                # loss += args.unl2_weight*nll
 
                 # unsupervised part
-                if counter > 50:
+                if counter > -1:
                     log_preds_u, latent_u = model_y(y_u)
                     log_probs = torch.log_softmax(log_preds_u, dim=1)
                     unsup_loss = -(log_probs.exp()*log_probs).sum(dim=1).mean()
-                    mu, logvar = latent_u
-                    kld_u = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1)).mean()
-                    loss += args.unl_weight*(unsup_loss + kld_u)
+                    z, mu, logvar, cmus, clvar = latent_u
 
-                return loss, log_preds[ixs, targets_l]
+                    # kld_u should be mixture of gaussians.
+                    # log prior
+                    log_p = log_normal(z, cmus, clvar).logsumexp(dim=1)
+                    log_q = log_normal(z[:, 0, :], mu, logvar)
+
+                    kld_u = -(log_p-log_q).mean()
+                    loss += kld_u
+
+                return loss, log_preds
 
             return loss, y_l
 
