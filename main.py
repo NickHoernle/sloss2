@@ -228,14 +228,16 @@ class DecoderModel(nn.Module):
         mu = self.mu(x)
         logvar = self.logvar(x)
 
+        zs2 = reparameterise(mu, logvar)
+
         cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
         cluster_logvars = self.cluster_lvariances.unsqueeze(0).repeat(len(x), 1, 1)
 
         zs = reparameterise(cluster_mus, cluster_logvars)
 
-        log_probs = torch.stack([log_normal(zs[:, i, :], mu, logvar) for i in range(self.nc)], dim=1)
+        log_probs = torch.stack([log_normal(zs[:, i, :].unsqueeze(1).repeat(1, self.nc, 1), cluster_mus, cluster_logvars) for i in range(self.nc)], dim=1)
 
-        return log_probs, (self.cluster_means, self.cluster_lvariances)
+        return log_probs, (zs2, mu, logvar, self.cluster_means, self.cluster_lvariances)
 
 
 def main():
@@ -304,8 +306,7 @@ def main():
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
         params_ = [v for v in params.values() if v.requires_grad]
-        params_ += model_y.get_local_params()
-        params_ += model_y.get_global_params()
+        params_ += model_y.parameters()
         return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
 
     optimizer = create_optimizer(args, args.lr)
@@ -413,9 +414,20 @@ def main():
                 # loss = pred_loss + weight*kld.mean()
 
                 log_preds, latent = model_y.forward_global(y_l)
-                loss = F.cross_entropy(log_preds, targets_l)
+                loss = F.cross_entropy(log_preds[ixs, targets_l], targets_l)
 
-                return loss, log_preds
+                zs, mu_, logvar_, cluster_mu_, cluseter_logvar_ = latent
+
+                kld = (-0.5 * torch.sum(1 + cluseter_logvar_ - cluster_mu_.pow(2) - cluseter_logvar_.exp(), dim=-1)).sum()/len(y_l)
+                loss += kld
+
+                # encoder loss
+                cmu = cluster_mu_.unsqueeze(0).repeat(len(y_l), 1, 1)[ixs, targets_l]
+                clv = cluseter_logvar_.unsqueeze(0).repeat(len(y_l), 1, 1)[ixs, targets_l]
+                nll = -log_normal(zs, cmu, clv).mean()
+                loss += nll
+
+                return loss, log_preds[ixs, targets_l]
 
             return loss, y_l
 
