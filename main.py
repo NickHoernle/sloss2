@@ -401,7 +401,6 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                weight = np.min([1., np.max([0.01, 0.05 * (counter - 20)])])
                 # weight = 1.
                 alpha = 0.001
 
@@ -410,23 +409,24 @@ def main():
                 log_preds, latent = model_y.forward_global(y_l)
                 loss = F.cross_entropy(log_preds[ixs, targets_l], targets_l)
                 zs, mu_, logvar_, cluster_mu_, cluseter_logvar_ = latent
-                kld = (-0.5 * torch.sum(1 + cluseter_logvar_ - cluster_mu_.pow(2) - cluseter_logvar_.exp(), dim=-1)).sum()/len(y_l)
+                kld = (-0.5 * torch.sum(1 + cluseter_logvar_ - cluster_mu_.pow(2) - cluseter_logvar_.exp(), dim=-1)).mean()
                 loss += kld
 
                 # encoder loss
                 cmu = cluster_mu_.unsqueeze(0).repeat(len(y_l), 1, 1)[ixs, targets_l]
                 clv = cluseter_logvar_.unsqueeze(0).repeat(len(y_l), 1, 1)[ixs, targets_l]
-                nll = args.unl2_weight*weight*-log_normal(zs, cmu, clv).mean()
+                nll = args.unl2_weight*-log_normal(zs, cmu, clv).mean()
                 loss += nll
 
                 # unsupervised part
-                if counter > 50:
-                    log_preds_u, latent_u = model_y(y_u)
-                    log_probs = torch.log_softmax(log_preds_u, dim=1)
-                    unsup_loss = -(log_probs.exp()*log_probs).sum(dim=1).mean()
-                    mu, logvar = latent_u
-                    kld_u = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1)).mean()
-                    loss += args.unl_weight*(unsup_loss + kld_u)
+                # if counter > 50:
+                #
+                #     log_preds_u, latent_u = model_y(y_u)
+                #     log_probs = torch.log_softmax(log_preds_u, dim=1)
+                #     unsup_loss = -(log_probs.exp()*log_probs).sum(dim=1).mean()
+                #     mu, logvar = latent_u
+                    # kld_u = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1)).mean()
+                    # loss += args.unl_weight*(unsup_loss + kld_u)
 
                 return loss, log_preds[ixs, targets_l]
 
