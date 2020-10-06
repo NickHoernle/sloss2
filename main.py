@@ -385,7 +385,7 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                weight = np.min([1., np.max([0, 0.05 * (counter)])])
+                weight = np.min([1., np.max([0, 0.05 * (counter-20)])])
                 # weight = 1.
                 idx = np.arange(len(y_l))
 
