@@ -390,9 +390,8 @@ def main():
 
                 log_pis, (mu, logvar, cluster_mus) = model_y(y_l.detach())
                 idx = np.arange(len(y_l))
-                kld = -0.5 * torch.sum(1 + logvar - (mu - cluster_mus[idx, targets_l]).pow(2) - logvar.exp(), dim=-1)
                 pred_loss = F.cross_entropy(log_pis, targets_l)
-                loss = pred_loss + kld.mean()
+                loss = pred_loss
                 optimizer_y.zero_grad()
                 loss.backward()
                 optimizer_y.step()
