@@ -394,12 +394,9 @@ def main():
                 tgts = one_hot_embedding(targets_l, num_classes, device=device).unsqueeze(-1)
 
                 log_pis, (z, mu, logvar, _) = model_y(y_l.detach())
-                # probs = torch.softmax(log_pis, dim=1)
-                log_probs = -(log_pis[idx, targets_l]).mean()
-                # import pdb
-                # pdb.set_trace()
+                pred_loss_1 = F.cross_entropy(log_pis, targets_l)
                 optimizer_y.zero_grad()
-                log_probs.backward()
+                pred_loss_1.backward()
                 optimizer_y.step()
 
                 log_pis, (zs, mu, logvar, cluster_mus) = model_y(y_l)
