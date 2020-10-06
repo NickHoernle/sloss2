@@ -402,7 +402,7 @@ def main():
                     loss += semantic_loss
 
             elif args.lp:
-                weight = np.min([1., np.max([0, 0.05 * (counter-20)])])
+                weight = np.min([1., np.max([0, 0.05 * (counter)])])
                 # weight = 1.
                 alpha = 0.001
 
@@ -415,16 +415,14 @@ def main():
 
                 log_preds, latent = model_y.forward_global(y_l)
                 loss = F.cross_entropy(log_preds[ixs, targets_l], targets_l)
-
                 zs, mu_, logvar_, cluster_mu_, cluseter_logvar_ = latent
-
                 kld = (-0.5 * torch.sum(1 + cluseter_logvar_ - cluster_mu_.pow(2) - cluseter_logvar_.exp(), dim=-1)).sum()/len(y_l)
                 loss += kld
 
                 # encoder loss
                 cmu = cluster_mu_.unsqueeze(0).repeat(len(y_l), 1, 1)[ixs, targets_l]
                 clv = cluseter_logvar_.unsqueeze(0).repeat(len(y_l), 1, 1)[ixs, targets_l]
-                nll = -log_normal(zs, cmu, clv).mean()/100
+                nll = weight*-log_normal(zs, cmu, clv).mean()
                 loss += nll
 
                 return loss, log_preds[ixs, targets_l]
