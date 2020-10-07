@@ -417,9 +417,10 @@ def main():
                 loss += nll
 
                 # custom generator loss
-                log_preds, latent = model_y.train_generative_only(100)
+                log_preds, latent = model_y.train_generative_only(len(targets_l))
                 for cat in range(num_classes):
-                    loss += F.cross_entropy(log_preds[:, cat, :], targets_l)
+                    fake_tgts = torch.ones_like(targets_l)*cat
+                    loss += F.cross_entropy(log_preds[:, cat, :], fake_tgts)
 
                 # unsupervised part
                 if counter > 50:
