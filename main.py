@@ -417,12 +417,13 @@ def main():
                 loss += nll
 
                 # unsupervised part
-                if counter > 50:
+                if counter > -1:
 
                     log_preds_u, latent_u = model_y(y_u)
                     (z, mu, logvar, cluster_mus, cluster_logvars) = latent_u
-                    loss_u = (-log_preds_u.logsumexp(dim=1) + log_normal(z[:, 0, :], mu, logvar)).mean()
-                    loss += args.unl_weight*loss_u
+                    log_predictions = torch.log_softmax(log_preds_u, dim=1)
+                    reconstruction = (-(log_predictions.exp()*log_preds_u).sum(dim=1) + log_normal(z[:, 0, :], mu, logvar)).mean()
+                    loss += args.unl_weight*reconstruction
 
                 return loss, log_preds[ixs, targets_l]
 
