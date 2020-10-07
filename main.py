@@ -224,19 +224,6 @@ class DecoderModel(nn.Module):
 
         return log_probs, (z, mu, logvar, cluster_mus, cluster_logvars)
 
-    def forward_global(self, x):
-        mu = self.mu(x)
-        logvar = self.logvar(x)
-        z1 = reparameterise(mu, logvar)
-
-        cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
-        cluster_logvars = torch.zeros_like(cluster_mus)
-        z2 = reparameterise(cluster_mus, cluster_logvars)
-
-        log_probs = torch.stack([log_normal(z2[:, i, :].unsqueeze(1).repeat(1, self.nc, 1), cluster_mus, cluster_logvars) for i in range(self.nc)], dim=1)
-
-        return log_probs, (z1, mu, logvar, cluster_mus, cluster_logvars)
-
 
 def main():
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -405,15 +392,16 @@ def main():
 
                 ixs = np.arange(len(y_l))
 
-                log_preds, latent = model_y.forward_global(y_l)
-                loss = F.cross_entropy(log_preds[ixs, targets_l], targets_l)
-                zs, mu_, logvar_, cmu_, clv_ = latent
+                log_preds, latent = model_y(y_l)
+                loss = F.cross_entropy(log_preds, targets_l)
+
+                (z, mu, logvar, cmu_, clv_) = latent
 
                 # encoder loss
                 cmu = cmu_[ixs, targets_l]
                 clv = clv_[ixs, targets_l]
 
-                nll = args.unl2_weight*-log_normal(zs, cmu, clv).mean()
+                nll = args.unl2_weight*(-log_normal(z[:, 0, :], cmu, clv) + log_normal(z[:, 0, :], mu, logvar)).mean()
                 loss += nll
 
                 # unsupervised part
@@ -425,7 +413,7 @@ def main():
                     reconstruction = (-(log_predictions.exp()*log_preds_u).sum(dim=1) + log_normal(z[:, 0, :], mu, logvar)).mean()
                     loss += args.unl_weight*reconstruction
 
-                return loss, log_preds[ixs, targets_l]
+                return loss, log_preds
 
             return loss, y_l
 
