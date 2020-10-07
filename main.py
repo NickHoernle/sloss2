@@ -421,7 +421,7 @@ def main():
 
                     log_preds_u, latent_u = model_y(y_u)
                     (z, mu, logvar, cluster_mus, cluster_logvars) = latent_u
-                    loss_u = (-log_preds_u.logsumexp(dim=1) + log_normal(z, mu, logvar)).mean()
+                    loss_u = (-log_preds_u.logsumexp(dim=1) + log_normal(z[:, 0, :], mu, logvar)).mean()
                     loss += args.unl_weight*loss_u
 
                 return loss, log_preds[ixs, targets_l]

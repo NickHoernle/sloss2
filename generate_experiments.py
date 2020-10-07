@@ -11,7 +11,7 @@ SCRATCH_HOME = f'{SCRATCH_DISK}/{USER}'
 
 DATA_HOME = f'{SCRATCH_HOME}/vaelib'
 base_call = (f"python main.py --save {DATA_HOME}/logs/resnet_$RANDOM$RANDOM "
-             f"--depth 28 --width 2 --ngpu 1 --dataroot {DATA_HOME}/data --epochs 300 "
+             f"--depth 28 --width 2 --ngpu 1 --dataroot {DATA_HOME}/data --epochs 200 "
              f"--num_labelled 4000 --cuda --ssl --lp --epoch_step [10,20,30,40,50,60,70,80,90,100,110,120,130,140,150,160,170,180,190]")
 
 repeats = 1
