@@ -224,6 +224,18 @@ class DecoderModel(nn.Module):
 
         return log_probs, (z, mu, logvar, cluster_mus, cluster_logvars)
 
+    def train_generative_only(self, num_samples):
+        cluster_mus = self.cluster_means.unsqueeze(0).repeat(num_samples, 1, 1)
+        cluster_logvars = torch.zeros_like(cluster_mus)
+
+        z2 = reparameterise(cluster_mus, cluster_logvars)
+
+        log_probs = torch.stack(
+            [log_normal(z2[:, i, :].unsqueeze(1).repeat(1, self.nc, 1), cluster_mus, cluster_logvars) for i in
+             range(self.nc)], dim=1)
+
+        return log_probs, (cluster_mus, cluster_logvars)
+
 
 def main():
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -403,6 +415,11 @@ def main():
 
                 nll = args.unl2_weight*(-log_normal(z[:, 0, :], cmu, clv) + log_normal(z[:, 0, :], mu, logvar)).mean()
                 loss += nll
+
+                # custom generator loss
+                log_preds, latent = model_y.train_generative_only(100)
+                for cat in range(num_classes):
+                    loss += F.cross_entropy(log_preds[:, cat, :], targets_l)
 
                 # unsupervised part
                 if counter > 50:
