@@ -230,7 +230,6 @@ class DecoderModel(nn.Module):
         z1 = reparameterise(mu, logvar)
 
         cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
-        # cluster_logvars = self.cluster_lvariances.unsqueeze(0).repeat(len(x), 1, 1)
         cluster_logvars = torch.zeros_like(cluster_mus)
         z2 = reparameterise(cluster_mus, cluster_logvars)
 
@@ -421,14 +420,9 @@ def main():
                 if counter > 50:
 
                     log_preds_u, latent_u = model_y(y_u)
-                    log_probs = torch.log_softmax(log_preds_u, dim=1)
-                    unsup_loss = -(log_probs.exp()*log_probs).sum(dim=1).mean()
-
                     (z, mu, logvar, cluster_mus, cluster_logvars) = latent_u
-                    log_p = log_normal(z, cluster_mus, cluster_logvars).logsumexp(dim=1)
-                    log_q = log_normal(z[:, 0, :], mu, logvar)
-                    kld_u = -(log_p - log_q).mean()
-                    loss += args.unl_weight*(unsup_loss + kld_u)
+                    loss_u = (-log_preds_u.logsumexp(dim=1) + log_normal(z, mu, logvar)).mean()
+                    loss += args.unl_weight*loss_u
 
                 return loss, log_preds[ixs, targets_l]
 
