@@ -405,7 +405,7 @@ def main():
                 ixs = np.arange(len(y_l))
 
                 log_preds, latent = model_y(y_l)
-                loss = F.cross_entropy(log_preds, targets_l)
+                # loss = F.cross_entropy(log_preds, targets_l)
 
                 (z, mu, logvar, cmu_, clv_) = latent
 
@@ -414,7 +414,7 @@ def main():
                 clv = clv_[ixs, targets_l]
 
                 nll = args.unl2_weight*(-log_normal(z[:, 0, :], cmu, clv) + log_normal(z[:, 0, :], mu, logvar)).mean()
-                loss += nll
+                loss = nll
 
                 # custom generator loss
                 log_preds_g, latent = model_y.train_generative_only(len(targets_l))
