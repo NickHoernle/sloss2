@@ -189,8 +189,8 @@ class DecoderModel(nn.Module):
         super().__init__()
 
         # local params
-        self.mu = nn.Sequential(nn.Tanh(), nn.Linear(num_classes, num_classes), nn.LeakyReLU(.2), nn.Linear(num_classes, z_dim))
-        self.logvar = nn.Sequential(nn.Tanh(), nn.Linear(num_classes, num_classes), nn.LeakyReLU(.2), nn.Linear(num_classes, z_dim))
+        self.mu = nn.Sequential(nn.LeakyReLU(.2), nn.Linear(num_classes, num_classes), nn.LeakyReLU(.2), nn.Linear(num_classes, z_dim))
+        self.logvar = nn.Sequential(nn.LeakyReLU(.2), nn.Linear(num_classes, num_classes), nn.LeakyReLU(.2), nn.Linear(num_classes, z_dim))
 
         # global params
         self.cluster_means = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
