@@ -189,8 +189,8 @@ class DecoderModel(nn.Module):
         super().__init__()
 
         # local params
-        self.mu = nn.Sequential(nn.LeakyReLU(.2), nn.Linear(num_classes, num_classes), nn.LeakyReLU(.2), nn.Linear(num_classes, z_dim))
-        self.logvar = nn.Sequential(nn.LeakyReLU(.2), nn.Linear(num_classes, num_classes), nn.LeakyReLU(.2), nn.Linear(num_classes, z_dim))
+        # self.mu = nn.Sequential(nn.LeakyReLU(.2), nn.Linear(num_classes, num_classes), nn.LeakyReLU(.2), nn.Linear(num_classes, z_dim))
+        # self.logvar = nn.Sequential(nn.LeakyReLU(.2), nn.Linear(num_classes, num_classes), nn.LeakyReLU(.2), nn.Linear(num_classes, z_dim))
 
         # global params
         self.cluster_means = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
@@ -208,8 +208,8 @@ class DecoderModel(nn.Module):
 
     def forward(self, x):
         # encode
-        mu = self.mu(x)
-        logvar = self.logvar(x)
+        mu = x
+        logvar = torch.zeros_like(x)
 
         # resample
         z = reparameterise(mu, logvar).unsqueeze(1).repeat(1, self.nc, 1)
@@ -290,7 +290,7 @@ def main():
         worker_init_fn=_init_fn
     )
     z_dim = args.num_hidden
-    model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
+    model, params = resnet(args.depth, args.width, z_dim, image_shape[0])
 
     if args.lp:
         model_y = DecoderModel(num_classes, z_dim)
