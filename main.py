@@ -197,6 +197,8 @@ class DecoderModel(nn.Module):
         self.cluster_means = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
         self.cluster_lvariances = nn.Parameter(torch.zeros(num_classes, z_dim), requires_grad=True)
 
+        self.net = nn.Sequential(nn.Linear(z_dim, 50), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
+
         self.nc = num_classes
         self.zdim = z_dim
         self.apply(init_weights)
@@ -213,16 +215,17 @@ class DecoderModel(nn.Module):
         logvar = self.logvar(x)
 
         # resample
-        z = reparameterise(mu, logvar).unsqueeze(1).repeat(1, self.nc, 1)
+        z = reparameterise(mu, logvar)
 
         # evaluate cluster params
         cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
         cluster_logvars = torch.zeros_like(cluster_mus)
 
         # calculate log-prob
-        log_probs = log_normal(z, cluster_mus, cluster_logvars)
+        # log_probs = log_normal(z, cluster_mus, cluster_logvars)
+        prediction = self.net(z)
 
-        return log_probs, (z, mu, logvar, cluster_mus, cluster_logvars)
+        return prediction, (z, mu, logvar, cluster_mus, cluster_logvars)
 
     def train_generative_only(self, num_samples):
         cluster_mus = self.cluster_means.unsqueeze(0).repeat(num_samples, 1, 1)
@@ -230,9 +233,7 @@ class DecoderModel(nn.Module):
 
         z2 = reparameterise(cluster_mus, cluster_logvars)
 
-        log_probs = torch.stack(
-            [log_normal(z2[:, i, :].unsqueeze(1).repeat(1, self.nc, 1), cluster_mus, cluster_logvars) for i in
-             range(self.nc)], dim=1)
+        log_probs = torch.stack([self.net(z2[:, i, :]) for i in range(self.nc)], dim=1)
 
         return log_probs, (cluster_mus, cluster_logvars)
 
@@ -414,11 +415,13 @@ def main():
                 log_preds, latent = model_y(y_l)
                 (z, mu, logvar, cmu_, clv_) = latent
 
+                loss += F.cross_entropy(log_preds, targets_l)
+
                 # encoder loss
                 cmu = cmu_[ixs, targets_l]
                 clv = clv_[ixs, targets_l]
 
-                nll = args.unl2_weight*(-log_normal(z[:, 0, :], cmu, clv)).mean()
+                nll = args.unl2_weight*(-log_normal(z, cmu, clv) + log_normal(z, mu, logvar)).mean()
                 loss += nll
 
                 # unsupervised part
@@ -427,7 +430,8 @@ def main():
                     log_preds_u, latent_u = model_y(y_u)
                     (z, mu, logvar, cluster_mus, cluster_logvars) = latent_u
                     log_predictions = torch.log_softmax(log_preds_u, dim=1)
-                    reconstruction = (-(log_predictions.exp()*log_preds_u).sum(dim=1) + log_normal(z[:, 0, :], mu, logvar)).mean()
+                    z_expanded = z.unsqueeze(1).repeat(1, num_classes, 1)
+                    reconstruction = (-(log_predictions.exp()*log_normal(z_expanded, cluster_mus, cluster_logvars)).sum(dim=1) + log_normal(z, mu, logvar)).mean()
                     loss += args.unl_weight*reconstruction
 
                 return loss, log_preds
