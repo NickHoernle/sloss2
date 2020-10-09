@@ -404,26 +404,25 @@ def main():
 
                 ixs = np.arange(len(y_l))
 
-                log_preds, latent = model_y(y_l)
-                loss = F.cross_entropy(log_preds, targets_l)
+                # custom generator loss
+                loss = 0
+                log_preds_g, latent = model_y.train_generative_only(len(targets_l))
+                for cat in range(num_classes):
+                    fake_tgts = torch.ones_like(targets_l) * cat
+                    loss += F.cross_entropy(log_preds_g[:, cat, :], fake_tgts)
 
+                log_preds, latent = model_y(y_l)
                 (z, mu, logvar, cmu_, clv_) = latent
 
                 # encoder loss
                 cmu = cmu_[ixs, targets_l]
                 clv = clv_[ixs, targets_l]
 
-                nll = args.unl2_weight*(-log_normal(z[:, 0, :], cmu, clv) + log_normal(z[:, 0, :], mu, logvar)).mean()
+                nll = args.unl2_weight*(-log_normal(z[:, 0, :], cmu, clv)).mean()
                 loss += nll
 
-                # custom generator loss
-                log_preds_g, latent = model_y.train_generative_only(len(targets_l))
-                for cat in range(num_classes):
-                    fake_tgts = torch.ones_like(targets_l)*cat
-                    loss += F.cross_entropy(log_preds_g[:, cat, :], fake_tgts)
-
                 # unsupervised part
-                if counter > 25:
+                if counter > 10:
 
                     log_preds_u, latent_u = model_y(y_u)
                     (z, mu, logvar, cluster_mus, cluster_logvars) = latent_u
