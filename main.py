@@ -421,17 +421,21 @@ def main():
                 cmu = cmu_[ixs, targets_l]
                 clv = clv_[ixs, targets_l]
 
-                nll = args.unl2_weight*(-log_normal(z, cmu, clv) + log_normal(z, mu, logvar)).mean()
-                loss += nll
+                kld = args.unl2_weight*(-0.5 * torch.sum(1 + logvar - (mu - cmu).pow(2) - logvar.exp(), dim=-1).mean())
+                loss += kld
 
                 # unsupervised part
-                if counter > 20:
+                if counter > -1:
 
                     log_preds_u, latent_u = model_y(y_u)
                     (z, mu, logvar, cluster_mus, cluster_logvars) = latent_u
                     log_predictions = torch.log_softmax(log_preds_u, dim=1)
-                    z_expanded = z.unsqueeze(1).repeat(1, num_classes, 1)
-                    reconstruction = (-(log_predictions.exp()*log_normal(z_expanded, cluster_mus, cluster_logvars)).sum(dim=1) + log_normal(z, mu, logvar)).mean()
+
+                    mus = mu.unsqueeze(1).repeat(1, num_classes, 1)
+                    lvars = logvar.unsqueeze(1).repeat(1, num_classes, 1)
+                    klds = args.unl2_weight*(-0.5 * torch.sum(1 + lvars - (mus - cluster_mus).pow(2) - lvars.exp(), dim=-1))
+
+                    reconstruction = -(log_predictions.exp()*(log_predictions + klds)).sum(dim=1).mean()
                     loss += args.unl_weight*reconstruction
 
                 return loss, log_preds
