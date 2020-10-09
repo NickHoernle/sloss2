@@ -425,7 +425,7 @@ def main():
                 loss += nll
 
                 # unsupervised part
-                if counter > 10:
+                if counter > 20:
 
                     log_preds_u, latent_u = model_y(y_u)
                     (z, mu, logvar, cluster_mus, cluster_logvars) = latent_u
