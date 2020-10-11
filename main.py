@@ -431,7 +431,7 @@ def main():
                     (z, mu, logvar, cluster_mus, cluster_logvars) = latent_u
                     log_predictions = torch.log_softmax(log_preds_u, dim=1)
                     z_expanded = z.unsqueeze(1).repeat(1, num_classes, 1)
-                    reconstruction = (-(log_predictions.exp()*log_normal(z_expanded, cluster_mus, cluster_logvars)).sum(dim=1) + log_normal(z, mu, logvar)).mean()
+                    reconstruction = (-(log_predictions.exp()*(log_predictions+log_normal(z_expanded, cluster_mus, cluster_logvars))).sum(dim=1) + log_normal(z, mu, logvar)).mean()
                     loss += args.unl_weight*reconstruction
 
                 return loss, log_preds
