@@ -401,7 +401,7 @@ def main():
 
             elif args.lp:
                 # weight = 1.
-                alpha = 0.001
+                temperature = min([10, 0.02*(counter+1)])
 
                 ixs = np.arange(len(y_l))
 
@@ -425,11 +425,11 @@ def main():
                 loss += nll
 
                 # unsupervised part
-                if counter > 20:
+                if counter > -1:
 
                     log_preds_u, latent_u = model_y(y_u)
                     (z, mu, logvar, cluster_mus, cluster_logvars) = latent_u
-                    log_predictions = torch.log_softmax(log_preds_u, dim=1)
+                    log_predictions = torch.log_softmax(log_preds_u*temperature, dim=1)
                     z_expanded = z.unsqueeze(1).repeat(1, num_classes, 1)
                     reconstruction = (-(log_predictions.exp()*log_normal(z_expanded, cluster_mus, cluster_logvars)).sum(dim=1) + log_normal(z, mu, logvar)).mean()
                     loss += args.unl_weight*reconstruction
