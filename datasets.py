@@ -16,7 +16,7 @@ class Joint(data.Dataset):
 
     def __getitem__(self, index):
         l_samp, l_label = self.dataset1[index]
-        u_samp, u_label = self.dataset1[index]
+        u_samp, u_label = self.dataset2[index]
         return ((self.transform(l_samp), l_label),
                 (self.transform(u_samp), u_label),
                 (self.transform(u_samp), u_label))
