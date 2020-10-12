@@ -9,12 +9,17 @@ from glob import glob
 
 
 class Joint(data.Dataset):
-    def __init__(self, dataset1, dataset2):
+    def __init__(self, dataset1, dataset2, transform=[]):
+        self.transform = transforms.Compose(transform)
         self.dataset1 = dataset1
         self.dataset2 = dataset2
 
     def __getitem__(self, index):
-        return self.dataset1[index], self.dataset2[index]
+        l_samp, l_label = self.dataset1[index]
+        u_samp, u_label = self.dataset1[index]
+        return ((self.transform(l_samp), l_label),
+                (self.transform(u_samp), u_label),
+                (self.transform(u_samp), u_label))
 
     def __len__(self):
         return len(self.dataset1)
@@ -25,6 +30,7 @@ def get_CIFAR10(augment, dataroot, download):
     num_classes = 10
     normalize = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     test_transform = transforms.Compose([transforms.ToTensor(), normalize])
+    augment = False
     if augment:
         transformations = [transforms.RandomCrop(size=32, padding=int(32 * 0.125), padding_mode='reflect'),
                            transforms.RandomHorizontalFlip()]

@@ -9,6 +9,7 @@ from torch.optim import SGD, Adam
 from torch.optim.lr_scheduler import StepLR
 import torch.utils.data as data
 from torch.utils.data import DataLoader, Subset
+from torchvision import transforms, datasets
 import torch.nn.functional as F
 from torch import nn
 
@@ -271,7 +272,12 @@ def main():
         labelled_set = data.ConcatDataset([labelled_set for i in range(num_unlabelled // num_labelled + 1)])
         labelled_set, _ = data.random_split(labelled_set, [num_unlabelled, len(labelled_set) - num_unlabelled])
 
-        train_dataset = Joint(labelled_set, unlabelled_set)
+        transformations = [transforms.ToPILImage(),
+                           transforms.RandomCrop(size=32, padding=int(32 * 0.125), padding_mode='reflect'),
+                           transforms.RandomHorizontalFlip(),
+                           transforms.ToTensor()]
+
+        train_dataset = Joint(labelled_set, unlabelled_set, transform=transformations)
 
     def _init_fn(worker_id):
         np.random.seed(args.seed)
@@ -354,7 +360,7 @@ def main():
         if not args.ssl:
             inputs = cast(sample[0], args.dtype)
             targets = cast(sample[1], 'long')
-            y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
+            y = data_parallel(model, inputs, params, sample[3], list(range(args.ngpu))).float()
             if args.dataset == "awa2":
                 return F.binary_cross_entropy_with_logits(y, targets.float()), y
             else:
@@ -363,13 +369,17 @@ def main():
             global counter
 
             l = sample[0]
-            u = sample[1]
+            u1 = sample[1]
+            u2 = sample[2]
+
             inputs_l = cast(l[0], args.dtype)
             targets_l = cast(l[1], 'long')
-            inputs_u = cast(u[0], args.dtype)
+            inputs_u = cast(u1[0], args.dtype)
+            inputs_u2 = cast(u2[0], args.dtype)
 
-            y_l = data_parallel(model, inputs_l, params, sample[2], list(range(args.ngpu))).float()
-            y_u = data_parallel(model, inputs_u, params, sample[2], list(range(args.ngpu))).float()
+            y_l = data_parallel(model, inputs_l, params, sample[3], list(range(args.ngpu))).float()
+            y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
+            y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
 
             if args.dataset == "awa2":
                 loss = F.binary_cross_entropy_with_logits(y_l, targets_l.float())
@@ -407,9 +417,9 @@ def main():
 
                 # custom generator loss
                 loss = 0
-                log_preds_g, latent = model_y.train_generative_only(5*len(targets_l))
+                log_preds_g, latent = model_y.train_generative_only(len(targets_l))
                 for cat in range(num_classes):
-                    fake_tgts = torch.ones(len(targets_l)*5).long().to(device) * cat
+                    fake_tgts = torch.ones_like(targets_l) * cat
                     loss += F.cross_entropy(log_preds_g[:, cat, :], fake_tgts)
 
                 log_preds, latent = model_y(y_l)
@@ -426,13 +436,20 @@ def main():
 
                 # unsupervised part
                 if counter > 20:
-
                     log_preds_u, latent_u = model_y(y_u)
+                    log_preds_u2, latent_u2 = model_y(y_u2)
+
                     (z, mu, logvar, cluster_mus, cluster_logvars) = latent_u
-                    log_predictions = torch.log_softmax(log_preds_u*temperature, dim=1)
+                    log_predictions2 = torch.log_softmax(log_preds_u2*temperature, dim=1)
                     z_expanded = z.unsqueeze(1).repeat(1, num_classes, 1)
-                    reconstruction = (-(log_predictions.exp()*log_normal(z_expanded, cluster_mus, cluster_logvars)).sum(dim=1) + log_normal(z, mu, logvar)).mean()
-                    loss += args.unl_weight*reconstruction
+                    reconstruction = (-(log_predictions2.exp()*log_normal(z_expanded, cluster_mus, cluster_logvars)).sum(dim=1) + log_normal(z, mu, logvar)).mean()
+
+                    (z2, mu2, logvar2, cluster_mus2, cluster_logvars2) = latent_u2
+                    log_predictions = torch.log_softmax(log_preds_u * temperature, dim=1)
+                    z_expanded2 = z2.unsqueeze(1).repeat(1, num_classes, 1)
+                    reconstruction2 = (-(log_predictions.exp() * log_normal(z_expanded2, cluster_mus2, cluster_logvars2)).sum(dim=1) + log_normal(z2, mu2, logvar2)).mean()
+
+                    loss += args.unl_weight*(reconstruction+reconstruction2)
 
                 return loss, log_preds
 
@@ -442,7 +459,7 @@ def main():
         model_y.eval()
         inputs = cast(sample[0], args.dtype)
         targets = cast(sample[1], 'long')
-        y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
+        y = data_parallel(model, inputs, params, sample[3], list(range(args.ngpu))).float()
         if args.lp:
             y_full, latent = model_y(y)
 
