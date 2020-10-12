@@ -457,7 +457,7 @@ def main():
         model_y.eval()
         inputs = cast(sample[0], args.dtype)
         targets = cast(sample[1], 'long')
-        y = data_parallel(model, inputs, params, sample[3], list(range(args.ngpu))).float()
+        y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
         if args.lp:
             y_full, latent = model_y(y)
 
