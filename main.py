@@ -272,10 +272,10 @@ def main():
         labelled_set = data.ConcatDataset([labelled_set for i in range(num_unlabelled // num_labelled + 1)])
         labelled_set, _ = data.random_split(labelled_set, [num_unlabelled, len(labelled_set) - num_unlabelled])
 
-        transformations = [transforms.ToPILImage(),
-                           transforms.RandomCrop(size=32, padding=int(32 * 0.125), padding_mode='reflect'),
+        transformations = [transforms.RandomCrop(size=32, padding=int(32 * 0.125), padding_mode='reflect'),
                            transforms.RandomHorizontalFlip(),
-                           transforms.ToTensor()]
+                           transforms.ToTensor(),
+                           transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
 
         train_dataset = Joint(labelled_set, unlabelled_set, transform=transformations)
 

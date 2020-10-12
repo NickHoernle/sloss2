@@ -36,7 +36,7 @@ def get_CIFAR10(augment, dataroot, download):
                            transforms.RandomHorizontalFlip()]
     else:
         transformations = []
-    transformations.extend([transforms.ToTensor(), normalize])
+    # transformations.extend([transforms.ToTensor(), normalize])
     train_transform = transforms.Compose(transformations)
 
     path = Path(dataroot) #/ 'data' / 'CIFAR10'
