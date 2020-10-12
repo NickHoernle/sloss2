@@ -41,7 +41,6 @@ def get_CIFAR10(augment, dataroot, download):
 
     path = Path(dataroot) #/ 'data' / 'CIFAR10'
     train_dataset = datasets.CIFAR10(path, train=True,
-                                     transform=train_transform,
                                      download=download)
 
     test_dataset = datasets.CIFAR10(path, train=False,
