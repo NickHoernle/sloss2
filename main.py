@@ -409,7 +409,7 @@ def main():
                 loss = 0
                 log_preds_g, latent = model_y.train_generative_only(5*len(targets_l))
                 for cat in range(num_classes):
-                    fake_tgts = torch.ones(len(targets_l)*5).float().to(device) * cat
+                    fake_tgts = torch.ones(len(targets_l)*5).long().to(device) * cat
                     loss += F.cross_entropy(log_preds_g[:, cat, :], fake_tgts)
 
                 log_preds, latent = model_y(y_l)
