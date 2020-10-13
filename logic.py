@@ -198,7 +198,6 @@ class DecoderModel(nn.Module):
         z2 = reparameterise(cluster_mus, cluster_logvars)
 
         log_probs = torch.stack([self.net(z2[:, i, :]) for i in range(self.nc)], dim=1)
-
         return log_probs, (cluster_mus, cluster_logvars)
 
 
@@ -226,9 +225,9 @@ def get_true_cifar100_sc(fc_labels):
 
 
 def get_cifar100_pred(samples):
-    return torch.stack(samples.split(5, dim=-1), dim=1).logsumexp(dim=-1)
+    return torch.stack(samples.split(5, dim=-1), dim=1).exp().sum(dim=-1)
 
 
 def cifar100_logic(samples):
     super_class_preds = get_cifar100_pred(samples)
-    return ((super_class_preds.exp() > 0.95) | (super_class_preds.exp() < 0.05)).all(dim=1)
+    return ((super_class_preds > 0.95) | (super_class_preds < 0.05)).all(dim=1)
