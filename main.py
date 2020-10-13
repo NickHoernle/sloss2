@@ -369,7 +369,9 @@ def main():
             engine.test(compute_loss_test, test_loader)
 
         test_acc = classacc.value()[0]
-        sc_acc = superclassacc.value()[0]
+        sc_acc = 0
+        if args.dataset == "cifar100":
+            sc_acc = superclassacc.value()[0]
 
         print(log({
             "train_loss": train_loss[0],
