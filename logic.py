@@ -225,7 +225,9 @@ def get_true_cifar100_sc(fc_labels):
 
 
 def get_cifar100_pred(samples):
-    return torch.stack(samples.split(5, dim=-1), dim=1).exp().sum(dim=-1)
+    import pdb
+    pdb.set_trace()
+    return torch.stack(samples[:, sc_map].split(5, dim=-1), dim=1).exp().sum(dim=-1)
 
 
 def cifar100_logic(samples):

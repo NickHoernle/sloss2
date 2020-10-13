@@ -226,19 +226,20 @@ def main():
                 ixs = np.arange(len(y_l))
 
                 if args.dataset == "cifar100":
-                    logic_net.train()
-                    gen_samples, _ = model_y.train_generative_only(len(targets_l))
-                    logic_loss = 0
-                    for cat in range(num_classes):
-                        log_pred = torch.log_softmax(gen_samples[:, cat, :].detach(), dim=-1)
-                        true_logic = cifar100_logic(log_pred)
-                        predicted_logic = logic_net(log_pred).squeeze()
-                        logic_loss += F.binary_cross_entropy(predicted_logic, true_logic.float())
+                    if counter > 1:
+                        logic_net.train()
+                        gen_samples, _ = model_y.train_generative_only(len(targets_l))
+                        logic_loss = 0
+                        for cat in range(num_classes):
+                            log_pred = torch.log_softmax(gen_samples[:, cat, :].detach(), dim=-1)
+                            true_logic = cifar100_logic(log_pred)
+                            predicted_logic = logic_net(log_pred).squeeze()
+                            logic_loss += F.binary_cross_entropy(predicted_logic, true_logic.float())
 
-                    logic_opt.zero_grad()
-                    logic_loss.backward()
-                    logic_opt.step()
-                    logic_net.eval()
+                        logic_opt.zero_grad()
+                        logic_loss.backward()
+                        logic_opt.step()
+                        logic_net.eval()
 
                 # custom generator loss
                 loss = 0
