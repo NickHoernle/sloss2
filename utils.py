@@ -116,15 +116,6 @@ def log_normal(x, m, log_v):
     return log_prob
 
 
-def check_dataset(dataset, dataroot, download):
-    if dataset == "cifar10":
-        return get_CIFAR10(dataroot, download)
-    if dataset == "cifar100":
-        return get_CIFAR10(dataroot, download)
-
-    raise NotImplementedError(f"No dataset for {dataset}")
-
-
 def check_manual_seed(seed):
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)

@@ -14,9 +14,9 @@ from torchnet.engine import Engine
 from utils import *
 from torch.backends import cudnn
 from resnet import resnet
-from datasets import Joint
+from datasets import Joint, check_dataset
 
-from logic import DecoderModel
+from logic import DecoderModel, cifar100_logic, LogicNet, set_class_mapping, get_cifar100_pred, get_true_cifar100_sc
 
 
 cudnn.benchmark = True
@@ -86,18 +86,14 @@ def main():
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_id
 
     ds = check_dataset(args.dataset, args.dataroot, args.download)
-
-    image_shape, num_classes, train_dataset, test_dataset = ds
+    image_shape, num_classes, train_dataset, test_dataset, td_targets = ds
 
     if args.ssl:
         num_labelled = args.num_labelled
         num_unlabelled = len(train_dataset) - num_labelled
-        if args.dataset == "awa2":
-            labelled_set, unlabelled_set = data.random_split(train_dataset, [num_labelled, num_unlabelled])
-        else:
-            td_targets = train_dataset.targets if args.dataset == "cifar10" else train_dataset.labels
-            labelled_idxs, unlabelled_idxs = x_u_split(td_targets, num_labelled, num_classes)
-            labelled_set, unlabelled_set = [Subset(train_dataset, labelled_idxs),
+
+        labelled_idxs, unlabelled_idxs = x_u_split(td_targets, num_labelled, num_classes)
+        labelled_set, unlabelled_set = [Subset(train_dataset, labelled_idxs),
                                             Subset(train_dataset, unlabelled_idxs)]
         labelled_set = data.ConcatDataset([labelled_set for i in range(num_unlabelled // num_labelled + 1)])
         labelled_set, _ = data.random_split(labelled_set, [num_unlabelled, len(labelled_set) - num_unlabelled])
@@ -137,6 +133,12 @@ def main():
         model_y.apply(init_weights)
         model_y.train()
 
+        if args.dataset == "cifar100":
+            logic_net = LogicNet(num_classes)
+            logic_net.to(device)
+            logic_net.apply(init_weights)
+            logic_opt = Adam(logic_net.parameters(), lr=1e-3)
+
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
         params_ = [v for v in params.values() if v.requires_grad]
@@ -153,12 +155,13 @@ def main():
 
     n_parameters = sum(p.numel() for p in params.values() if p.requires_grad)
     if args.generative_loss:
-        n_parameters = sum(p.numel() for p in model_y.parameters())
+        n_parameters += sum(p.numel() for p in model_y.parameters())
     print('\nTotal number of parameters:', n_parameters)
 
     meter_loss = tnt.meter.AverageValueMeter()
 
     classacc = tnt.meter.ClassErrorMeter(accuracy=True)
+    superclassacc = tnt.meter.ClassErrorMeter(accuracy=True)
 
     timer_train = tnt.meter.TimeMeter('s')
     timer_test = tnt.meter.TimeMeter('s')
@@ -167,6 +170,8 @@ def main():
         os.mkdir(args.save)
 
     global counter
+    if args.dataset == "cifar100":
+        set_class_mapping(test_dataset.classes)
     counter = 0
 
     # device = torch.cuda.current_device()
@@ -220,12 +225,37 @@ def main():
 
                 ixs = np.arange(len(y_l))
 
+                if args.dataset == "cifar100":
+                    logic_net.train()
+                    gen_samples, _ = model_y.train_generative_only(len(targets_l))
+                    logic_loss = 0
+                    for cat in range(num_classes):
+                        log_pred = torch.log_softmax(gen_samples[:, cat, :].detach(), dim=-1)
+                        true_logic = cifar100_logic(log_pred)
+                        predicted_logic = logic_net(log_pred).squeeze()
+                        logic_loss += F.binary_cross_entropy(predicted_logic, true_logic.float())
+
+                    logic_opt.zero_grad()
+                    logic_loss.backward()
+                    logic_opt.step()
+                    logic_net.eval()
+
                 # custom generator loss
                 loss = 0
                 log_preds_g, latent = model_y.train_generative_only(len(targets_l))
                 for cat in range(num_classes):
                     fake_tgts = torch.ones_like(targets_l) * cat
-                    loss += F.cross_entropy(log_preds_g[:, cat, :], fake_tgts)
+                    log_pred = torch.log_softmax(log_preds_g[:, cat, :], dim=-1)
+                    loss += F.nll_loss(log_pred, fake_tgts)
+
+                    if args.dataset == "cifar100":
+                        # chances that the samples break the logic
+                        true_logic = cifar100_logic(log_pred)
+                        predicted_logic = logic_net(log_pred).squeeze()
+                        fake = torch.ones_like(predicted_logic)
+                        logic_loss2 = F.binary_cross_entropy_with_logits(predicted_logic, fake, reduction="none")
+                        logic_loss2 = logic_loss2[~true_logic].sum() / len(predicted_logic)
+                        loss += logic_loss2
 
                 log_preds, latent = model_y(y_l)
                 (z, mu, logvar, cmu_, clv_) = latent
@@ -270,6 +300,10 @@ def main():
         y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
         if args.generative_loss:
             y_full, latent = model_y(y)
+            if args.dataset == "cifar100":
+                log_pred = torch.log_softmax(y_full, dim=-1)
+                superclassacc.add(get_cifar100_pred(log_pred), get_true_cifar100_sc(targets).to(device))
+
             recon_loss = F.cross_entropy(y_full, targets)
             return recon_loss.mean(), y_full
 
@@ -322,14 +356,18 @@ def main():
         train_loss = meter_loss.value()
         train_acc = classacc.value()[0]
         train_time = timer_train.value()
+
         meter_loss.reset()
         classacc.reset()
         timer_test.reset()
+        superclassacc.reset()
 
         with torch.no_grad():
             engine.test(compute_loss_test, test_loader)
 
         test_acc = classacc.value()[0]
+        sc_acc = superclassacc.value()[0]
+
         print(log({
             "train_loss": train_loss[0],
             "train_acc": train_acc,
@@ -340,9 +378,9 @@ def main():
             "n_parameters": n_parameters,
             "train_time": train_time,
             "test_time": timer_test.value(),
+            "super_class_acc": sc_acc,
         }, state))
-        print('==> id: %s (%d/%d), test_acc: \33[91m%.2f\033[0m' %
-              (args.save, state['epoch'], args.epochs, test_acc))
+        print('==> id: %s (%d/%d), test_acc: \33[91m%.2f\033[0m' % (args.save, state['epoch'], args.epochs, test_acc))
 
         global counter
         counter += 1

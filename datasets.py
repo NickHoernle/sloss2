@@ -8,6 +8,15 @@ import os
 from glob import glob
 
 
+def check_dataset(dataset, dataroot, download):
+    if dataset == "cifar10":
+        return get_CIFAR10(dataroot, download)
+    if dataset == "cifar100":
+        return get_CIFAR100(dataroot, download)
+
+    raise NotImplementedError(f"No dataset for {dataset}")
+
+
 class Joint(data.Dataset):
     def __init__(self, dataset1, dataset2, transform=[]):
         self.transform = transforms.Compose(transform)
@@ -30,47 +39,21 @@ def get_CIFAR10(dataroot, download):
     num_classes = 10
     normalize = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     test_transform = transforms.Compose([transforms.ToTensor(), normalize])
-    augment = False
-    if augment:
-        transformations = [transforms.RandomCrop(size=32, padding=int(32 * 0.125), padding_mode='reflect'),
-                           transforms.RandomHorizontalFlip()]
-    else:
-        transformations = []
-    # transformations.extend([transforms.ToTensor(), normalize])
-    train_transform = transforms.Compose(transformations)
-
-    path = Path(dataroot) #/ 'data' / 'CIFAR10'
-    train_dataset = datasets.CIFAR10(path, train=True,
-                                     download=download)
-
-    test_dataset = datasets.CIFAR10(path, train=False,
-                                    transform=test_transform,
-                                    download=download)
-    return image_shape, num_classes, train_dataset, test_dataset
+    path = Path(dataroot)
+    train_dataset = datasets.CIFAR10(path, train=True, download=download)
+    test_dataset = datasets.CIFAR10(path, train=False, transform=test_transform, download=download)
+    return image_shape, num_classes, train_dataset, test_dataset, train_dataset.targets
 
 
 def get_CIFAR100(dataroot, download):
     image_shape = (32, 32, 3)
-    num_classes = 10
+    num_classes = 100
     normalize = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     test_transform = transforms.Compose([transforms.ToTensor(), normalize])
-    augment = False
-    if augment:
-        transformations = [transforms.RandomCrop(size=32, padding=int(32 * 0.125), padding_mode='reflect'),
-                           transforms.RandomHorizontalFlip()]
-    else:
-        transformations = []
-    # transformations.extend([transforms.ToTensor(), normalize])
-    train_transform = transforms.Compose(transformations)
-
-    path = Path(dataroot) #/ 'data' / 'CIFAR10'
-    train_dataset = datasets.CIFAR10(path, train=True,
-                                     download=download)
-
-    test_dataset = datasets.CIFAR10(path, train=False,
-                                    transform=test_transform,
-                                    download=download)
-    return image_shape, num_classes, train_dataset, test_dataset
+    path = Path(dataroot)
+    train_dataset = datasets.CIFAR100(path, train=True, download=download)
+    test_dataset = datasets.CIFAR100(path, train=False, transform=test_transform, download=download)
+    return image_shape, num_classes, train_dataset, test_dataset, train_dataset.targets
 
 
 def get_SVHN(augment, dataroot, download):

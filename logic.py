@@ -1,5 +1,3 @@
-
-from torch import nn
 from utils import *
 
 superclass_mapping = {
@@ -129,6 +127,7 @@ super_class_label = {
 }
 
 fc_mapping = {}
+global sc_map
 
 sc_prev = ""
 count = 0
@@ -142,6 +141,12 @@ for fc, sc in sorted(superclass_mapping.items(), key=lambda x: x[1]):
         sc_prev = sc
         fc_mapping[fc] = count
         count += 1
+
+
+def set_class_mapping(classes):
+    global sc_map
+    sc_map_ = np.array([super_class_label[superclass_mapping[c]] for c in classes])
+    sc_map = np.argsort(sc_map_)
 
 
 class DecoderModel(nn.Module):
@@ -202,9 +207,7 @@ class LogicNet(nn.Module):
     def __init__(self, num_dim):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(num_dim, 50),
-            nn.Sigmoid(),
-            nn.Linear(50, 100),
+            nn.Linear(num_dim, 100),
             nn.Sigmoid(),
             nn.Linear(100, 100),
             nn.Sigmoid(),
@@ -218,5 +221,14 @@ class LogicNet(nn.Module):
         return self.net(x)
 
 
-def cifar100_logic(variables, device):
-    pass
+def get_true_cifar100_sc(fc_labels):
+    return torch.tensor([sc_map[c] for c in fc_labels])
+
+
+def get_cifar100_pred(samples):
+    return torch.stack(samples.split(5, dim=-1), dim=1).logsumexp(dim=-1)
+
+
+def cifar100_logic(samples):
+    super_class_preds = get_cifar100_pred(samples)
+    return ((super_class_preds.exp() > 0.95) | (super_class_preds.exp() < 0.05)).all(dim=1)
