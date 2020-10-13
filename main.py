@@ -169,9 +169,10 @@ def main():
     if not os.path.exists(args.save):
         os.mkdir(args.save)
 
-    global counter
+    global counter, classes
     if args.dataset == "cifar100":
-        set_class_mapping(test_dataset.classes)
+        classes = test_dataset.classes
+        set_class_mapping(classes)
     counter = 0
 
     # device = torch.cuda.current_device()
@@ -304,7 +305,7 @@ def main():
             y_full, latent = model_y(y)
             if args.dataset == "cifar100":
                 log_pred = torch.log_softmax(y_full, dim=-1)
-                superclassacc.add(get_cifar100_pred(log_pred), get_true_cifar100_sc(targets).to(device))
+                superclassacc.add(get_cifar100_pred(log_pred), get_true_cifar100_sc(targets, classes).to(device))
 
             recon_loss = F.cross_entropy(y_full, targets)
             return recon_loss.mean(), y_full

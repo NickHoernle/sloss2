@@ -220,8 +220,8 @@ class LogicNet(nn.Module):
         return self.net(x)
 
 
-def get_true_cifar100_sc(fc_labels):
-    return torch.tensor([sc_map[c] for c in fc_labels])
+def get_true_cifar100_sc(fc_labels, classes):
+    return torch.tensor([super_class_label[superclass_mapping[classes[c]]] for c in fc_labels])
 
 
 def get_cifar100_pred(samples):
