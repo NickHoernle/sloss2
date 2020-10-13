@@ -1,32 +1,23 @@
 import argparse
 import os
 import json
-import numpy as np
-import random
 from tqdm import tqdm
-import torch
+
 from torch.optim import SGD, Adam
 from torch.optim.lr_scheduler import StepLR
 import torch.utils.data as data
-from torch.utils.data import DataLoader, Subset
-from torchvision import transforms, datasets
-import torch.nn.functional as F
-from torch import nn
+from torch.utils.data import Subset
+from torchvision import transforms
 
 import torchnet as tnt
 from torchnet.engine import Engine
-from utils import cast, data_parallel, print_tensor_dict, x_u_split, calculate_accuracy
+from utils import *
 from torch.backends import cudnn
 from resnet import resnet
-from datasets import get_CIFAR10, get_SVHN, Joint, get_AwA2
-from flows import Invertible1x1Conv, NormalizingFlowModel
-from spline_flows import NSF_CL
-from torch.distributions import MultivariateNormal
-import itertools
-from torch.distributions.dirichlet import Dirichlet
-from torch.distributions.categorical import Categorical
-from torch.distributions.bernoulli import Bernoulli
-from torch.distributions.beta import Beta
+from datasets import Joint
+
+from logic import DecoderModel
+
 
 cudnn.benchmark = True
 
@@ -47,7 +38,7 @@ parser.add_argument('--eval_batch_size', default=512, type=int)
 parser.add_argument('--lr', default=0.1, type=float)
 parser.add_argument('--epochs', default=200, type=int, metavar='N',
                     help='number of total epochs to run')
-parser.add_argument('--weight_decay', default=0.0005, type=float)
+parser.add_argument('--weight_decay', default=0.0004, type=float)
 parser.add_argument('--epoch_step', default='[60, 120, 160]', type=str,
                     help='json list with epochs to drop lr on')
 parser.add_argument('--lr_decay_ratio', default=0.2, type=float)
@@ -72,12 +63,10 @@ parser.add_argument("--ssl", action="store_true",
                     help="Do semi-supervised learning")
 parser.add_argument("--num_labelled", type=int, default=4000,
                     help="Number of labelled data points")
-parser.add_argument("--min_entropy", action="store_true",
-                    help="Add the minimum entropy loss")
-parser.add_argument("--lp", action="store_true",
-                    help="Add the learned prior (LP) loss")
 parser.add_argument("--semantic_loss", action="store_true",
                     help="Add the semantic loss")
+parser.add_argument("--generative_loss", action="store_true",
+                    help="Add the generative loss")
 parser.add_argument("--unl_weight", type=float, default=0.1,
                     help="Weight for unlabelled regularizer loss")
 parser.add_argument("--unl2_weight", type=float, default=0.1,
@@ -86,162 +75,8 @@ parser.add_argument("--num_hidden", type=int, default=10,
                     help="Dim of the latent dimension used")
 
 
-def one_hot_embedding(labels, num_classes, device="cuda:0"):
-    """Embedding labels to one-hot form.
-
-    Args:
-      labels: (LongTensor) class labels, sized [N,].
-      num_classes: (int) number of classes.
-
-    Returns:
-      (tensor) encoded labels, sized [N, #classes].
-    """
-    y = torch.eye(num_classes).to(device)
-    return y[labels]
-
-
-def log_normal(x, m, log_v):
-    """
-    Computes the elem-wise log probability of a Gaussian and then sum over the
-    last dim. Basically we're assuming all dims are batch dims except for the
-    last dim.
-    Args:
-        x: tensor: (batch, ..., dim): Observation
-        m: tensor: (batch, ..., dim): Mean
-        v: tensor: (batch, ..., dim): Variance
-    Return:
-        kl: tensor: (batch1, batch2, ...): log probability of each sample. Note
-            that the summation dimension (dim=-1) is not kept
-    """
-    ################################################################################
-    # TODO: Modify/complete the code here
-    # Compute element-wise log probability of normal and remember to sum over
-    # the last dimension
-    ################################################################################
-    # print("q_m", m.size())
-    # print("q_v", v.size())
-    const = -0.5 * x.size(-1) * torch.log(2 * torch.tensor(np.pi))
-    # print(const.size())
-    log_det = -0.5 * torch.sum(log_v, dim=-1)
-    # print("log_det", log_det.size())
-    log_exp = -0.5 * torch.sum((x - m) ** 2 / (log_v.exp()), dim=-1)
-
-    log_prob = const + log_det + log_exp
-
-    ################################################################################
-    # End of code modification
-    ################################################################################
-    return log_prob
-
-
-def gaussian_parameters(h, dim=-1):
-    """
-    Thanks: https://github.com/divymurli/VAEs/blob/master/codebase/utils.py
-    Converts generic real-valued representations into mean and variance
-    parameters of a Gaussian distribution
-    Args:
-        h: tensor: (batch, ..., dim, ...): Arbitrary tensor
-        dim: int: (): Dimension along which to split the tensor for mean and
-            variance
-    Returns:z
-        m: tensor: (batch, ..., dim / 2, ...): Mean
-        v: tensor: (batch, ..., dim / 2, ...): Variance
-    """
-    m, h = torch.split(h, h.size(dim) // 2, dim=dim)
-    v = F.softplus(h) + 1e-8
-    return m, v
-
-
-def check_dataset(dataset, dataroot, augment, download):
-    if dataset == "cifar10":
-        dataset = get_CIFAR10(augment, dataroot, download)
-    if dataset == "svhn":
-        dataset = get_SVHN(augment, dataroot, download)
-    if dataset == "awa2":
-        dataset = get_AwA2(augment, dataroot)
-    return dataset
-
-
-def check_manual_seed(seed):
-    random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
-
-
-def reparameterise(mu, logvar):
-    std = torch.exp(0.5 * logvar)
-    eps = torch.randn_like(std)
-    return mu + eps*std
-
-
-def init_weights(m):
-    if type(m) == nn.Linear:
-        torch.nn.init.xavier_uniform(m.weight)
-        m.bias.data.fill_(0.01)
-
-
-class DecoderModel(nn.Module):
-    def __init__(self, num_classes, z_dim=2):
-        super().__init__()
-
-        # local params
-        self.mu = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
-        self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
-        self.log_pi = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
-
-        # global params
-        self.cluster_means = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
-        self.cluster_lvariances = nn.Parameter(torch.zeros(num_classes, z_dim), requires_grad=True)
-
-        self.net = nn.Sequential(nn.Linear(z_dim, 50), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
-
-        self.nc = num_classes
-        self.zdim = z_dim
-        self.apply(init_weights)
-
-    def get_global_params(self):
-        return [v for k, v in self.named_parameters() if ("cluster_means" in k) or ("cluster_lvariances" in k)]
-
-    def get_local_params(self):
-        return [v for k, v in self.named_parameters() if ("mu" in k) or ("logvar" in k)]
-
-    def forward(self, x):
-        # encode
-        mu = self.mu(x)
-        logvar = self.logvar(x)
-
-        # resample
-        z = reparameterise(mu, logvar)
-
-        # evaluate cluster params
-        cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
-        cluster_logvars = torch.zeros_like(cluster_mus)
-
-        # calculate log-prob
-        # log_probs = log_normal(z, cluster_mus, cluster_logvars)
-        prediction = self.net(z)
-
-        return prediction, (z, mu, logvar, cluster_mus, cluster_logvars)
-
-    def train_generative_only(self, num_samples):
-        cluster_mus = self.cluster_means.unsqueeze(0).repeat(num_samples, 1, 1)
-        cluster_logvars = torch.zeros_like(cluster_mus)
-
-        z2 = reparameterise(cluster_mus, cluster_logvars)
-
-        log_probs = torch.stack([self.net(z2[:, i, :]) for i in range(self.nc)], dim=1)
-
-        return log_probs, (cluster_mus, cluster_logvars)
-
-
 def main():
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
-    # device = "cpu"
 
     args = parser.parse_args()
     print('parsed options:', vars(args))
@@ -250,14 +85,9 @@ def main():
     check_manual_seed(args.seed)
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_id
 
-    ds = check_dataset(args.dataset, args.dataroot, args.augment, args.download)
+    ds = check_dataset(args.dataset, args.dataroot, args.download)
 
-    if args.dataset == "awa2":
-        image_shape, num_classes, train_dataset, test_dataset, all_labels = ds
-        all_labels = all_labels.to(device)
-    else:
-        image_shape, num_classes, train_dataset, test_dataset = ds
-        all_labels = torch.eye(num_classes).to(device)
+    image_shape, num_classes, train_dataset, test_dataset = ds
 
     if args.ssl:
         num_labelled = args.num_labelled
@@ -297,20 +127,21 @@ def main():
         num_workers=args.n_workers,
         worker_init_fn=_init_fn
     )
+
     z_dim = args.num_hidden
     model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
 
-    if args.lp:
+    if args.generative_loss:
         model_y = DecoderModel(num_classes, z_dim)
         model_y.to(device)
         model_y.apply(init_weights)
-        optimizer_y = Adam(model_y.get_global_params(), lr=1e-1)
-        scheduler = StepLR(optimizer_y, step_size=10, gamma=0.7)
+        model_y.train()
 
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
         params_ = [v for v in params.values() if v.requires_grad]
-        params_ += model_y.parameters()
+        if args.generative_loss:
+            params_ += model_y.parameters()
         return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
 
     optimizer = create_optimizer(args, args.lr)
@@ -321,22 +152,22 @@ def main():
     print_tensor_dict(params)
 
     n_parameters = sum(p.numel() for p in params.values() if p.requires_grad)
+    if args.generative_loss:
+        n_parameters = sum(p.numel() for p in model_y.parameters())
     print('\nTotal number of parameters:', n_parameters)
 
     meter_loss = tnt.meter.AverageValueMeter()
-    if args.dataset == "awa2":
-        classacc = tnt.meter.AverageValueMeter()
-    else:
-        classacc = tnt.meter.ClassErrorMeter(accuracy=True)
+
+    classacc = tnt.meter.ClassErrorMeter(accuracy=True)
+
     timer_train = tnt.meter.TimeMeter('s')
     timer_test = tnt.meter.TimeMeter('s')
 
     if not os.path.exists(args.save):
         os.mkdir(args.save)
 
-    global counter, aggressive
+    global counter
     counter = 0
-    aggressive = False
 
     # device = torch.cuda.current_device()
     # print(f"On GPU: {device}")
@@ -351,12 +182,6 @@ def main():
 
     def compute_loss(sample):
 
-        alpha = 1./num_classes**2
-        # mu_prior = (np.log(alpha) - 1 / np.log(alpha)) * num_classes ** 2
-        sigma_prior = (1. / alpha * (1 - 2. / num_classes) + 1 / (num_classes ** 2) * num_classes / alpha)
-        log_det_sigma = num_classes * np.log(sigma_prior)
-
-        model_y.train()
         if not args.ssl:
             inputs = cast(sample[0], args.dtype)
             targets = cast(sample[1], 'long')
@@ -378,30 +203,12 @@ def main():
             inputs_u2 = cast(u2[0], args.dtype)
 
             y_l = data_parallel(model, inputs_l, params, sample[3], list(range(args.ngpu))).float()
-            y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
-            y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
+            loss = F.cross_entropy(y_l, targets_l)
 
-            if args.dataset == "awa2":
-                loss = F.binary_cross_entropy_with_logits(y_l, targets_l.float())
-            else:
-                loss = F.cross_entropy(y_l, targets_l)
-
-            if args.min_entropy:
-                if args.dataset == "awa2":
-                    labels_pred = F.sigmoid(y_u)
-                    entropy = -torch.sum(labels_pred * torch.log(labels_pred), dim=1)
-                else:
-                    labels_pred = F.softmax(y_u, dim=1)
-                    entropy = -torch.sum(labels_pred * torch.log(labels_pred), dim=1)
-                if counter >= 10:
-                    loss_entropy = args.unl_weight * torch.mean(entropy)
-                    loss += loss_entropy
-
-            elif args.semantic_loss:
-                if args.dataset == "awa2":
-                    labels_pred = F.sigmoid(y_u)
-                else:
-                    labels_pred = F.softmax(y_u, dim=1)
+            if args.semantic_loss:
+                y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
+                labels_pred = F.softmax(y_u, dim=1)
+                all_labels = torch.eye(num_classes).to(device)
                 part1 = torch.stack([labels_pred ** all_labels[i] for i in range(all_labels.shape[0])])
                 part2 = torch.stack([(1 - labels_pred) ** (1 - all_labels[i]) for i in range(all_labels.shape[0])])
                 sem_loss = -torch.log(torch.sum(torch.prod(part1 * part2, dim=2), dim=0))
@@ -409,8 +216,8 @@ def main():
                     semantic_loss = args.unl_weight * torch.mean(sem_loss)
                     loss += semantic_loss
 
-            elif args.lp:
-                # weight = 1.
+            elif args.generative_loss:
+
                 ixs = np.arange(len(y_l))
 
                 # custom generator loss
@@ -434,6 +241,9 @@ def main():
 
                 # unsupervised part
                 if counter > 20:
+                    y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
+                    y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
+
                     log_preds_u, latent_u = model_y(y_u)
                     log_preds_u2, latent_u2 = model_y(y_u2)
 
@@ -458,22 +268,12 @@ def main():
         inputs = cast(sample[0], args.dtype)
         targets = cast(sample[1], 'long')
         y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
-        if args.lp:
+        if args.generative_loss:
             y_full, latent = model_y(y)
-
-            # q_mu, q_logvar, log_alpha = latent
-            # preds = (log_alpha.exp().unsqueeze(-1) * y_full).sum(dim=1)
-            #
-            # tgts = one_hot_embedding(targets, num_classes, device=device)
-            # recon_loss = F.binary_cross_entropy_with_logits(y_full, tgts)\
             recon_loss = F.cross_entropy(y_full, targets)
-
             return recon_loss.mean(), y_full
 
-        if args.dataset == "awa2":
-            return F.binary_cross_entropy_with_logits(y, targets.float()), y
-        else:
-            return F.cross_entropy(y, targets), y
+        return F.cross_entropy(y, targets), y
 
     def log(t, state):
         torch.save(dict(params=params, epoch=t['epoch'], optimizer=state['optimizer'].state_dict()),
@@ -546,8 +346,6 @@ def main():
 
         global counter
         counter += 1
-
-        scheduler.step()
 
     engine = Engine()
     engine.hooks['on_sample'] = on_sample

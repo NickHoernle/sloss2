@@ -1,4 +1,7 @@
 import torch
+import random
+import os
+from torch import nn
 from torch.nn.init import kaiming_normal_
 import torch.nn.functional as F
 from torch.nn.parallel._functions import Broadcast
@@ -6,6 +9,7 @@ from torch.nn.parallel import scatter, parallel_apply, gather
 from functools import partial
 from nested_dict import nested_dict
 import numpy as np
+from datasets import get_CIFAR10, get_CIFAR100
 
 
 def cast(params, dtype='float'):
@@ -96,3 +100,49 @@ def calculate_accuracy(preds, labels):
     acc = np.sum(np.all(preds == labels, axis=1)) / float(labels.shape[0])
     return acc * 100
 
+
+def one_hot_embedding(labels, num_classes, device="cuda:0"):
+    y = torch.eye(num_classes).to(device)
+    return y[labels]
+
+
+def log_normal(x, m, log_v):
+    const = -0.5 * x.size(-1) * torch.log(2 * torch.tensor(np.pi))
+    log_det = -0.5 * torch.sum(log_v, dim=-1)
+    log_exp = -0.5 * torch.sum((x - m) ** 2 / (log_v.exp()), dim=-1)
+
+    log_prob = const + log_det + log_exp
+
+    return log_prob
+
+
+def check_dataset(dataset, dataroot, download):
+    if dataset == "cifar10":
+        return get_CIFAR10(dataroot, download)
+    if dataset == "cifar100":
+        return get_CIFAR10(dataroot, download)
+
+    raise NotImplementedError(f"No dataset for {dataset}")
+
+
+def check_manual_seed(seed):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+
+
+def reparameterise(mu, logvar):
+    std = torch.exp(0.5 * logvar)
+    eps = torch.randn_like(std)
+    return mu + eps*std
+
+
+def init_weights(m):
+    if type(m) == nn.Linear:
+        torch.nn.init.xavier_uniform(m.weight)
+        m.bias.data.fill_(0.01)

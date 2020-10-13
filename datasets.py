@@ -25,7 +25,31 @@ class Joint(data.Dataset):
         return len(self.dataset1)
 
 
-def get_CIFAR10(augment, dataroot, download):
+def get_CIFAR10(dataroot, download):
+    image_shape = (32, 32, 3)
+    num_classes = 10
+    normalize = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    test_transform = transforms.Compose([transforms.ToTensor(), normalize])
+    augment = False
+    if augment:
+        transformations = [transforms.RandomCrop(size=32, padding=int(32 * 0.125), padding_mode='reflect'),
+                           transforms.RandomHorizontalFlip()]
+    else:
+        transformations = []
+    # transformations.extend([transforms.ToTensor(), normalize])
+    train_transform = transforms.Compose(transformations)
+
+    path = Path(dataroot) #/ 'data' / 'CIFAR10'
+    train_dataset = datasets.CIFAR10(path, train=True,
+                                     download=download)
+
+    test_dataset = datasets.CIFAR10(path, train=False,
+                                    transform=test_transform,
+                                    download=download)
+    return image_shape, num_classes, train_dataset, test_dataset
+
+
+def get_CIFAR100(dataroot, download):
     image_shape = (32, 32, 3)
     num_classes = 10
     normalize = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))

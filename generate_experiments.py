@@ -11,15 +11,15 @@ SCRATCH_HOME = f'{SCRATCH_DISK}/{USER}'
 
 DATA_HOME = f'{SCRATCH_HOME}/vaelib'
 base_call = (f"python main.py --save {DATA_HOME}/logs/resnet_$RANDOM$RANDOM "
-             f"--depth 28 --width 2 --ngpu 1 --dataroot {DATA_HOME}/data --epochs 250 "
-             f"--num_labelled 4000 --cuda --ssl --lp --epoch_step [60,120,160,200]")
+             f"--depth 28 --width 2 --ngpu 1 --dataroot {DATA_HOME}/data "
+             f"--num_labelled 4000 --cuda --ssl --generative_loss --epoch_step [60,120,160]")
 
 repeats = 1
 
 dataset = ["cifar10"]
 learning_rate = [.1]
-unl_weight = [.1, .075, .05]
-unl2_weight = [1, .5, 0.1]
+unl_weight = [.1, .05, .01]
+unl2_weight = [.1, .05, .01]
 lr_decay_ratio = [.2]
 num_hidden = [10]
 

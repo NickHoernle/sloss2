@@ -1,7 +1,6 @@
-import torch
-from torch import nn
-import torch.nn.functional as F
 
+from torch import nn
+from utils import *
 
 superclass_mapping = {
     'beaver': 'aquatic mammals',
@@ -134,60 +133,68 @@ fc_mapping = {}
 sc_prev = ""
 count = 0
 
+for fc, sc in sorted(superclass_mapping.items(), key=lambda x: x[1]):
+    if sc == sc_prev:
+        fc_mapping[fc] = count
+        count += 1
+    else:
+        count = 0
+        sc_prev = sc
+        fc_mapping[fc] = count
+        count += 1
 
-class Decoder(nn.Module):
-    def __init__(self, hidden_dim, num_dim):
+
+class DecoderModel(nn.Module):
+    def __init__(self, num_classes, z_dim=2):
         super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(hidden_dim, 100),
-            nn.ReLU(True),
-            nn.Linear(100, 100),
-            nn.ReLU(True),
-            nn.Linear(100, num_dim)
-        )
+
+        # local params
+        self.mu = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
+        self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
+        self.log_pi = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
+
+        # global params
+        self.cluster_means = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
+        self.cluster_lvariances = nn.Parameter(torch.zeros(num_classes, z_dim), requires_grad=True)
+
+        self.net = nn.Sequential(nn.Linear(z_dim, 50), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
+
+        self.nc = num_classes
+        self.zdim = z_dim
+        self.apply(init_weights)
+
+    def get_global_params(self):
+        return [v for k, v in self.named_parameters() if ("cluster_means" in k) or ("cluster_lvariances" in k)]
+
+    def get_local_params(self):
+        return [v for k, v in self.named_parameters() if ("mu" in k) or ("logvar" in k)]
 
     def forward(self, x):
-        return self.net(x)
+        # encode
+        mu = self.mu(x)
+        logvar = self.logvar(x)
 
+        # resample
+        z = reparameterise(mu, logvar)
 
-def simplex_transform(y, device):
-    k = torch.arange(y.size(1)).float().to(device)
-    K = len(k) + 1
+        # evaluate cluster params
+        cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
+        cluster_logvars = torch.zeros_like(cluster_mus)
 
-    z = torch.sigmoid(y + torch.log(1 / (K - k)))
+        # calculate log-prob
+        prediction = self.net(z)
 
-    x = torch.cat((torch.zeros_like(y), torch.zeros_like(y[:, 0]).unsqueeze(1)), dim=1).to(device)
+        return prediction, (z, mu, logvar, cluster_mus, cluster_logvars)
 
-    for i in range(K - 1):
-        x[:, i] = (1 - torch.sum(x[:, :i], dim=1)) * z[:, i]
+    def train_generative_only(self, num_samples):
+        cluster_mus = self.cluster_means.unsqueeze(0).repeat(num_samples, 1, 1)
+        cluster_logvars = torch.zeros_like(cluster_mus)
 
-    x[:, -1] = (1 - torch.sum(x[:, :-1], dim=1))
+        z2 = reparameterise(cluster_mus, cluster_logvars)
 
-    return x
+        log_probs = torch.stack([self.net(z2[:, i, :]) for i in range(self.nc)], dim=1)
 
-
-def logit(x):
-    return torch.log(x) - torch.log1p(-x)
-
-
-def inverse_simplex_transform(x, device):
-    K = x.size(1)
-    k = torch.arange(K - 1).float().to(device)
-
-    if x.max() == 1:
-        # if one hot then change to be .99
-        factor = torch.tensor(np.random.uniform(99, 999, size=len(x))).unsqueeze(1).float().to(device)
-        x *= factor
-        idxs = (x == 0)
-        lower_factor = torch.tensor(np.random.uniform(0, 1, size=idxs.sum())).float().to(device)
-        x[idxs] = lower_factor
-        x /= x.sum(dim=1).unsqueeze(1)
-
-    z = torch.zeros_like(x[:, :-1])
-    for i in range(K - 1):
-        z[:, i] = x[:, i] / (1 - torch.sum(x[:, :i], dim=1))
-
-    return logit(z) + torch.log(K - k)
+        return log_probs, (cluster_mus, cluster_logvars)
 
 
 class LogicNet(nn.Module):
@@ -210,88 +217,6 @@ class LogicNet(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-for fc, sc in sorted(superclass_mapping.items(), key=lambda x: x[1]):
-    if sc == sc_prev:
-        fc_mapping[fc] = count
-        count += 1
-    else:
-        count = 0
-        sc_prev = sc
-        fc_mapping[fc] = count
-        count += 1
-
-
-def log_sigmoid(x):
-    return x - torch.log1p(x)
-
-
-def log_sigmoid(x):
-    return x - torch.log1p(x)
-
-
-def cifar10_logic(variables, **kwargs):
-    probs = variables
-    return ((probs > 0.99) | (probs < 0.01)).all(dim=1).float()
-    # we are dealing with one-hot assigments
-    # assignments = torch.eye(10).to(device)
-    # lower_triang = torch.tril(torch.ones_like(assignments)) - assignments
-    #
-    # log_probabilities = F.logsigmoid(variables)
-    # log_1_min_prob = F.logsigmoid(-variables)
-    #
-    # log_prob = torch.cat((log_probabilities, torch.zeros_like(log_probabilities[:, 0]).unsqueeze(1)), dim=1)
-    # log_1_min_prob = torch.cat((log_1_min_prob, torch.zeros_like(log_1_min_prob[:, 0]).unsqueeze(1)), dim=1)
-    #
-    # weight = log_prob.unsqueeze(1) * assignments.unsqueeze(0).repeat(log_prob.shape[0], 1, 1)
-    # weight2 = log_1_min_prob.unsqueeze(1) * lower_triang.unsqueeze(0).repeat(log_1_min_prob.shape[0], 1, 1)
-    #
-    # log_WMC = (weight.sum(dim=2) + weight2.sum(dim=2))
-    #
-    # return log_WMC
-
 
 def cifar100_logic(variables, device):
-    # we are dealing with one-hot assigments
-    sc_assign = torch.eye(20).to(device)
-    fc_assign = torch.eye(5).to(device)
-
-    lower_triang_sc = torch.tril(torch.ones_like(sc_assign)) - sc_assign
-    lower_triang_fc = torch.tril(torch.ones_like(fc_assign)) - fc_assign
-
-    log_probabilities = F.logsigmoid(variables)
-    log_1_min_prob = F.logsigmoid(-variables)
-
-    sc_pred = log_probabilities[:, :19]
-    fc_pred = log_probabilities[:, 19:]
-    # fc_pred = log_probabilities[:, 19:].view(log_probabilities.shape[0], -1, 4)
-
-    sc_1min_pred = log_1_min_prob[:, :19]
-    fc_1min_pred = log_1_min_prob[:, 19:]
-    # fc_1min_pred = log_1_min_prob[:, 19:].view(log_1_min_prob.shape[0], -1, 4)
-
-    sc_log_prob = torch.cat((sc_pred, torch.zeros_like(sc_pred[:, 0]).unsqueeze(1)), dim=1)
-    fc_log_prob = torch.cat((fc_pred, torch.zeros_like(fc_pred[:, 0]).unsqueeze(1)), dim=1)
-    # fc_log_prob = torch.cat((fc_pred, torch.zeros_like(fc_pred[:, :, 0]).unsqueeze(2)), dim=2)
-
-    sc_log_1min_prob = torch.cat((sc_1min_pred, torch.zeros_like(sc_1min_pred[:, 0]).unsqueeze(1)), dim=1)
-    fc_log_1min_prob = torch.cat((fc_1min_pred, torch.zeros_like(fc_1min_pred[:, 0]).unsqueeze(1)), dim=1)
-    # fc_log_1min_prob = torch.cat((fc_1min_pred, torch.zeros_like(fc_1min_pred[:, :, 0]).unsqueeze(2)), dim=2)
-
-    weight_sc = sc_log_prob.unsqueeze(1) * sc_assign.unsqueeze(0).repeat(sc_log_prob.shape[0], 1, 1)
-    weight2_sc = sc_log_1min_prob.unsqueeze(1) * lower_triang_sc.unsqueeze(0).repeat(sc_log_1min_prob.shape[0], 1, 1)
-
-    weight_fc = fc_log_prob.unsqueeze(1) * fc_assign.unsqueeze(0).repeat(fc_log_prob.shape[0], 1, 1)
-    weight2_fc = fc_log_1min_prob.unsqueeze(1) * lower_triang_fc.unsqueeze(0).repeat(fc_log_1min_prob.shape[0], 1, 1)
-
-    # weight_fc = fc_log_prob.unsqueeze(2) * fc_assign.view(1,1,5,5).repeat(fc_log_prob.shape[0], 1, 1, 1)
-    # weight2_fc = fc_log_1min_prob.unsqueeze(2) * lower_triang_fc.unsqueeze(0).repeat(fc_log_1min_prob.shape[0], 1, 1, 1)
-
-    log_WMC_sc = (weight_sc.sum(dim=2) + weight2_sc.sum(dim=2))
-    log_WMC_fc = (weight_fc.sum(dim=2) + weight2_fc.sum(dim=2))
-    # log_WMC_fc = (weight_fc.sum(dim=3) + weight2_fc.sum(dim=3))
-
-    log_WMC_sc_p = log_WMC_sc.view(-1, 1).repeat(1, 5).view(-1, 100)
-    log_WMC_fc_p = log_WMC_fc.repeat(1, 20)
-    # log_WMC_fc_p = log_WMC_fc.view(-1, 100)
-
-    return log_WMC_sc, log_WMC_fc, (log_WMC_sc_p+log_WMC_fc_p)
+    pass
