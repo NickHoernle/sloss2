@@ -250,7 +250,7 @@ def main():
                     loss += F.nll_loss(log_pred, fake_tgts)
 
                     if args.dataset == "cifar100":
-                        if counter > 40:
+                        if counter > 25:
                             # chances that the samples break the logic
                             true_logic = cifar100_logic(log_pred)
                             predicted_logic = logic_net(log_pred).squeeze()
