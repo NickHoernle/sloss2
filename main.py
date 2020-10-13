@@ -249,13 +249,14 @@ def main():
                     loss += F.nll_loss(log_pred, fake_tgts)
 
                     if args.dataset == "cifar100":
-                        # chances that the samples break the logic
-                        true_logic = cifar100_logic(log_pred)
-                        predicted_logic = logic_net(log_pred).squeeze()
-                        fake = torch.ones_like(predicted_logic)
-                        logic_loss2 = F.binary_cross_entropy_with_logits(predicted_logic, fake, reduction="none")
-                        logic_loss2 = logic_loss2[~true_logic].sum() / len(predicted_logic)
-                        loss += logic_loss2
+                        if counter > 40:
+                            # chances that the samples break the logic
+                            true_logic = cifar100_logic(log_pred)
+                            predicted_logic = logic_net(log_pred).squeeze()
+                            fake = torch.ones_like(predicted_logic)
+                            logic_loss2 = F.binary_cross_entropy_with_logits(predicted_logic, fake, reduction="none")
+                            logic_loss2 = logic_loss2[~true_logic].sum() / len(predicted_logic)
+                            loss += logic_loss2
 
                 log_preds, latent = model_y(y_l)
                 (z, mu, logvar, cmu_, clv_) = latent
