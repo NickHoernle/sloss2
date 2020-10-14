@@ -238,7 +238,7 @@ def main():
                 ixs = np.arange(len(y_l))
 
                 # custom generator loss
-                log_preds, latent = model_y(y_l)
+                log_preds, latent = model_y(y_l.detach())
                 loss = F.cross_entropy(log_preds, targets_l)
                 opt_y.zero_grad()
                 loss.backward()
