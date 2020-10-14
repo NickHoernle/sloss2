@@ -16,7 +16,11 @@ from torch.backends import cudnn
 from resnet import resnet
 from datasets import Joint, check_dataset
 
-from logic import DecoderModel, cifar100_logic, LogicNet, set_class_mapping, get_cifar100_pred, get_true_cifar100_sc
+from logic import (
+    DecoderModel, cifar100_logic,
+    LogicNet, set_class_mapping,
+    get_cifar100_pred, get_true_cifar100_sc, get_cifar100_unnormed_pred
+)
 
 
 cudnn.benchmark = True
@@ -87,6 +91,7 @@ def main():
 
     ds = check_dataset(args.dataset, args.dataroot, args.download)
     image_shape, num_classes, train_dataset, test_dataset, td_targets = ds
+    num_super_classes = 20
 
     if args.ssl:
         num_labelled = args.num_labelled
@@ -132,6 +137,7 @@ def main():
         model_y.to(device)
         model_y.apply(init_weights)
         model_y.train()
+        opt_y = SGD(model_y.get_global_params(), lr=1e-2)
 
         if args.dataset == "cifar100":
             logic_net = LogicNet(num_classes)
@@ -226,40 +232,39 @@ def main():
 
                 ixs = np.arange(len(y_l))
 
-                if args.dataset == "cifar100":
-                    if counter > 1:
-                        logic_net.train()
-                        gen_samples, _ = model_y.train_generative_only(len(targets_l))
-                        logic_loss = 0
-                        for cat in range(num_classes):
-                            log_pred = torch.log_softmax(gen_samples[:, cat, :].detach(), dim=-1)
-                            true_logic = cifar100_logic(log_pred)
-                            predicted_logic = logic_net(log_pred).squeeze()
-                            logic_loss += F.binary_cross_entropy(predicted_logic, true_logic.float())
-
-                        logic_opt.zero_grad()
-                        logic_loss.backward()
-                        logic_opt.step()
-                        logic_net.eval()
-
                 # custom generator loss
+                log_preds, latent = model_y(y_l.detach())
+                loss = F.cross_entropy(log_preds, targets_l)
+
+                if args.dataset == "cifar100":
+                    logic_net.train()
+                    logic_loss = 0
+
+                    log_pred = torch.log_softmax(log_preds.detach(), dim=-1)
+                    true_logic = cifar100_logic(log_pred)
+                    predicted_logic = logic_net(log_pred).squeeze()
+
+                    logic_loss += F.binary_cross_entropy(predicted_logic, true_logic.float())
+
+                    logic_opt.zero_grad()
+                    logic_loss.backward()
+                    logic_opt.step()
+
+                    logic_net.eval()
+
+                    log_pred = torch.log_softmax(log_preds, dim=-1)
+                    true_logic = cifar100_logic(log_pred)
+                    predicted_logic = logic_net(log_pred).squeeze()
+
+                    logic_loss2 = F.binary_cross_entropy_with_logits(predicted_logic, torch.ones_like(predicted_logic), reduction="none")
+                    logic_loss2 = logic_loss2[~true_logic].sum() / len(predicted_logic)
+                    loss += logic_loss2
+
+                opt_y.zero_grad()
+                loss.backward()
+                opt_y.step()
+
                 loss = 0
-                log_preds_g, latent = model_y.train_generative_only(len(targets_l))
-                for cat in range(num_classes):
-                    fake_tgts = torch.ones_like(targets_l) * cat
-                    log_pred = torch.log_softmax(log_preds_g[:, cat, :], dim=-1)
-                    loss += F.nll_loss(log_pred, fake_tgts)
-
-                    if args.dataset == "cifar100":
-                        # if counter > 25:
-                        # chances that the samples break the logic
-                        true_logic = cifar100_logic(log_pred)
-                        predicted_logic = logic_net(log_pred).squeeze()
-                        fake = torch.ones_like(predicted_logic)
-                        logic_loss2 = F.binary_cross_entropy_with_logits(predicted_logic, fake, reduction="none")
-                        logic_loss2 = logic_loss2[~true_logic].sum() / len(predicted_logic)
-                        loss += 10*logic_loss2
-
                 log_preds, latent = model_y(y_l)
                 (z, mu, logvar, cmu_, clv_) = latent
 
@@ -305,7 +310,9 @@ def main():
             y_full, latent = model_y(y)
             if args.dataset == "cifar100":
                 log_pred = torch.log_softmax(y_full, dim=-1)
-                superclassacc.add(get_cifar100_pred(log_pred), get_true_cifar100_sc(targets, classes).to(device))
+                sc_pred = get_cifar100_pred(log_pred)
+                sc_targets = get_true_cifar100_sc(targets, classes).to(device)
+                superclassacc.add(sc_pred, sc_targets)
 
             recon_loss = F.cross_entropy(y_full, targets)
             return recon_loss.mean(), y_full

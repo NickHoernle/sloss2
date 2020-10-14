@@ -169,7 +169,10 @@ class DecoderModel(nn.Module):
         self.apply(init_weights)
 
     def get_global_params(self):
-        return [v for k, v in self.named_parameters() if ("cluster_means" in k) or ("cluster_lvariances" in k)]
+        return [v for k, v in self.named_parameters() if
+                ("cluster_means" in k) or
+                ("cluster_lvariances" in k) or
+                ("net" in k)]
 
     def get_local_params(self):
         return [v for k, v in self.named_parameters() if ("mu" in k) or ("logvar" in k)]
@@ -222,6 +225,10 @@ class LogicNet(nn.Module):
 
 def get_true_cifar100_sc(fc_labels, classes):
     return torch.tensor([super_class_label[superclass_mapping[classes[c]]] for c in fc_labels])
+
+
+def get_cifar100_unnormed_pred(samples):
+    return torch.stack(samples[:, sc_map].split(5, dim=-1), dim=1).logsumexp(dim=-1)
 
 
 def get_cifar100_pred(samples):
