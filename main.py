@@ -237,9 +237,43 @@ def main():
 
                 ixs = np.arange(len(y_l))
 
+                # custom generator loss
+                log_preds, latent = model_y.train_generative_only(y_l)
+                loss2 = F.cross_entropy(log_preds, targets_l)
+
+                if args.dataset == "cifar100":
+                    preds = torch.log_softmax(log_preds.detach(), dim=-1)
+
+                    logic_net.train()
+                    true_logic = cifar100_logic(preds).float()
+                    pred_logic = logic_net(preds).squeeze()
+
+                    logic_loss = F.binary_cross_entropy_with_logits(pred_logic, true_logic)
+
+                    logic_opt.zero_grad()
+                    logic_loss.backward()
+                    logic_opt.step()
+
+                    logic_net.eval()
+
+                    if counter > 10:
+                        preds = torch.log_softmax(log_preds, dim=-1)
+
+                        true_logic = cifar100_logic(preds)
+                        pred_logic = logic_net(preds).squeeze()
+
+                        logic_loss2 = F.binary_cross_entropy_with_logits(pred_logic, torch.ones_like(pred_logic),
+                                                                         reduction="none")
+                        logic_loss2 = logic_loss2[~true_logic].sum() / len(pred_logic)
+                        loss2 += logic_loss2
+
+                opt_y.zero_grad()
+                loss2.backward()
+                opt_y.step()
+
                 loss = 0
                 log_preds, latent = model_y(y_l)
-                # loss += F.cross_entropy(log_preds, targets_l)
+                loss += F.cross_entropy(log_preds, targets_l)
 
                 (z, mu, logvar, cmu_, clv_) = latent
 
@@ -271,42 +305,6 @@ def main():
                     reconstruction2 = (-(log_predictions.exp() * log_normal(z_expanded2, cluster_mus2, cluster_logvars2)).sum(dim=1) + log_normal(z2, mu2, logvar2)).mean()
 
                     loss += args.unl_weight*(reconstruction+reconstruction2)
-
-                # custom generator loss
-                log_preds, latent = model_y.train_generative_only(y_l)
-                loss2 = F.cross_entropy(log_preds, targets_l)
-
-                if args.dataset == "cifar100":
-                    preds = torch.log_softmax(log_preds.detach(), dim=-1)
-
-                    logic_net.train()
-                    true_logic = cifar100_logic(preds).float()
-                    pred_logic = logic_net(preds).squeeze()
-
-                    logic_loss = F.binary_cross_entropy_with_logits(pred_logic, true_logic)
-
-                    logic_opt.zero_grad()
-                    logic_loss.backward()
-                    logic_opt.step()
-
-                    logic_net.eval()
-
-                    if counter > 10:
-                        preds = torch.log_softmax(log_preds, dim=-1)
-
-                        true_logic = cifar100_logic(preds)
-                        pred_logic = logic_net(preds).squeeze()
-
-                        logic_loss2 = F.binary_cross_entropy_with_logits(pred_logic, torch.ones_like(pred_logic), reduction="none")
-                        logic_loss2 = logic_loss2[~true_logic].sum() / len(pred_logic)
-                        loss2 += logic_loss2
-
-                opt_y.zero_grad()
-                loss2.backward()
-                opt_y.step()
-
-                log_preds, latent = model_y(y_l)
-                loss += F.cross_entropy(log_preds, targets_l)
 
                 return loss, log_preds
 
