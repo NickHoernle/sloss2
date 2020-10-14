@@ -237,13 +237,6 @@ def main():
 
                 ixs = np.arange(len(y_l))
 
-                # custom generator loss
-                log_preds, latent = model_y(y_l.detach())
-                loss = F.cross_entropy(log_preds, targets_l)
-                opt_y.zero_grad()
-                loss.backward()
-                opt_y.step()
-
                 loss = 0
                 log_preds, latent = model_y(y_l)
                 (z, mu, logvar, cmu_, clv_) = latent
@@ -276,6 +269,17 @@ def main():
                     reconstruction2 = (-(log_predictions.exp() * log_normal(z_expanded2, cluster_mus2, cluster_logvars2)).sum(dim=1) + log_normal(z2, mu2, logvar2)).mean()
 
                     loss += args.unl_weight*(reconstruction+reconstruction2)
+
+                # custom generator loss
+                log_preds, latent = model_y(y_l.detach())
+                loss = F.cross_entropy(log_preds, targets_l)
+                if args.dataset == "cifar100":
+                    import pdb
+                    pdb.set_trace()
+
+                opt_y.zero_grad()
+                loss.backward()
+                opt_y.step()
 
                 return loss, log_preds
 
