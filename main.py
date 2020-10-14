@@ -239,9 +239,9 @@ def main():
 
                 loss = 0
                 log_preds, latent = model_y(y_l)
-                (z, mu, logvar, cmu_, clv_) = latent
-
                 # loss += F.cross_entropy(log_preds, targets_l)
+
+                (z, mu, logvar, cmu_, clv_) = latent
 
                 # encoder loss
                 cmu = cmu_[ixs, targets_l].detach()
@@ -304,6 +304,9 @@ def main():
                 opt_y.zero_grad()
                 loss2.backward()
                 opt_y.step()
+
+                log_preds, latent = model_y(y_l)
+                loss += F.cross_entropy(log_preds, targets_l)
 
                 return loss, log_preds
 
