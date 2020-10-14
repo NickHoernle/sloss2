@@ -271,14 +271,14 @@ def main():
                     loss += args.unl_weight*(reconstruction+reconstruction2)
 
                 # custom generator loss
-                log_preds, latent = model_y(y_l.detach())
-                loss = F.cross_entropy(log_preds, targets_l)
+                log_preds, latent = model_y.train_generative_only(y_l)
+                loss2 = F.cross_entropy(log_preds, targets_l)
                 if args.dataset == "cifar100":
                     import pdb
                     pdb.set_trace()
 
                 opt_y.zero_grad()
-                loss.backward()
+                loss2.backward()
                 opt_y.step()
 
                 return loss, log_preds
