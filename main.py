@@ -241,11 +241,11 @@ def main():
                 log_preds, latent = model_y(y_l)
                 (z, mu, logvar, cmu_, clv_) = latent
 
-                loss += F.cross_entropy(log_preds, targets_l)
+                # loss += F.cross_entropy(log_preds, targets_l)
 
                 # encoder loss
-                cmu = cmu_[ixs, targets_l]
-                clv = clv_[ixs, targets_l]
+                cmu = cmu_[ixs, targets_l].detach()
+                clv = clv_[ixs, targets_l].detach()
 
                 nll = args.unl2_weight*(-log_normal(z, cmu, clv) + log_normal(z, mu, logvar)).mean()
                 loss += nll
@@ -259,12 +259,14 @@ def main():
                     log_preds_u2, latent_u2 = model_y(y_u2)
 
                     (z, mu, logvar, cluster_mus, cluster_logvars) = latent_u
-                    log_predictions2 = torch.log_softmax(log_preds_u2, dim=1)
+                    cluster_mus, cluster_logvars = cluster_mus.detach(), cluster_logvars.detach()
+                    log_predictions2 = torch.log_softmax(log_preds_u2, dim=1).detach()
                     z_expanded = z.unsqueeze(1).repeat(1, num_classes, 1)
                     reconstruction = (-(log_predictions2.exp()*log_normal(z_expanded, cluster_mus, cluster_logvars)).sum(dim=1) + log_normal(z, mu, logvar)).mean()
 
                     (z2, mu2, logvar2, cluster_mus2, cluster_logvars2) = latent_u2
-                    log_predictions = torch.log_softmax(log_preds_u, dim=1)
+                    cluster_mus2, cluster_logvars2 = cluster_mus2.detach(), cluster_logvars2.detach()
+                    log_predictions = torch.log_softmax(log_preds_u, dim=1).detach()
                     z_expanded2 = z2.unsqueeze(1).repeat(1, num_classes, 1)
                     reconstruction2 = (-(log_predictions.exp() * log_normal(z_expanded2, cluster_mus2, cluster_logvars2)).sum(dim=1) + log_normal(z2, mu2, logvar2)).mean()
 
