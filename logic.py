@@ -194,6 +194,15 @@ class DecoderModel(nn.Module):
 
         return prediction, (z, mu, logvar, cluster_mus, cluster_logvars)
 
+    def sample(self, num_samples):
+        cluster_mus = self.cluster_means.unsqueeze(0).repeat(num_samples, 1, 1)
+        cluster_logvars = torch.zeros_like(cluster_mus)
+
+        z2 = reparameterise(cluster_mus, cluster_logvars)
+
+        log_probs = torch.stack([self.net(z2[:, i, :]) for i in range(self.nc)], dim=1)
+        return log_probs, (cluster_mus, cluster_logvars)
+
     def train_generative_only(self, x):
         # encode
         mu = self.mu(x)
@@ -210,7 +219,6 @@ class DecoderModel(nn.Module):
         prediction = self.net(z)
 
         return prediction, (z, mu, logvar, cluster_mus, cluster_logvars)
-
 
 class LogicNet(nn.Module):
 
