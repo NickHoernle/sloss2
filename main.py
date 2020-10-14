@@ -149,10 +149,15 @@ def main():
         print('creating optimizer with lr = ', lr)
         params_ = [v for v in params.values() if v.requires_grad]
         if args.generative_loss:
-            params_ += model_y.parameters()
+            params_ += model_y.get_local_params()
+        return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
+
+    def create_decoder_opt(args, lr):
+        params_ = model_y.get_global_params()
         return SGD(params_, lr, momentum=0.9, weight_decay=args.weight_decay)
 
     optimizer = create_optimizer(args, args.lr)
+    opt_y = create_decoder_opt(args, args.lr)
 
     epoch = 0
 
@@ -233,34 +238,11 @@ def main():
                 ixs = np.arange(len(y_l))
 
                 # custom generator loss
-                # log_preds, latent = model_y(y_l.detach())
-                # loss = F.cross_entropy(log_preds, targets_l)
-                # if args.dataset == "cifar100":
-                #     logic_net.train()
-                #     logic_loss = 0
-                #
-                #     log_pred = torch.log_softmax(log_preds.detach(), dim=-1)
-                #     true_logic = cifar100_logic(log_pred)
-                #     predicted_logic = logic_net(log_pred).squeeze()
-                #
-                #     logic_loss += F.binary_cross_entropy(predicted_logic, true_logic.float())
-                #
-                #     logic_opt.zero_grad()
-                #     logic_loss.backward()
-                #     logic_opt.step()
-                #
-                #     logic_net.eval()
-                #
-                #     log_pred = torch.log_softmax(log_preds, dim=-1)
-                #     true_logic = cifar100_logic(log_pred)
-                #     predicted_logic = logic_net(log_pred).squeeze()
-                #
-                #     logic_loss2 = F.binary_cross_entropy_with_logits(predicted_logic, torch.ones_like(predicted_logic), reduction="none")
-                #     logic_loss2 = logic_loss2[~true_logic].sum() / len(predicted_logic)
-                #     loss += logic_loss2
-                # opt_y.zero_grad()
-                # loss.backward()
-                # opt_y.step()
+                log_preds, latent = model_y(y_l)
+                loss = F.cross_entropy(log_preds, targets_l)
+                opt_y.zero_grad()
+                loss.backward()
+                opt_y.step()
 
                 loss = 0
                 log_preds, latent = model_y(y_l)
@@ -359,6 +341,7 @@ def main():
         if epoch in epoch_step:
             lr = state['optimizer'].param_groups[0]['lr']
             state['optimizer'] = create_optimizer(args, lr * args.lr_decay_ratio)
+            opt_y = create_decoder_opt(args, args.lr)
 
     def on_end_epoch(state):
         train_loss = meter_loss.value()
