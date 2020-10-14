@@ -237,4 +237,4 @@ def get_cifar100_pred(samples):
 
 def cifar100_logic(samples):
     super_class_preds = get_cifar100_pred(samples)
-    return ((super_class_preds > 0.95) | (super_class_preds < 0.05)).all(dim=1)
+    return ((super_class_preds > 0.95)).all(dim=1)

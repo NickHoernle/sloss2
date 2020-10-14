@@ -161,7 +161,7 @@ def main():
 
     n_parameters = sum(p.numel() for p in params.values() if p.requires_grad)
     if args.generative_loss:
-        n_parameters += sum(p.numel() for p in model_y.parameters())
+        n_parameters += sum(p.numel() for p in model_y.get_local_params())
     print('\nTotal number of parameters:', n_parameters)
 
     meter_loss = tnt.meter.AverageValueMeter()
