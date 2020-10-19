@@ -271,7 +271,9 @@ def main():
                 cmu = cmu_[ixs, targets_l].detach()
                 clv = clv_[ixs, targets_l].detach()
 
-                nll = (-log_normal(z, cmu, clv) + log_normal(z, mu, logvar)).mean()
+                kld = 0.5 * ((clv - logvar) + (mu - cmu).pow(2)/(clv.exp()) + logvar.exp()/(clv.exp()) - 1)
+
+                nll = kld.sum(dim=1).mean()
                 loss += nll
 
                 # unsupervised part
