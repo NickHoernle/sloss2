@@ -242,13 +242,13 @@ def main():
                 #     sc_pred = get_cifar100_unnormed_pred(preds)
                 #     loss2 += F.cross_entropy(sc_pred, get_true_cifar100_sc(targets_l, classes).to(device))
 
-                    # samples, latent = model_y.sample(len(y_l))
-                    # fke_preds = torch.log_softmax(samples.detach(), dim=-1)
-                    # fake_tgts = torch.ones_like(samples[:, :, 0]).long()
-                    # fake_tgts *= torch.arange(num_classes).to(device)
-                    # samps = torch.cat(samples.split(1, dim=1), dim=0).squeeze(1)
-                    # fke_tgts = torch.cat(fake_tgts.split(1, dim=1), dim=0).squeeze(1)
-                    # loss2 += F.cross_entropy(samps, fke_tgts)
+                # samples, latent = model_y.sample(len(y_l))
+                # fke_preds = torch.log_softmax(samples.detach(), dim=-1)
+                # fake_tgts = torch.ones_like(samples[:, :, 0]).long()
+                # fake_tgts *= torch.arange(num_classes).to(device)
+                # samps = torch.cat(samples.split(1, dim=1), dim=0).squeeze(1)
+                # fke_tgts = torch.cat(fake_tgts.split(1, dim=1), dim=0).squeeze(1)
+                # loss2 += F.cross_entropy(samps, fke_tgts)
 
                 samples, latent = model_y.sample(len(y_l))
                 fake_tgts = torch.ones_like(samples[:, :, 0]).long()
@@ -284,19 +284,25 @@ def main():
                     log_preds_u, latent_u = model_y(y_u)
                     log_preds_u2, latent_u2 = model_y(y_u2)
 
+                    # consistency regularisation
+                    if counter > 40:
+                        log_predictions2 = torch.log_softmax(log_preds_u, dim=1).detach()
+                        log_predictions = torch.log_softmax(log_preds_u2, dim=1).detach()
+                    else:
+                        log_predictions = torch.log_softmax(log_preds_u, dim=1).detach()
+                        log_predictions2 = torch.log_softmax(log_preds_u2, dim=1).detach()
+
                     (z, mu, logvar, c_mu, c_lv) = latent_u
                     c_mu, c_lv = c_mu.detach(), c_lv.detach()
-                    log_predictions2 = torch.log_softmax(log_preds_u2, dim=1).detach()
                     mu_expd, lv_expd = mu.unsqueeze(1).repeat(1, num_classes, 1), logvar.unsqueeze(1).repeat(1, num_classes, 1)
                     KLD1 = (0.5 * ((c_lv - lv_expd) + (mu_expd - c_mu).pow(2)/(c_lv.exp()) + lv_expd.exp()/(c_lv.exp()) - 1)).sum(dim=1)
-                    reconstruction = (log_predictions2.exp()*KLD1).sum(dim=1).mean()
+                    reconstruction = (log_predictions.exp()*KLD1).sum(dim=1).mean()
 
                     (z2, mu2, logvar2, c_mu2, c_lv2) = latent_u2
                     c_mu2, c_lv2 = c_mu2.detach(), c_lv2.detach()
-                    log_predictions = torch.log_softmax(log_preds_u, dim=1).detach()
                     mu_expd2, lv_expd2 = mu2.unsqueeze(1).repeat(1, num_classes, 1), logvar2.unsqueeze(1).repeat(1, num_classes, 1)
                     KLD2 = (0.5 * ((c_lv2 - lv_expd2) + (mu_expd2 - c_mu2).pow(2)/(c_lv2.exp()) + lv_expd2.exp()/(c_lv2.exp()) - 1)).sum(dim=1)
-                    reconstruction2 = (log_predictions.exp()*KLD2).sum(dim=1).mean()
+                    reconstruction2 = (log_predictions2.exp()*KLD2).sum(dim=1).mean()
 
                     loss += args.unl_weight*(reconstruction+reconstruction2)
 
