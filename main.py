@@ -284,17 +284,19 @@ def main():
                     log_preds_u, latent_u = model_y(y_u)
                     log_preds_u2, latent_u2 = model_y(y_u2)
 
-                    (z, mu, logvar, cluster_mus, cluster_logvars) = latent_u
-                    cluster_mus, cluster_logvars = cluster_mus.detach(), cluster_logvars.detach()
+                    (z, mu, logvar, c_mu, c_lv) = latent_u
+                    c_mu, c_lv = c_mu.detach(), c_lv.detach()
                     log_predictions2 = torch.log_softmax(log_preds_u2, dim=1).detach()
-                    z_expanded = z.unsqueeze(1).repeat(1, num_classes, 1)
-                    reconstruction = (-(log_predictions2.exp()*log_normal(z_expanded, cluster_mus, cluster_logvars)).sum(dim=1) + log_normal(z, mu, logvar)).mean()
+                    mu_expd, lv_expd = mu.unsqueeze(1).repeat(1, num_classes, 1), logvar.unsqueeze(1).repeat(1, num_classes, 1)
+                    KLD1 = (0.5 * ((c_lv - lv_expd) + (mu_expd - c_mu).pow(2)/(c_lv.exp()) + lv_expd.exp()/(c_lv.exp()) - 1)).sum(dim=1)
+                    reconstruction = (log_predictions2.exp()*KLD1).sum(dim=1).mean()
 
-                    (z2, mu2, logvar2, cluster_mus2, cluster_logvars2) = latent_u2
-                    cluster_mus2, cluster_logvars2 = cluster_mus2.detach(), cluster_logvars2.detach()
+                    (z2, mu2, logvar2, c_mu2, c_lv2) = latent_u2
+                    c_mu2, c_lv2 = c_mu2.detach(), c_lv2.detach()
                     log_predictions = torch.log_softmax(log_preds_u, dim=1).detach()
-                    z_expanded2 = z2.unsqueeze(1).repeat(1, num_classes, 1)
-                    reconstruction2 = (-(log_predictions.exp() * log_normal(z_expanded2, cluster_mus2, cluster_logvars2)).sum(dim=1) + log_normal(z2, mu2, logvar2)).mean()
+                    mu_expd2, lv_expd2 = mu2.unsqueeze(1).repeat(1, num_classes, 1), logvar2.unsqueeze(1).repeat(1, num_classes, 1)
+                    KLD2 = (0.5 * ((c_lv2 - lv_expd2) + (mu_expd2 - c_mu2).pow(2)/(c_lv2.exp()) + lv_expd2.exp()/(c_lv2.exp()) - 1)).sum(dim=1)
+                    reconstruction2 = (log_predictions.exp()*KLD2).sum(dim=1).mean()
 
                     loss += args.unl_weight*(reconstruction+reconstruction2)
 
