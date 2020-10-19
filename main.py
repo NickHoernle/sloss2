@@ -137,7 +137,7 @@ def main():
         model_y.to(device)
         model_y.apply(init_weights)
         model_y.train()
-        opt_y = SGD(model_y.get_global_params(), args.lr/1e2, momentum=0.9, weight_decay=args.weight_decay)
+        opt_y = SGD(model_y.get_global_params(), args.lr/1e1, momentum=0.9, weight_decay=args.weight_decay)
         scheduler = StepLR(opt_y, step_size=40, gamma=0.2)
 
         if args.dataset == "cifar100":
