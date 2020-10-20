@@ -154,15 +154,14 @@ class DecoderModel(nn.Module):
         super().__init__()
 
         # local params
-        self.mu = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
-        self.logvar = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, z_dim))
-        self.log_pi = nn.Sequential(nn.Linear(num_classes, 50), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
+        self.mu = nn.Sequential(nn.Linear(num_classes, 100), nn.LeakyReLU(.2), nn.Linear(100, z_dim))
+        self.logvar = nn.Sequential(nn.Linear(num_classes, 100), nn.LeakyReLU(.2), nn.Linear(100, z_dim))
 
         # global params
         self.cluster_means = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
         self.cluster_lvariances = nn.Parameter(torch.zeros(num_classes, z_dim), requires_grad=True)
 
-        self.net = nn.Sequential(nn.Linear(z_dim, 50), nn.LeakyReLU(.2), nn.Linear(50, num_classes))
+        self.net = nn.Sequential(nn.Linear(z_dim, 100), nn.LeakyReLU(.2), nn.Linear(100, num_classes))
 
         self.nc = num_classes
         self.zdim = z_dim
