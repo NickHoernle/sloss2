@@ -80,6 +80,8 @@ parser.add_argument("--unl_weight", type=float, default=0.1,
                     help="Weight for unlabelled regularizer loss")
 parser.add_argument("--unl2_weight", type=float, default=0.1,
                     help="Weight for unlabelled regularizer loss")
+parser.add_argument("--sloss_weight", type=float, default=1.,
+                    help="Weight for unlabelled regularizer loss")
 parser.add_argument("--num_hidden", type=int, default=10,
                     help="Dim of the latent dimension used")
 
@@ -142,7 +144,7 @@ def main():
         model_y.to(device)
         model_y.apply(init_weights)
         model_y.train()
-        opt_y = SGD(model_y.get_global_params(), args.lr/1e1, momentum=0.9, weight_decay=args.weight_decay)
+        opt_y = SGD(model_y.get_global_params(), args.lr, momentum=0.9, weight_decay=args.weight_decay)
         scheduler = StepLR(opt_y, step_size=40, gamma=0.2)
 
         if args.dataset == "cifar100":
@@ -239,34 +241,38 @@ def main():
                 ixs = np.arange(len(y_l))
 
                 # custom generator loss
-                log_preds, latent = model_y.train_generative_only(y_l)
-                loss2 = F.cross_entropy(log_preds, targets_l)
+                if np.random.uniform(0, 1) > .9:
+                    log_preds, latent = model_y.train_generative_only(y_l)
+                    loss2 = F.cross_entropy(log_preds, targets_l)
+                    sloss = 0
 
-                if args.dataset == "cifar100":
-                    # basic reconstruction
-                    preds = torch.log_softmax(log_preds, dim=-1)
-                    sc_pred = get_cifar100_unnormed_pred(preds)
-                    loss2 += F.cross_entropy(sc_pred, get_true_cifar100_sc(targets_l, classes).to(device))
+                    if args.dataset == "cifar100":
+                        # basic reconstruction
+                        # preds = torch.log_softmax(log_preds, dim=-1)
+                        # sc_pred = get_cifar100_unnormed_pred(preds)
+                        # sloss += F.cross_entropy(sc_pred, get_true_cifar100_sc(targets_l, classes).to(device))
 
-                    # generated loss
+                        # generated loss
+                        samples, latent = model_y.sample(len(y_l))
+                        fake_tgts = torch.ones_like(samples[:, :, 0]).long()
+                        fake_tgts *= torch.arange(num_classes).to(device)
+                        samps = torch.cat(samples.split(1, dim=1), dim=0).squeeze(1)
+                        fke_tgts = torch.cat(fake_tgts.split(1, dim=1), dim=0).squeeze(1)
+                        sc_preds = get_cifar100_unnormed_pred(torch.log_softmax(samps, dim=-1))
+                        sloss += F.cross_entropy(sc_preds, get_true_cifar100_sc(fke_tgts, classes).to(device))
+
                     samples, latent = model_y.sample(len(y_l))
                     fake_tgts = torch.ones_like(samples[:, :, 0]).long()
                     fake_tgts *= torch.arange(num_classes).to(device)
                     samps = torch.cat(samples.split(1, dim=1), dim=0).squeeze(1)
                     fke_tgts = torch.cat(fake_tgts.split(1, dim=1), dim=0).squeeze(1)
-                    sc_preds = get_cifar100_unnormed_pred(torch.log_softmax(samps, dim=-1))
-                    loss2 += F.cross_entropy(sc_preds, get_true_cifar100_sc(fke_tgts, classes).to(device))
+                    sloss += F.cross_entropy(samps, fke_tgts)
 
-                samples, latent = model_y.sample(len(y_l))
-                fake_tgts = torch.ones_like(samples[:, :, 0]).long()
-                fake_tgts *= torch.arange(num_classes).to(device)
-                samps = torch.cat(samples.split(1, dim=1), dim=0).squeeze(1)
-                fke_tgts = torch.cat(fake_tgts.split(1, dim=1), dim=0).squeeze(1)
-                loss2 += F.cross_entropy(samps, fke_tgts)
+                    loss2 += args.sloss_weight * sloss
 
-                opt_y.zero_grad()
-                loss2.backward()
-                opt_y.step()
+                    opt_y.zero_grad()
+                    loss2.backward()
+                    opt_y.step()
 
                 loss = 0
                 log_preds, latent = model_y(y_l)
