@@ -255,7 +255,7 @@ def main():
                     samps = torch.cat(samples.split(1, dim=1), dim=0).squeeze(1)
                     fke_tgts = torch.cat(fake_tgts.split(1, dim=1), dim=0).squeeze(1)
                     sc_preds = get_cifar100_unnormed_pred(torch.log_softmax(samps, dim=-1))
-                    loss2 += F.cross_entropy(sc_preds, get_true_cifar100_sc(fke_tgts, classes))
+                    loss2 += F.cross_entropy(sc_preds, get_true_cifar100_sc(fke_tgts, classes).to(device))
 
                 samples, latent = model_y.sample(len(y_l))
                 fake_tgts = torch.ones_like(samples[:, :, 0]).long()
