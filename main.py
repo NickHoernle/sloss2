@@ -17,9 +17,14 @@ from resnet import resnet
 from datasets import Joint, check_dataset
 
 from logic import (
-    DecoderModel, cifar100_logic,
-    LogicNet, set_class_mapping,
-    get_cifar100_pred, get_true_cifar100_sc, get_cifar100_unnormed_pred
+    DecoderModel,
+    cifar100_logic,
+    LogicNet,
+    set_class_mapping,
+    get_cifar100_pred,
+    get_true_cifar100_sc,
+    get_cifar100_unnormed_pred,
+    get_true_cifar100_from_one_hot
 )
 
 
@@ -237,18 +242,20 @@ def main():
                 log_preds, latent = model_y.train_generative_only(y_l)
                 loss2 = F.cross_entropy(log_preds, targets_l)
 
-                # if args.dataset == "cifar100":
-                #     preds = torch.log_softmax(log_preds.detach(), dim=-1)
-                #     sc_pred = get_cifar100_unnormed_pred(preds)
-                #     loss2 += F.cross_entropy(sc_pred, get_true_cifar100_sc(targets_l, classes).to(device))
+                if args.dataset == "cifar100":
+                    # basic reconstruction
+                    preds = torch.log_softmax(log_preds, dim=-1)
+                    sc_pred = get_cifar100_unnormed_pred(preds)
+                    loss2 += F.cross_entropy(sc_pred, get_true_cifar100_sc(targets_l, classes).to(device))
 
-                # samples, latent = model_y.sample(len(y_l))
-                # fke_preds = torch.log_softmax(samples.detach(), dim=-1)
-                # fake_tgts = torch.ones_like(samples[:, :, 0]).long()
-                # fake_tgts *= torch.arange(num_classes).to(device)
-                # samps = torch.cat(samples.split(1, dim=1), dim=0).squeeze(1)
-                # fke_tgts = torch.cat(fake_tgts.split(1, dim=1), dim=0).squeeze(1)
-                # loss2 += F.cross_entropy(samps, fke_tgts)
+                    # generated loss
+                    samples, latent = model_y.sample(len(y_l))
+                    fake_tgts = torch.ones_like(samples[:, :, 0]).long()
+                    fake_tgts *= torch.arange(num_classes).to(device)
+                    samps = torch.cat(samples.split(1, dim=1), dim=0).squeeze(1)
+                    fke_tgts = torch.cat(fake_tgts.split(1, dim=1), dim=0).squeeze(1)
+                    sc_preds = get_cifar100_unnormed_pred(torch.log_softmax(samps, dim=-1))
+                    loss2 += F.cross_entropy(sc_preds, get_true_cifar100_sc(fke_tgts, classes))
 
                 samples, latent = model_y.sample(len(y_l))
                 fake_tgts = torch.ones_like(samples[:, :, 0]).long()

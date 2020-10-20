@@ -243,6 +243,10 @@ def get_true_cifar100_sc(fc_labels, classes):
     return torch.tensor([super_class_label[superclass_mapping[classes[c]]] for c in fc_labels])
 
 
+def get_true_cifar100_from_one_hot(one_hot):
+    return torch.stack(one_hot[:, sc_map].split(5, dim=-1), dim=1).sum(dim=-1)
+
+
 def get_cifar100_unnormed_pred(samples):
     return torch.stack(samples[:, sc_map].split(5, dim=-1), dim=1).logsumexp(dim=-1)
 
