@@ -18,9 +18,9 @@ repeats = 1
 
 experiment = "cifar10"
 dataset = [experiment]
-learning_rate = [.1]
-unl_weight = [1., .75, .25, .1, .075, .05]
-unl2_weight = [1]
+learning_rate = [.2, .1]
+unl_weight = [2., 1.5, 1., .75, .25, .1]
+unl2_weight = [0, 1.]
 lr_decay_ratio = [.2]
 num_hidden = [10]
 
@@ -49,14 +49,14 @@ for (lr, unl_, unl2_, lr_decay_ratio_, num_hidden_, dataset_, rep) in settings:
         f"{base_call} "
         f"--lr {lr} "
         f"--unl_weight {unl_} "
-        f"--unl2_weight {unl2_} "
+        f"--sloss_weight {unl2_} "
         f"--lr_decay_ratio {lr_decay_ratio_} "
         f"--dataset {dataset_} "
         f"--num_hidden {num_hidden_} "
     )
     print(expt_call, file=output_file)
 
-baseline = f"{base_call} --lr 0.1 --sloss_weight 0 --unl_weight .1 --lr_decay_ratio 0.7 --dataset {experiment}"
-print(baseline, file=output_file)
+# baseline = f"{base_call} --lr 0.1 --sloss_weight 0 --unl_weight .1 --lr_decay_ratio 0.7 --dataset {experiment}"
+# print(baseline, file=output_file)
 
 output_file.close()

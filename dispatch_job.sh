@@ -141,13 +141,13 @@ echo "Command ran successfully!"
 # This presumes your command wrote data to some known directory. In this
 # example, send it back to the DFS with rsync
 
-#echo "Moving output data back to DFS"
-#
-#src_path=${output_dir}
-#dest_path=${repo_home}/experiments/semi_supervised_vae
-#mkdir -p ${dest_path}
-#rsync --archive --update --compress --progress ${src_path}/ ${dest_path}
-#
+echo "Moving output data back to DFS"
+
+src_path=${output_dir}
+dest_path=${repo_home}/experiments/semi_supervised_vae
+mkdir -p ${dest_path}
+rsync --archive --update --compress --progress ${src_path}/ ${dest_path}
+
 # =========================
 # Post experiment logging
 # =========================
