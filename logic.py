@@ -150,7 +150,7 @@ def set_class_mapping(classes):
 
 
 class DecoderModel(nn.Module):
-    def __init__(self, num_classes, z_dim=2):
+    def __init__(self, num_classes, device, z_dim=2):
         super().__init__()
 
         # local params
@@ -165,6 +165,7 @@ class DecoderModel(nn.Module):
 
         self.nc = num_classes
         self.zdim = z_dim
+        self.device = device
         self.apply(init_weights)
 
     def get_global_params(self):
@@ -202,7 +203,7 @@ class DecoderModel(nn.Module):
         log_probs = torch.stack([self.net(z2[:, i, :]) for i in range(self.nc)], dim=1)
 
         fake_tgts = torch.ones_like(log_probs[:, :, 0]).long()
-        fake_tgts *= np.arange(self.nc)
+        fake_tgts *= torch.arange(self.nc).to(self.device)
         samps = torch.cat(log_probs.split(1, dim=1), dim=0).squeeze(1)
         fke_tgts = torch.cat(fake_tgts.split(1, dim=1), dim=0).squeeze(1)
 
