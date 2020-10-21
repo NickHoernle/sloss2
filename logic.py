@@ -200,7 +200,13 @@ class DecoderModel(nn.Module):
         z2 = reparameterise(cluster_mus, cluster_logvars)
 
         log_probs = torch.stack([self.net(z2[:, i, :]) for i in range(self.nc)], dim=1)
-        return log_probs, (cluster_mus, cluster_logvars)
+
+        fake_tgts = torch.ones_like(log_probs[:, :, 0]).long()
+        fake_tgts *= np.arange(self.nc)
+        samps = torch.cat(log_probs.split(1, dim=1), dim=0).squeeze(1)
+        fke_tgts = torch.cat(fake_tgts.split(1, dim=1), dim=0).squeeze(1)
+
+        return samps, fke_tgts
 
     def train_generative_only(self, x):
         # encode
@@ -254,6 +260,71 @@ def get_cifar100_pred(samples):
     return torch.stack(samples[:, sc_map].split(5, dim=-1), dim=1).exp().sum(dim=-1)
 
 
-def cifar100_logic(samples):
-    super_class_preds = get_cifar100_pred(samples)
-    return ((super_class_preds > 0.95)).all(dim=1)
+def cifar100_logic(probabilities, labels, class_names):
+    # "airplane"
+    ix = class_names.index("airplane")
+    ix2 = class_names.index("bird")
+    other_idxs = np.array([i for i in range(len(class_names)) if i not in (ix, ix2)])
+    samps = probabilities[labels == ix]
+    logic1 = (samps[:, ix] > 0.95) & (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
+
+    # "automobile"
+    ix = class_names.index("automobile")
+    ix2 = class_names.index("truck")
+    other_idxs = np.array([i for i in range(len(class_names)) if i not in (ix, ix2)])
+    samps = probabilities[labels == ix]
+    logic2 = (samps[:, ix] > 0.95) & (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
+
+    # "bird"
+    ix = class_names.index("bird")
+    ix2 = class_names.index("airplane")
+    other_idxs = np.array([i for i in range(len(class_names)) if i not in (ix, ix2)])
+    samps = probabilities[labels == ix]
+    logic3 = (samps[:, ix] > 0.95) & (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
+
+    # "cat"
+    ix = class_names.index("cat")
+    ix2 = class_names.index("dog")
+    other_idxs = np.array([i for i in range(len(class_names)) if i not in (ix, ix2)])
+    samps = probabilities[labels == ix]
+    logic4 = (samps[:, ix] > 0.95) & (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
+
+    # "deer"
+    ix = class_names.index("deer")
+    ix2 = class_names.index("dog")
+    other_idxs = np.array([i for i in range(len(class_names)) if i not in (ix, ix2)])
+    samps = probabilities[labels == ix]
+    logic5 = (samps[:, ix] > 0.95) & (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
+
+    # "dog"
+    ix = class_names.index("dog")
+    ix2 = class_names.index("cat")
+    other_idxs = np.array([i for i in range(len(class_names)) if i not in (ix, ix2)])
+    samps = probabilities[labels == ix]
+    logic6 = (samps[:, ix] > 0.95) & (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
+
+    # "frog"
+    ix = class_names.index("frog")
+    logic7 = samps[:, ix] > 0.95
+
+    # "horse"
+    ix = class_names.index("horse")
+    ix2 = class_names.index("deer")
+    other_idxs = np.array([i for i in range(len(class_names)) if i not in (ix, ix2)])
+    samps = probabilities[labels == ix]
+    logic8 = (samps[:, ix] > 0.95) & (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
+
+    # "ship"
+    ix = class_names.index("ship")
+    logic9 = samps[:, ix] > 0.95
+
+    # "truck"
+    ix = class_names.index("truck")
+    ix2 = class_names.index("automobile")
+    other_idxs = np.array([i for i in range(len(class_names)) if i not in (ix, ix2)])
+    samps = probabilities[labels == ix]
+    logic10 = (samps[:, ix] > 0.95) & (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
+
+    final_logic = torch.cat([logic1, logic2, logic3, logic4, logic5, logic6, logic7, logic8, logic9, logic10], dim=0)
+
+    return final_logic

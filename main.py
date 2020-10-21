@@ -139,6 +139,8 @@ def main():
     z_dim = args.num_hidden
     model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
 
+    class_names = test_dataset.classes
+
     if args.generative_loss:
         model_y = DecoderModel(num_classes, z_dim)
         model_y.to(device)
@@ -147,11 +149,10 @@ def main():
         opt_y = SGD(model_y.get_global_params(), args.lr, momentum=0.9, weight_decay=args.weight_decay)
         scheduler = StepLR(opt_y, step_size=40, gamma=0.2)
 
-        if args.dataset == "cifar100":
-            logic_net = LogicNet(num_classes)
-            logic_net.to(device)
-            logic_net.apply(init_weights)
-            logic_opt = Adam(logic_net.parameters(), lr=1e-3)
+        logic_net = LogicNet(num_classes)
+        logic_net.to(device)
+        logic_net.apply(init_weights)
+        logic_opt = Adam(logic_net.parameters(), lr=1e-3)
 
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
@@ -240,39 +241,41 @@ def main():
 
                 ixs = np.arange(len(y_l))
 
+                # train logic net
+                samples, targets = model_y.sample(len(y_l))
+                probabilities = samples.softmax(dim=-1)
+
+                true = cifar100_logic(probabilities, targets, class_names).float()
+                pred = logic_net(probabilities).squeeze()
+
+                logic_loss = F.binary_cross_entropy_with_logits(pred, true)
+
+                logic_opt.zero_grad()
+                logic_loss.backward()
+                logic_opt.step()
+
                 # custom generator loss
+                # log_preds, latent = model_y.train_generative_only(y_l)
+                samples, targets = model_y.sample(len(y_l))
+                loss2 = F.cross_entropy(samples, targets)
+
                 if np.random.uniform(0, 1) > .9:
-                    log_preds, latent = model_y.train_generative_only(y_l)
-                    loss2 = F.cross_entropy(log_preds, targets_l)
                     sloss = 0
+                    samples, targets = model_y.sample(len(y_l))
+                    sloss += F.cross_entropy(samples, targets)
 
-                    if args.dataset == "cifar100":
-                        # basic reconstruction
-                        # preds = torch.log_softmax(log_preds, dim=-1)
-                        # sc_pred = get_cifar100_unnormed_pred(preds)
-                        # sloss += F.cross_entropy(sc_pred, get_true_cifar100_sc(targets_l, classes).to(device))
+                    # use logic here
+                    probabilities = samples.softmax(dim=-1)
+                    true_logic = cifar100_logic(probabilities, targets, class_names)
+                    pred = logic_net(probabilities).squeeze()
 
-                        # generated loss
-                        samples, latent = model_y.sample(len(y_l))
-                        fake_tgts = torch.ones_like(samples[:, :, 0]).long()
-                        fake_tgts *= torch.arange(num_classes).to(device)
-                        samps = torch.cat(samples.split(1, dim=1), dim=0).squeeze(1)
-                        fke_tgts = torch.cat(fake_tgts.split(1, dim=1), dim=0).squeeze(1)
-                        sc_preds = get_cifar100_unnormed_pred(torch.log_softmax(samps, dim=-1))
-                        sloss += F.cross_entropy(sc_preds, get_true_cifar100_sc(fke_tgts, classes).to(device))
+                    logic_loss2 = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
+                    logic_loss2 = logic_loss2[~true_logic].sum() / len(pred)
+                    loss2 += args.sloss_weight * logic_loss2
 
-                    samples, latent = model_y.sample(len(y_l))
-                    fake_tgts = torch.ones_like(samples[:, :, 0]).long()
-                    fake_tgts *= torch.arange(num_classes).to(device)
-                    samps = torch.cat(samples.split(1, dim=1), dim=0).squeeze(1)
-                    fke_tgts = torch.cat(fake_tgts.split(1, dim=1), dim=0).squeeze(1)
-                    sloss += F.cross_entropy(samps, fke_tgts)
-
-                    loss2 += args.sloss_weight * sloss
-
-                    opt_y.zero_grad()
-                    loss2.backward()
-                    opt_y.step()
+                opt_y.zero_grad()
+                loss2.backward()
+                opt_y.step()
 
                 loss = 0
                 log_preds, latent = model_y(y_l)
