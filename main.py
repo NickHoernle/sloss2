@@ -271,7 +271,7 @@ def main():
 
                     logic_loss2 = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
                     logic_loss2 = logic_loss2[~true_logic].sum() / len(pred)
-                    loss2 += args.sloss_weight * logic_loss2
+                    loss2 += args.sloss_weight * (logic_loss2 + sloss)
 
                 opt_y.zero_grad()
                 loss2.backward()
