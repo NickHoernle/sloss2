@@ -341,7 +341,15 @@ def main():
         return F.cross_entropy(y, targets), y
 
     def log(t, state):
-        torch.save(dict(params=params, epoch=t['epoch'], optimizer=state['optimizer'].state_dict()),
+        torch.save(dict(
+            params=params,
+            epoch=t['epoch'],
+            optimizer=state['optimizer'].state_dict(),
+            model_y=model_y.state_dict(),
+            logic_net=logic_net.state_dict(),
+            logic_opt=logic_opt.state_dict(),
+            opt_y=opt_y.state_dict()
+        ),
                    os.path.join(args.save, 'model.pt7'))
         z = {**vars(args), **t}
         with open(os.path.join(args.save, 'log.txt'), 'a') as flog:
