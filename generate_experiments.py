@@ -19,10 +19,10 @@ repeats = 1
 experiment = "cifar10"
 dataset = [experiment]
 learning_rate = [.1, .01]
-unl_weight = [2., 1.5, 1., .75, .25, .1]
+unl_weight = [1., .75, .25, .1]
 unl2_weight = [0, 1.]
 lr_decay_ratio = [.2]
-num_hidden = [15, 10, 2]
+num_hidden = [10]
 
 settings = [(lr, unl_, unl2_, lr_decay_ratio_, num_hidden_, dataset_, rep)
             for lr in learning_rate
