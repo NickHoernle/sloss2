@@ -237,8 +237,7 @@ class LogicNet(nn.Module):
             nn.Sigmoid(),
             nn.Linear(100, 25),
             nn.Sigmoid(),
-            nn.Linear(25, 1),
-            nn.LogSigmoid()
+            nn.Linear(25, 1)
         )
 
     def forward(self, x):
