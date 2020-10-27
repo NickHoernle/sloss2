@@ -346,6 +346,12 @@ def main():
                 superclassacc.add(sc_pred, sc_targets)
 
             recon_loss = F.cross_entropy(y_full, targets)
+
+            # logic
+            probabilities = torch.softmax(y_full, dim=1)
+            true_logic = cifar100_logic(probabilities, targets, class_names).float()
+            superclassacc.add(sc_pred, torch.ones_like(true_logic))
+
             return recon_loss.mean(), y_full
 
         return F.cross_entropy(y, targets), y
@@ -431,7 +437,7 @@ def main():
             "n_parameters": n_parameters,
             "train_time": train_time,
             "test_time": timer_test.value(),
-            "super_class_acc": sc_acc,
+            "logic_acc": sc_acc,
         }, state))
         print('==> id: %s (%d/%d), test_acc: \33[91m%.2f\033[0m' % (args.save, state['epoch'], args.epochs, test_acc))
 
