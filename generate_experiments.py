@@ -20,7 +20,7 @@ experiment = "cifar10"
 dataset = [experiment]
 learning_rate = [.1, .01]
 unl_weight = [1., .75, .25, .1]
-unl2_weight = [0, 1.]
+unl2_weight = [1.]
 lr_decay_ratio = [.2]
 num_hidden = [10, 2]
 
