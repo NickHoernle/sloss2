@@ -176,7 +176,8 @@ def main():
     meter_loss = tnt.meter.AverageValueMeter()
 
     classacc = tnt.meter.ClassErrorMeter(accuracy=True)
-    superclassacc = tnt.meter.ClassErrorMeter(accuracy=True)
+    global superclassacc
+    superclassacc = []
 
     timer_train = tnt.meter.TimeMeter('s')
     timer_test = tnt.meter.TimeMeter('s')
@@ -333,24 +334,25 @@ def main():
             return loss, y_l
 
     def compute_loss_test(sample):
+        global superclassacc
         model_y.eval()
         inputs = cast(sample[0], args.dtype)
         targets = cast(sample[1], 'long')
         y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
         if args.generative_loss:
             y_full, latent = model_y(y)
-            if args.dataset == "cifar100":
-                log_pred = torch.log_softmax(y_full, dim=-1)
-                sc_pred = get_cifar100_pred(log_pred)
-                sc_targets = get_true_cifar100_sc(targets, classes).to(device)
-                superclassacc.add(sc_pred, sc_targets)
+            # if args.dataset == "cifar100":
+            #     log_pred = torch.log_softmax(y_full, dim=-1)
+            #     sc_pred = get_cifar100_pred(log_pred)
+            #     sc_targets = get_true_cifar100_sc(targets, classes).to(device)
+            #     superclassacc.add(sc_pred, sc_targets)
 
             recon_loss = F.cross_entropy(y_full, targets)
 
             # logic
             probabilities = torch.softmax(y_full, dim=1)
             true_logic = cifar100_logic(probabilities, targets, class_names).float()
-            superclassacc.add(true_logic, torch.ones_like(true_logic))
+            superclassacc += true_logic.detach().numpy().tolist()
 
             return recon_loss.mean(), y_full
 
@@ -407,7 +409,12 @@ def main():
             lr = state['optimizer'].param_groups[0]['lr']
             state['optimizer'] = create_optimizer(args, lr * args.lr_decay_ratio)
 
+        # with torch.no_grad():
+        #     engine.test(compute_loss_test, test_loader)
+
     def on_end_epoch(state):
+        global superclassacc
+
         train_loss = meter_loss.value()
         train_acc = classacc.value()[0]
         train_time = timer_train.value()
@@ -415,15 +422,13 @@ def main():
         meter_loss.reset()
         classacc.reset()
         timer_test.reset()
-        superclassacc.reset()
+        superclassacc = []
 
         with torch.no_grad():
             engine.test(compute_loss_test, test_loader)
 
         test_acc = classacc.value()[0]
-        sc_acc = 0
-        if args.dataset == "cifar100":
-            sc_acc = superclassacc.value()[0]
+        sc_acc = np.mean(superclassacc)
 
         scheduler.step()
 
