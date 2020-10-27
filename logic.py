@@ -232,11 +232,13 @@ class LogicNet(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(num_dim, 100),
-            nn.Sigmoid(),
-            nn.Linear(100, 100),
-            nn.Sigmoid(),
+            nn.LeakyReLU(),
+            nn.Linear(100, 1000),
+            nn.LeakyReLU(),
+            nn.Linear(1000, 100),
+            nn.LeakyReLU(),
             nn.Linear(100, 25),
-            nn.Sigmoid(),
+            nn.LeakyReLU(),
             nn.Linear(25, 1)
         )
 
