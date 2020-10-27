@@ -307,6 +307,7 @@ def cifar100_logic(probabilities, labels, class_names):
 
     # "frog"
     ix = class_names.index("frog")
+    samps = probabilities[labels == ix]
     logic7 = samps[:, ix] > 0.95
 
     # "horse"
@@ -318,6 +319,7 @@ def cifar100_logic(probabilities, labels, class_names):
 
     # "ship"
     ix = class_names.index("ship")
+    samps = probabilities[labels == ix]
     logic9 = samps[:, ix] > 0.95
 
     # "truck"
