@@ -20,7 +20,7 @@ experiment = "cifar10"
 dataset = [experiment]
 learning_rate = [.1, .05, .01]
 unl_weight = [.25, .1, .075, .05, .01]
-unl2_weight = [1.]
+unl2_weight = [.1]
 lr_decay_ratio = [.2]
 num_hidden = [10, 2]
 
@@ -31,8 +31,7 @@ settings = [(lr, unl_, unl2_, lr_decay_ratio_, num_hidden_, dataset_, rep)
             for lr_decay_ratio_ in lr_decay_ratio
             for num_hidden_ in num_hidden
             for dataset_ in dataset
-            for rep in range(repeats) if not ((lr == .1 and num_hidden_ == 2) or
-                                             (lr == .05 and num_hidden_ == 2))]
+            for rep in range(repeats)]
 
 nr_expts = len(settings)
 
@@ -46,6 +45,12 @@ output_file = open("experiment.txt", "w")
 for (lr, unl_, unl2_, lr_decay_ratio_, num_hidden_, dataset_, rep) in settings:
     # Note that we don't set a seed for rep - a seed is selected at random
     # and recorded in the output data by the python script
+
+    if lr == .1 and num_hidden_ == 2:
+        continue
+    if lr == .05 and num_hidden_ == 2:
+        continue
+
     expt_call = (
         f"{base_call} "
         f"--lr {lr} "

@@ -265,69 +265,69 @@ def get_cifar100_pred(samples):
 def cifar100_logic(probabilities, labels, class_names):
     # "airplane"
     ix = class_names.index("airplane")
-    ix2 = class_names.index("bird")
+    ix2 = class_names.index("automobile")
     other_idxs = np.array([i for i in range(len(class_names)) if i not in (ix, ix2)])
     samps = probabilities[labels == ix]
-    logic1 = (samps[:, ix] > 0.95) & (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
+    logic1 = (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
 
     # "automobile"
     ix = class_names.index("automobile")
     ix2 = class_names.index("truck")
     other_idxs = np.array([i for i in range(len(class_names)) if i not in (ix, ix2)])
     samps = probabilities[labels == ix]
-    logic2 = (samps[:, ix] > 0.95) & (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
+    logic2 = (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
 
     # "bird"
     ix = class_names.index("bird")
     ix2 = class_names.index("airplane")
     other_idxs = np.array([i for i in range(len(class_names)) if i not in (ix, ix2)])
     samps = probabilities[labels == ix]
-    logic3 = (samps[:, ix] > 0.95) & (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
+    logic3 = (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
 
     # "cat"
     ix = class_names.index("cat")
     ix2 = class_names.index("dog")
     other_idxs = np.array([i for i in range(len(class_names)) if i not in (ix, ix2)])
     samps = probabilities[labels == ix]
-    logic4 = (samps[:, ix] > 0.95) & (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
+    logic4 = (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
 
     # "deer"
     ix = class_names.index("deer")
     ix2 = class_names.index("dog")
     other_idxs = np.array([i for i in range(len(class_names)) if i not in (ix, ix2)])
     samps = probabilities[labels == ix]
-    logic5 = (samps[:, ix] > 0.95) & (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
+    logic5 = (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
 
     # "dog"
     ix = class_names.index("dog")
     ix2 = class_names.index("cat")
     other_idxs = np.array([i for i in range(len(class_names)) if i not in (ix, ix2)])
     samps = probabilities[labels == ix]
-    logic6 = (samps[:, ix] > 0.95) & (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
+    logic6 = (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
 
     # "frog"
     ix = class_names.index("frog")
     samps = probabilities[labels == ix]
-    logic7 = samps[:, ix] > 0.95
+    logic7 = samps[:, ix] > 0
 
     # "horse"
     ix = class_names.index("horse")
     ix2 = class_names.index("deer")
     other_idxs = np.array([i for i in range(len(class_names)) if i not in (ix, ix2)])
     samps = probabilities[labels == ix]
-    logic8 = (samps[:, ix] > 0.95) & (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
+    logic8 = (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
 
     # "ship"
     ix = class_names.index("ship")
     samps = probabilities[labels == ix]
-    logic9 = samps[:, ix] > 0.95
+    logic9 = samps[:, ix] > 0
 
     # "truck"
     ix = class_names.index("truck")
     ix2 = class_names.index("automobile")
     other_idxs = np.array([i for i in range(len(class_names)) if i not in (ix, ix2)])
     samps = probabilities[labels == ix]
-    logic10 = (samps[:, ix] > 0.95) & (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
+    logic10 = (samps[:, ix2].unsqueeze(1) > samps[:, other_idxs]).all(dim=1)
 
     final_logic = torch.cat([logic1, logic2, logic3, logic4, logic5, logic6, logic7, logic8, logic9, logic10], dim=0)
 
