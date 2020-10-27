@@ -352,7 +352,7 @@ def main():
             # logic
             probabilities = torch.softmax(y_full, dim=1)
             true_logic = cifar100_logic(probabilities, targets, class_names).float()
-            superclassacc += true_logic.detach().numpy().tolist()
+            superclassacc += true_logic.detach().cpu().numpy().tolist()
 
             return recon_loss.mean(), y_full
 
