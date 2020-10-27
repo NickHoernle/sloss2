@@ -271,9 +271,8 @@ def main():
 
                 # custom generator loss
                 # log_preds, latent = model_y.train_generative_only(y_l)
-                sloss = 0
                 samples, targets = model_y.sample(len(y_l))
-                sloss += F.cross_entropy(samples, targets)
+                sloss = F.cross_entropy(samples, targets)
 
                 # use logic here
                 probabilities = samples.softmax(dim=-1)
@@ -282,7 +281,7 @@ def main():
 
                 logic_loss2 = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
                 logic_loss2 = logic_loss2[~true_logic].sum() / len(pred)
-                loss2 = args.sloss_weight * (10*logic_loss2 + sloss)
+                loss2 = args.sloss_weight * (100*logic_loss2 + sloss)
 
                 opt_y.zero_grad()
                 loss2.backward()
