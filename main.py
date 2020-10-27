@@ -152,7 +152,7 @@ def main():
         logic_net = LogicNet(num_classes)
         logic_net.to(device)
         logic_net.apply(init_weights)
-        logic_opt = Adam(logic_net.parameters(), lr=1e-3)
+        logic_opt = Adam(logic_net.parameters(), lr=1e-1)
 
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
