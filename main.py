@@ -190,6 +190,20 @@ def main():
         set_class_mapping(classes)
     counter = 0
 
+    if args.resume != '':
+        state_dict = torch.load(args.resume, map_location=torch.device('cpu'))
+        epoch = state_dict['epoch']
+        params_tensors = state_dict['params']
+        for k, v in params.items():
+            v.data.copy_(params_tensors[k])
+        optimizer.load_state_dict(state_dict['optimizer'])
+
+        model_y.load_state_dict(state_dict['model_y'])
+        logic_net.load_state_dict(state_dict['logic_net'])
+
+        # import pdb
+        # pdb.set_trace()
+
     # device = torch.cuda.current_device()
     # print(f"On GPU: {device}")
     #
@@ -256,22 +270,18 @@ def main():
 
                 # custom generator loss
                 # log_preds, latent = model_y.train_generative_only(y_l)
+                sloss = 0
                 samples, targets = model_y.sample(len(y_l))
-                loss2 = F.cross_entropy(samples, targets)
+                sloss += F.cross_entropy(samples, targets)
 
-                if np.random.uniform(0, 1) > .9:
-                    sloss = 0
-                    samples, targets = model_y.sample(len(y_l))
-                    sloss += F.cross_entropy(samples, targets)
+                # use logic here
+                probabilities = samples.softmax(dim=-1)
+                true_logic = cifar100_logic(probabilities, targets, class_names)
+                pred = logic_net(probabilities).squeeze()
 
-                    # use logic here
-                    probabilities = samples.softmax(dim=-1)
-                    true_logic = cifar100_logic(probabilities, targets, class_names)
-                    pred = logic_net(probabilities).squeeze()
-
-                    logic_loss2 = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
-                    logic_loss2 = logic_loss2[~true_logic].sum() / len(pred)
-                    loss2 += args.sloss_weight * (logic_loss2 + sloss)
+                logic_loss2 = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
+                logic_loss2 = logic_loss2[~true_logic].sum() / len(pred)
+                loss2 = args.sloss_weight * (logic_loss2 + sloss)
 
                 opt_y.zero_grad()
                 loss2.backward()
