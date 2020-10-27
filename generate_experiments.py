@@ -31,7 +31,9 @@ settings = [(lr, unl_, unl2_, lr_decay_ratio_, num_hidden_, dataset_, rep)
             for lr_decay_ratio_ in lr_decay_ratio
             for num_hidden_ in num_hidden
             for dataset_ in dataset
-            for rep in range(repeats)]
+            for rep in range(repeats) if not
+                                    (lr == .1 and num_hidden_ == 2) or
+                                    (lr == .05 and num_hidden_ == 2)]
 
 nr_expts = len(settings)
 
