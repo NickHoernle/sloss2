@@ -233,9 +233,11 @@ class LogicNet(nn.Module):
         self.net = nn.Sequential(
             nn.Linear(num_dim, 100),
             nn.LeakyReLU(),
-            nn.Linear(100, 1000),
+            nn.Linear(100, 100),
             nn.LeakyReLU(),
-            nn.Linear(1000, 100),
+            nn.Linear(100, 100),
+            nn.LeakyReLU(),
+            nn.Linear(100, 100),
             nn.LeakyReLU(),
             nn.Linear(100, 25),
             nn.LeakyReLU(),

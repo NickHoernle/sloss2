@@ -22,7 +22,7 @@ learning_rate = [.1, .05, .01]
 unl_weight = [.25, .1, .075, .05, .01]
 sloss_weight = [1.]
 lr_decay_ratio = [.2]
-num_hidden = [10, 2]
+num_hidden = [2]
 
 settings = [(lr, unl_, sloss_, lr_decay_ratio_, num_hidden_, dataset_, rep)
             for lr in learning_rate

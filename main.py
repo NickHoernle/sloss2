@@ -152,7 +152,7 @@ def main():
         logic_net = LogicNet(num_classes)
         logic_net.to(device)
         logic_net.apply(init_weights)
-        logic_opt = Adam(logic_net.parameters(), lr=1e-2)
+        logic_opt = Adam(logic_net.parameters(), lr=1e-1)
 
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
@@ -353,7 +353,8 @@ def main():
 
             # logic
             probabilities = torch.softmax(y_full, dim=1)
-            true_logic = cifar100_logic(probabilities, targets, class_names).float()
+            # true_logic = cifar100_logic(probabilities, targets, class_names).float()
+            true_logic = cifar100_logic(probabilities, torch.argmax(probabilities), class_names).float()
             superclassacc += true_logic.detach().cpu().numpy().tolist()
 
             return recon_loss.mean(), y_full
