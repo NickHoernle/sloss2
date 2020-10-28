@@ -20,14 +20,16 @@ experiment = "cifar10"
 dataset = [experiment]
 learning_rate = [.1, .05, .01]
 unl_weight = [.25, .1, .075, .05, .01]
+unl2_weight = [1, .1, .01]
 sloss_weight = [1.]
 lr_decay_ratio = [.2]
-num_hidden = [2]
+num_hidden = [10]
 
-settings = [(lr, unl_, sloss_, lr_decay_ratio_, num_hidden_, dataset_, rep)
+settings = [(lr, unl_, sloss_, unl2_, lr_decay_ratio_, num_hidden_, dataset_, rep)
             for lr in learning_rate
             for unl_ in unl_weight
             for sloss_ in sloss_weight
+            for unl2_ in unl2_weight
             for lr_decay_ratio_ in lr_decay_ratio
             for num_hidden_ in num_hidden
             for dataset_ in dataset
@@ -42,7 +44,7 @@ print(f'Estimated time = {(nr_expts / nr_servers * avg_expt_time)/60} hrs')
 
 output_file = open("experiment.txt", "w")
 
-for (lr, unl_, sloss_, lr_decay_ratio_, num_hidden_, dataset_, rep) in settings:
+for (lr, unl_, sloss_, unl2_, lr_decay_ratio_, num_hidden_, dataset_, rep) in settings:
     # Note that we don't set a seed for rep - a seed is selected at random
     # and recorded in the output data by the python script
 
@@ -55,6 +57,7 @@ for (lr, unl_, sloss_, lr_decay_ratio_, num_hidden_, dataset_, rep) in settings:
         f"{base_call} "
         f"--lr {lr} "
         f"--unl_weight {unl_} "
+        f"--unl2_weight {unl2_} "
         f"--sloss_weight {sloss_} "
         f"--lr_decay_ratio {lr_decay_ratio_} "
         f"--dataset {dataset_} "
