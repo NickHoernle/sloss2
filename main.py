@@ -159,6 +159,7 @@ def main():
         logic_net.to(device)
         logic_net.apply(init_weights)
         logic_opt = Adam(logic_net.parameters(), lr=1e-2)
+        scheduler2 = StepLR(logic_opt, step_size=40, gamma=0.2)
 
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
@@ -440,6 +441,7 @@ def main():
         sc_acc = np.mean(superclassacc)
 
         scheduler.step()
+        scheduler2.step()
 
         print(log({
             "train_loss": train_loss[0],

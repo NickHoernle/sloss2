@@ -18,12 +18,12 @@ repeats = 1
 
 experiment = "cifar10"
 dataset = [experiment]
-learning_rate = [.1, .05, .01]
+learning_rate = [.1, .01]
 unl_weight = [.25, .1, .075, .05, .01]
 unl2_weight = [1, .1, .01]
 sloss_weight = [1.]
 lr_decay_ratio = [.2]
-num_hidden = [10]
+num_hidden = [10, 2]
 
 settings = [(lr, unl_, sloss_, unl2_, lr_decay_ratio_, num_hidden_, dataset_, rep)
             for lr in learning_rate
@@ -50,7 +50,7 @@ for (lr, unl_, sloss_, unl2_, lr_decay_ratio_, num_hidden_, dataset_, rep) in se
 
     if lr == .1 and num_hidden_ == 2:
         continue
-    if lr == .05 and num_hidden_ == 2:
+    if lr == .01 and num_hidden_ == 10:
         continue
 
     expt_call = (
