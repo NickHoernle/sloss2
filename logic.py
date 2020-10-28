@@ -231,7 +231,7 @@ class LogicNet(nn.Module):
     def __init__(self, num_dim):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(num_dim, 100),
+            nn.Linear(2*num_dim, 100),
             nn.LeakyReLU(),
             nn.Linear(100, 100),
             nn.LeakyReLU(),

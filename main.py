@@ -86,6 +86,12 @@ parser.add_argument("--num_hidden", type=int, default=10,
                     help="Dim of the latent dimension used")
 
 
+def idx_to_one_hot(labels, num_classes, device):
+    y_onehot = torch.FloatTensor(len(labels), num_classes).to(device)
+    y_onehot.zero_()
+    y_onehot.scatter_(1, labels.unsqueeze(1), 1)
+    return y_onehot
+
 def main():
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
@@ -261,7 +267,8 @@ def main():
                 probabilities = samples.softmax(dim=-1)
 
                 true = cifar100_logic(probabilities, targets, class_names).float()
-                pred = logic_net(probabilities).squeeze()
+                logic_in = torch.cat((probabilities, idx_to_one_hot(targets, num_classes, device)), dim=1)
+                pred = logic_net(logic_in).squeeze()
 
                 logic_loss = F.binary_cross_entropy_with_logits(pred, true)
 
@@ -279,7 +286,8 @@ def main():
                 if counter > 10:
                     probabilities = samples.softmax(dim=-1)
                     true_logic = cifar100_logic(probabilities, targets, class_names)
-                    pred = logic_net(probabilities).squeeze()
+                    logic_in = torch.cat((probabilities, idx_to_one_hot(targets, num_classes, device)), dim=1)
+                    pred = logic_net(logic_in).squeeze()
 
                     logic_loss2_ = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
                     logic_loss2 = logic_loss2_[~true_logic].sum() / len(pred)
