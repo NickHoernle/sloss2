@@ -282,15 +282,13 @@ def main():
                 sloss = F.cross_entropy(samples, targets)
 
                 # use logic here
-                logic_loss2 = 0
-                if counter > 10:
-                    probabilities = samples.softmax(dim=-1)
-                    true_logic = cifar100_logic(probabilities, targets, class_names)
-                    logic_in = torch.cat((probabilities, idx_to_one_hot(targets, num_classes, device)), dim=1)
-                    pred = logic_net(logic_in).squeeze()
+                probabilities = samples.softmax(dim=-1)
+                true_logic = cifar100_logic(probabilities, targets, class_names)
+                logic_in = torch.cat((probabilities, idx_to_one_hot(targets, num_classes, device)), dim=1)
+                pred = logic_net(logic_in).squeeze()
 
-                    logic_loss2_ = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
-                    logic_loss2 = logic_loss2_[~true_logic].sum() / len(pred)
+                logic_loss2_ = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
+                logic_loss2 = logic_loss2_[~true_logic].sum() / len(pred)
 
                 loss2 = args.sloss_weight * (args.unl2_weight*logic_loss2 + sloss)
 
