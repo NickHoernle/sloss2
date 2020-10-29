@@ -283,6 +283,8 @@ def main():
                 samples, targets = model_y.sample(len(y_l))
                 sloss = F.cross_entropy(samples, targets)
 
+                sloss_weight = min([0.1*counter, args.sloss_weight])
+
                 # use logic here
                 logic_loss2 = 0
                 if counter > 10:
@@ -293,7 +295,7 @@ def main():
                     logic_loss2_ = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
                     logic_loss2 = logic_loss2_[~true_logic].sum() / len(pred)
 
-                loss2 = args.sloss_weight * (args.unl2_weight*logic_loss2 + sloss)
+                loss2 = sloss_weight * (args.unl2_weight*logic_loss2 + sloss)
 
                 opt_y.zero_grad()
                 loss2.backward()
