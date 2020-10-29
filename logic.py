@@ -269,59 +269,69 @@ def cifar100_logic(probabilities, labels, class_names):
     ix = class_names.index("airplane")
     ix2 = class_names.index("automobile")
     samps = probabilities[labels == ix]
-    logic1 = (samps[:, ix] + samps[:, ix2]) > 0.99
+    preds = torch.argmax(samps, dim=1)
+    logic1 = (preds == ix) | (preds == ix2)
 
     # "automobile"
     ix = class_names.index("automobile")
     ix2 = class_names.index("truck")
     samps = probabilities[labels == ix]
-    logic2 = (samps[:, ix] + samps[:, ix2]) > 0.99
+    preds = torch.argmax(samps, dim=1)
+    logic2 = (preds == ix) | (preds == ix2)
 
     # "bird"
     ix = class_names.index("bird")
     ix2 = class_names.index("airplane")
     samps = probabilities[labels == ix]
-    logic3 = (samps[:, ix] + samps[:, ix2]) > 0.99
+    preds = torch.argmax(samps, dim=1)
+    logic3 = (preds == ix) | (preds == ix2)
 
     # "cat"
     ix = class_names.index("cat")
     ix2 = class_names.index("dog")
     samps = probabilities[labels == ix]
-    logic4 = (samps[:, ix] + samps[:, ix2]) > 0.99
+    preds = torch.argmax(samps, dim=1)
+    logic4 = (preds == ix) | (preds == ix2)
 
     # "deer"
     ix = class_names.index("deer")
     ix2 = class_names.index("dog")
     samps = probabilities[labels == ix]
-    logic5 = (samps[:, ix] + samps[:, ix2]) > 0.99
+    preds = torch.argmax(samps, dim=1)
+    logic5 = (preds == ix) | (preds == ix2)
 
     # "dog"
     ix = class_names.index("dog")
     ix2 = class_names.index("cat")
     samps = probabilities[labels == ix]
-    logic6 = (samps[:, ix] + samps[:, ix2]) > 0.99
+    preds = torch.argmax(samps, dim=1)
+    logic6 = (preds == ix) | (preds == ix2)
 
     # "frog"
     ix = class_names.index("frog")
     samps = probabilities[labels == ix]
-    logic7 = samps[:, ix] > 0
+    preds = torch.argmax(samps, dim=1)
+    logic7 = (preds == ix) | (preds == ix2)
 
     # "horse"
     ix = class_names.index("horse")
     ix2 = class_names.index("deer")
     samps = probabilities[labels == ix]
-    logic8 = (samps[:, ix] + samps[:, ix2]) > 0.99
+    preds = torch.argmax(samps, dim=1)
+    logic8 = (preds == ix) | (preds == ix2)
 
     # "ship"
     ix = class_names.index("ship")
     samps = probabilities[labels == ix]
-    logic9 = samps[:, ix] > 0.99
+    preds = torch.argmax(samps, dim=1)
+    logic9 = (preds == ix)
 
     # "truck"
     ix = class_names.index("truck")
     ix2 = class_names.index("automobile")
     samps = probabilities[labels == ix]
-    logic10 = (samps[:, ix] + samps[:, ix2]) > 0.99
+    preds = torch.argmax(samps, dim=1)
+    logic10 = (preds == ix) | (preds == ix2)
 
     final_logic = torch.cat([logic1, logic2, logic3, logic4, logic5, logic6, logic7, logic8, logic9, logic10], dim=0)
 
