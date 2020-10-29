@@ -231,7 +231,7 @@ class LogicNet(nn.Module):
     def __init__(self, num_dim):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(2*num_dim, 100),
+            nn.Linear(num_dim, 100),
             nn.LeakyReLU(),
             nn.Linear(100, 100),
             nn.LeakyReLU(),
@@ -264,44 +264,37 @@ def get_cifar100_pred(samples):
     return torch.stack(samples[:, sc_map].split(5, dim=-1), dim=1).exp().sum(dim=-1)
 
 
-def cifar100_logic(log_prob, labels):
+def cifar100_logic(log_prob):
 
-    mapping = {
-        0: 1,
-        1: 9,
-        2: 0,
-        3: 5,
-        4: 5,
-        5: 3,
-        6: 6,
-        7: 4,
-        8: 8,
-        9: 1,
-    }
+    terms = ((log_prob[:, (0, 1)].exp().sum(dim=1) > .95) |
+             (log_prob[:, (1, 9)].exp().sum(dim=1) > .95) |
+             (log_prob[:, (2, 0)].exp().sum(dim=1) > .95) |
+             (log_prob[:, (3, 5)].exp().sum(dim=1) > .95) |
+             (log_prob[:, (4, 5)].exp().sum(dim=1) > .95) |
+             (log_prob[:, (5, 3)].exp().sum(dim=1) > .95) |
+             (log_prob[:, 6].exp() > .95) |
+             (log_prob[:, (7, 4)].exp().sum(dim=1) > .95) |
+             (log_prob[:, 8].exp() > .95) |
+             (log_prob[:, (9, 1)].exp().sum(dim=1) > .95))
 
-    labels_ = labels.cpu().detach().numpy()
-    labels2 = np.stack((labels_, [mapping[l] for l in labels_]), axis=1)
-    idxs = np.stack((np.arange(len(log_prob)), np.arange(len(log_prob))), axis=1)
-    ll = log_prob[idxs, labels2].logsumexp(dim=1)
+    return terms
 
-    return ll
-
-def cifar100_logic_val(log_prob, labels):
-
-    mapping = {
-        0: 1,
-        1: 9,
-        2: 0,
-        3: 5,
-        4: 5,
-        5: 3,
-        6: 6,
-        7: 4,
-        8: 8,
-        9: 1,
-    }
-
-    labels_ = labels.cpu().detach().numpy()
-    labels2 = np.stack((labels_, [mapping[l] for l in labels_]), axis=1)
-    pred = torch.argmax(log_prob, dim=1).cpu().detach().numpy()
-    return (pred.reshape(-1,1) == labels2).any(axis=1)
+# def cifar100_logic_val(log_prob, labels):
+#
+#     mapping = {
+#         0: 1,
+#         1: 9,
+#         2: 0,
+#         3: 5,
+#         4: 5,
+#         5: 3,
+#         6: 6,
+#         7: 4,
+#         8: 8,
+#         9: 1,
+#     }
+#
+#     labels_ = labels.cpu().detach().numpy()
+#     labels2 = np.stack((labels_, [mapping[l] for l in labels_]), axis=1)
+#     pred = torch.argmax(log_prob, dim=1).cpu().detach().numpy()
+#     return (pred.reshape(-1,1) == labels2).any(axis=1)
