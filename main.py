@@ -192,7 +192,8 @@ def main():
     if not os.path.exists(args.save):
         os.mkdir(args.save)
 
-    global counter, classes
+    global counter, classes, logic_losses
+    logic_losses = 0
     if args.dataset == "cifar100":
         classes = test_dataset.classes
         set_class_mapping(classes)
@@ -234,7 +235,7 @@ def main():
             else:
                 return F.cross_entropy(y, targets), y
         else:
-            global counter
+            global counter, logic_losses
 
             l = sample[0]
             u1 = sample[1]
@@ -272,6 +273,7 @@ def main():
                 pred = logic_net(logic_in).squeeze()
 
                 logic_loss = F.binary_cross_entropy_with_logits(pred, true)
+                logic_losses += logic_loss.item()
 
                 logic_opt.zero_grad()
                 logic_loss.backward()
@@ -361,8 +363,32 @@ def main():
             # logic
             probabilities = torch.softmax(y_full, dim=1)
             true_logic = cifar100_logic(probabilities, targets, class_names).float()
+
+            logic_in = torch.cat((probabilities, idx_to_one_hot(targets, num_classes, device)), dim=1)
+            pred = logic_net(logic_in).squeeze()
+
             # true_logic = cifar100_logic(probabilities, torch.argmax(probabilities), class_names).float()
             superclassacc += true_logic.detach().cpu().numpy().tolist()
+
+            # y_pred = torch.argmax(probabilities, dim=1)
+            # import pdb
+            # pdb.set_trace()
+            #
+            # from sklearn.metrics import confusion_matrix
+            # import matplotlib.pyplot as plt
+            # confusion_matrix(targets, y_pred)
+            #
+            # # import pdb
+            # # pdb.set_trace()
+            #
+            # arr = ((y_pred == 3) & (targets == 2))
+            # for img in inputs[arr]:
+            #     img_vec = img.detach().numpy().transpose(1,2,0).astype(np.float) * .5 + .5
+            #     plt.imshow(img_vec)
+            #     plt.show()
+            #
+            # import pdb
+            # pdb.set_trace()
 
             return recon_loss.mean(), y_full
 
@@ -419,11 +445,11 @@ def main():
             lr = state['optimizer'].param_groups[0]['lr']
             state['optimizer'] = create_optimizer(args, lr * args.lr_decay_ratio)
 
-        # with torch.no_grad():
-        #     engine.test(compute_loss_test, test_loader)
+        with torch.no_grad():
+            engine.test(compute_loss_test, test_loader)
 
     def on_end_epoch(state):
-        global superclassacc
+        global superclassacc, logic_losses
 
         train_loss = meter_loss.value()
         train_acc = classacc.value()[0]
@@ -454,10 +480,12 @@ def main():
             "train_time": train_time,
             "test_time": timer_test.value(),
             "logic_acc": sc_acc,
+            "train_logic_loss": logic_losses
         }, state))
         print('==> id: %s (%d/%d), test_acc: \33[91m%.2f\033[0m' % (args.save, state['epoch'], args.epochs, test_acc))
 
         global counter
+        logic_losses = 0
         counter += 1
 
     engine = Engine()
