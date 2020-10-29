@@ -303,5 +303,5 @@ def cifar100_logic_val(log_prob, labels):
 
     labels_ = labels.cpu().detach().numpy()
     labels2 = np.stack((labels_, [mapping[l] for l in labels_]), axis=1)
-    pred = torch.argmax(log_prob, dim=1).detach().numpy()
+    pred = torch.argmax(log_prob, dim=1).cpu().detach().numpy()
     return (pred.reshape(-1,1) == labels2).any(axis=1)
