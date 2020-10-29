@@ -172,8 +172,8 @@ def main():
 
     epoch = 0
 
-    print('\nParameters:')
-    print_tensor_dict(params)
+    # print('\nParameters:')
+    # print_tensor_dict(params)
 
     n_parameters = sum(p.numel() for p in params.values() if p.requires_grad)
     if args.generative_loss:
