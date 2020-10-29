@@ -264,75 +264,44 @@ def get_cifar100_pred(samples):
     return torch.stack(samples[:, sc_map].split(5, dim=-1), dim=1).exp().sum(dim=-1)
 
 
-def cifar100_logic(probabilities, labels, class_names):
-    # "airplane"
-    ix = class_names.index("airplane")
-    ix2 = class_names.index("automobile")
-    samps = probabilities[labels == ix]
-    preds = torch.argmax(samps, dim=1)
-    logic1 = (preds == ix) | (preds == ix2)
+def cifar100_logic(log_prob, labels):
 
-    # "automobile"
-    ix = class_names.index("automobile")
-    ix2 = class_names.index("truck")
-    samps = probabilities[labels == ix]
-    preds = torch.argmax(samps, dim=1)
-    logic2 = (preds == ix) | (preds == ix2)
+    mapping = {
+        0: 1,
+        1: 9,
+        2: 0,
+        3: 5,
+        4: 5,
+        5: 3,
+        6: 6,
+        7: 4,
+        8: 8,
+        9: 1,
+    }
 
-    # "bird"
-    ix = class_names.index("bird")
-    ix2 = class_names.index("airplane")
-    samps = probabilities[labels == ix]
-    preds = torch.argmax(samps, dim=1)
-    logic3 = (preds == ix) | (preds == ix2)
+    labels_ = labels.detach().numpy()
+    labels2 = np.stack((labels_, [mapping[l] for l in labels_]), axis=1)
+    idxs = np.stack((np.arange(len(log_prob)), np.arange(len(log_prob))), axis=1)
+    ll = log_prob[idxs, labels2].logsumexp(dim=1)
 
-    # "cat"
-    ix = class_names.index("cat")
-    ix2 = class_names.index("dog")
-    samps = probabilities[labels == ix]
-    preds = torch.argmax(samps, dim=1)
-    logic4 = (preds == ix) | (preds == ix2)
+    return ll
 
-    # "deer"
-    ix = class_names.index("deer")
-    ix2 = class_names.index("dog")
-    samps = probabilities[labels == ix]
-    preds = torch.argmax(samps, dim=1)
-    logic5 = (preds == ix) | (preds == ix2)
+def cifar100_logic_val(log_prob, labels):
 
-    # "dog"
-    ix = class_names.index("dog")
-    ix2 = class_names.index("cat")
-    samps = probabilities[labels == ix]
-    preds = torch.argmax(samps, dim=1)
-    logic6 = (preds == ix) | (preds == ix2)
+    mapping = {
+        0: 1,
+        1: 9,
+        2: 0,
+        3: 5,
+        4: 5,
+        5: 3,
+        6: 6,
+        7: 4,
+        8: 8,
+        9: 1,
+    }
 
-    # "frog"
-    ix = class_names.index("frog")
-    samps = probabilities[labels == ix]
-    preds = torch.argmax(samps, dim=1)
-    logic7 = (preds == ix) | (preds == ix2)
-
-    # "horse"
-    ix = class_names.index("horse")
-    ix2 = class_names.index("deer")
-    samps = probabilities[labels == ix]
-    preds = torch.argmax(samps, dim=1)
-    logic8 = (preds == ix) | (preds == ix2)
-
-    # "ship"
-    ix = class_names.index("ship")
-    samps = probabilities[labels == ix]
-    preds = torch.argmax(samps, dim=1)
-    logic9 = (preds == ix)
-
-    # "truck"
-    ix = class_names.index("truck")
-    ix2 = class_names.index("automobile")
-    samps = probabilities[labels == ix]
-    preds = torch.argmax(samps, dim=1)
-    logic10 = (preds == ix) | (preds == ix2)
-
-    final_logic = torch.cat([logic1, logic2, logic3, logic4, logic5, logic6, logic7, logic8, logic9, logic10], dim=0)
-
-    return final_logic
+    labels_ = labels.detach().numpy()
+    labels2 = np.stack((labels_, [mapping[l] for l in labels_]), axis=1)
+    pred = torch.argmax(log_prob, dim=1).detach().numpy()
+    return (pred.reshape(-1,1) == labels2).any(axis=1)

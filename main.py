@@ -19,6 +19,7 @@ from datasets import Joint, check_dataset
 from logic import (
     DecoderModel,
     cifar100_logic,
+    cifar100_logic_val,
     LogicNet,
     set_class_mapping,
     get_cifar100_pred,
@@ -265,19 +266,19 @@ def main():
                 ixs = np.arange(len(y_l))
 
                 # train logic net
-                samples, targets = model_y.sample(len(y_l))
-                probabilities = samples.softmax(dim=-1)
-
-                true = cifar100_logic(probabilities, targets, class_names).float()
-                logic_in = torch.cat((probabilities, idx_to_one_hot(targets, num_classes, device)), dim=1)
-                pred = logic_net(logic_in).squeeze()
-
-                logic_loss = F.binary_cross_entropy_with_logits(pred, true)
-                logic_losses += logic_loss.item()
-
-                logic_opt.zero_grad()
-                logic_loss.backward()
-                logic_opt.step()
+                # samples, targets = model_y.sample(len(y_l))
+                # probabilities = samples.softmax(dim=-1)
+                #
+                # true = cifar100_logic(probabilities, targets, class_names).float()
+                # logic_in = torch.cat((probabilities, idx_to_one_hot(targets, num_classes, device)), dim=1)
+                # pred = logic_net(logic_in).squeeze()
+                #
+                # logic_loss = F.binary_cross_entropy_with_logits(pred, true)
+                # logic_losses += logic_loss.item()
+                #
+                # logic_opt.zero_grad()
+                # logic_loss.backward()
+                # logic_opt.step()
 
                 # custom generator loss
                 # log_preds, latent = model_y.train_generative_only(y_l)
@@ -285,15 +286,15 @@ def main():
                 sloss = F.cross_entropy(samples, targets)
 
                 # use logic here
-                probabilities = samples.softmax(dim=-1)
-                true_logic = cifar100_logic(probabilities, targets, class_names)
-                logic_in = torch.cat((probabilities, idx_to_one_hot(targets, num_classes, device)), dim=1)
-                pred = logic_net(logic_in).squeeze()
+                log_prob = samples.log_softmax(dim=-1)
+                logic_loss = cifar100_logic(log_prob, targets).mean()
+                # logic_in = torch.cat((probabilities, idx_to_one_hot(targets, num_classes, device)), dim=1)
+                # pred = logic_net(logic_in).squeeze()
+                #
+                # logic_loss2_ = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
+                # logic_loss2 = logic_loss2_[~true_logic].sum() / len(pred)
 
-                logic_loss2_ = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
-                logic_loss2 = logic_loss2_[~true_logic].sum() / len(pred)
-
-                loss2 = args.sloss_weight * (args.unl2_weight*logic_loss2 + sloss)
+                loss2 = args.sloss_weight * (args.unl2_weight*logic_loss + sloss)
 
                 opt_y.zero_grad()
                 loss2.backward()
@@ -361,14 +362,14 @@ def main():
             recon_loss = F.cross_entropy(y_full, targets)
 
             # logic
-            probabilities = torch.softmax(y_full, dim=1)
-            true_logic = cifar100_logic(probabilities, targets, class_names).float()
+            log_prob = torch.log_softmax(y_full, dim=1)
+            true_logic_pred = cifar100_logic_val(log_prob, targets)
 
-            logic_in = torch.cat((probabilities, idx_to_one_hot(targets, num_classes, device)), dim=1)
-            pred = logic_net(logic_in).squeeze()
+            # logic_in = torch.cat((probabilities, idx_to_one_hot(targets, num_classes, device)), dim=1)
+            # pred = logic_net(logic_in).squeeze()
 
             # true_logic = cifar100_logic(probabilities, torch.argmax(probabilities), class_names).float()
-            superclassacc += true_logic.detach().cpu().numpy().tolist()
+            superclassacc += true_logic_pred.tolist()
 
             # y_pred = torch.argmax(probabilities, dim=1)
             # import pdb
@@ -445,8 +446,8 @@ def main():
             lr = state['optimizer'].param_groups[0]['lr']
             state['optimizer'] = create_optimizer(args, lr * args.lr_decay_ratio)
 
-        with torch.no_grad():
-            engine.test(compute_loss_test, test_loader)
+        # with torch.no_grad():
+        #     engine.test(compute_loss_test, test_loader)
 
     def on_end_epoch(state):
         global superclassacc, logic_losses
