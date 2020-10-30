@@ -443,7 +443,7 @@ def main():
 
         if counter == 10:
             model_y.apply(init_weights)
-            model_y.reset_globals(num_classes, z_dim)
+            model_y.reset_globals(num_classes, z_dim, device)
 
         state['iterator'] = tqdm(train_loader, dynamic_ncols=True)
 
