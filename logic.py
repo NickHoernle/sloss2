@@ -172,6 +172,8 @@ class DecoderModel(nn.Module):
         self.net = nn.Sequential(
             nn.Linear(num_classes, 100),
             nn.LeakyReLU(.2),
+            nn.Linear(100, 100),
+            nn.LeakyReLU(.2),
             nn.Linear(100, num_classes)
         )
 
