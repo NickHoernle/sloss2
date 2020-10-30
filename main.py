@@ -153,7 +153,7 @@ def main():
         model_y.apply(init_weights)
         model_y.train()
         opt_y = SGD(model_y.get_global_params(), args.lr, momentum=0.9, weight_decay=args.weight_decay)
-        scheduler = StepLR(opt_y, step_size=40, gamma=0.2)
+        scheduler = StepLR(opt_y, step_size=5, gamma=0.9)
 
         logic_net = LogicNet(num_classes)
         logic_net.to(device)
@@ -208,7 +208,7 @@ def main():
         optimizer.load_state_dict(state_dict['optimizer'])
 
         model_y.load_state_dict(state_dict['model_y'])
-        logic_net.load_state_dict(state_dict['logic_net'])
+        # logic_net.load_state_dict(state_dict['logic_net'])
 
         # import pdb
         # pdb.set_trace()
@@ -440,6 +440,11 @@ def main():
         classacc.reset()
         meter_loss.reset()
         timer_train.reset()
+
+        if counter == 10:
+            model_y.apply(init_weights)
+            model_y.reset_globals(num_classes, z_dim)
+
         state['iterator'] = tqdm(train_loader, dynamic_ncols=True)
 
         epoch = state['epoch'] + 1

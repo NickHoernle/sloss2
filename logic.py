@@ -177,6 +177,10 @@ class DecoderModel(nn.Module):
     def get_local_params(self):
         return [v for k, v in self.named_parameters() if ("mu" in k) or ("logvar" in k)]
 
+    def reset_globals(self, num_classes, z_dim):
+        self.cluster_means.data = torch.randn(num_classes, z_dim)
+        self.cluster_lvariances.data = torch.randn(num_classes, z_dim)
+
     def forward(self, x):
         # encode
         mu = self.mu(x)
