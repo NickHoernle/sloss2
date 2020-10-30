@@ -201,7 +201,7 @@ class DecoderModel(nn.Module):
         logvar = self.logvar(x)
 
         # resample
-        z = reparameterise(mu, logvar)
+        z = torch.log_softmax(reparameterise(mu, logvar), dim=1)
 
         # evaluate cluster params
         # cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
@@ -233,7 +233,7 @@ class DecoderModel(nn.Module):
         logvar = self.logvar(x)
 
         # resample
-        z = reparameterise(mu, logvar).detach()
+        z = torch.log_softmax(reparameterise(mu, logvar).detach(), dim=1)
 
         # evaluate cluster params
         # cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
