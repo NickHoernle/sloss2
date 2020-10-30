@@ -311,7 +311,7 @@ def main():
                 loss += F.cross_entropy(log_preds, targets_l)
 
                 (z, mu, logvar) = latent
-                loss += -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean()
+                # loss += -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean()
 
                 # encoder loss
                 # cmu = cmu_[ixs, targets_l].detach()
