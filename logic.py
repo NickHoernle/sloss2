@@ -154,14 +154,26 @@ class DecoderModel(nn.Module):
         super().__init__()
 
         # local params
-        self.mu = nn.Sequential(nn.Linear(num_classes, 100), nn.LeakyReLU(.2), nn.Linear(100, z_dim))
-        self.logvar = nn.Sequential(nn.Linear(num_classes, 100), nn.LeakyReLU(.2), nn.Linear(100, z_dim))
+        self.mu = nn.Sequential(
+            nn.Linear(num_classes, 100),
+            nn.LeakyReLU(.2),
+            nn.Linear(100, num_classes)
+        )
+        self.logvar = nn.Sequential(
+            nn.Linear(num_classes, 100),
+            nn.LeakyReLU(.2),
+            nn.Linear(100, num_classes)
+        )
 
-        # global params
-        self.cluster_means = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
-        self.cluster_lvariances = nn.Parameter(torch.zeros(num_classes, z_dim), requires_grad=True)
+        # # global params
+        # self.cluster_means = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
+        # self.cluster_lvariances = nn.Parameter(torch.zeros(num_classes, z_dim), requires_grad=True)
 
-        self.net = nn.Sequential(nn.Linear(z_dim, 100), nn.LeakyReLU(.2), nn.Linear(100, num_classes))
+        self.net = nn.Sequential(
+            nn.Linear(num_classes, 100),
+            nn.LeakyReLU(.2),
+            nn.Linear(100, num_classes)
+        )
 
         self.nc = num_classes
         self.zdim = z_dim
@@ -177,9 +189,9 @@ class DecoderModel(nn.Module):
     def get_local_params(self):
         return [v for k, v in self.named_parameters() if ("mu" in k) or ("logvar" in k)]
 
-    def reset_globals(self, num_classes, z_dim, device):
-        self.cluster_means.data = torch.randn(num_classes, z_dim).to(device)
-        self.cluster_lvariances.data = torch.randn(num_classes, z_dim).to(device)
+    # def reset_globals(self, num_classes, z_dim, device):
+    #     self.cluster_means.data = torch.randn(num_classes, z_dim).to(device)
+    #     self.cluster_lvariances.data = torch.randn(num_classes, z_dim).to(device)
 
     def forward(self, x):
         # encode
@@ -190,13 +202,13 @@ class DecoderModel(nn.Module):
         z = reparameterise(mu, logvar)
 
         # evaluate cluster params
-        cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
-        cluster_logvars = torch.zeros_like(cluster_mus)
+        # cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
+        # cluster_logvars = torch.zeros_like(cluster_mus)
 
         # calculate log-prob
         prediction = self.net(z)
 
-        return prediction, (z, mu, logvar, cluster_mus, cluster_logvars)
+        return prediction, (z, mu, logvar)
 
     def sample(self, num_samples):
         cluster_mus = self.cluster_means.unsqueeze(0).repeat(num_samples, 1, 1)
@@ -222,13 +234,13 @@ class DecoderModel(nn.Module):
         z = reparameterise(mu, logvar).detach()
 
         # evaluate cluster params
-        cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
-        cluster_logvars = torch.zeros_like(cluster_mus)
+        # cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
+        # cluster_logvars = torch.zeros_like(cluster_mus)
 
         # calculate log-prob
         prediction = self.net(z)
 
-        return prediction, (z, mu, logvar, cluster_mus, cluster_logvars)
+        return prediction, (z, mu, logvar)#, cluster_mus, cluster_logvars)
 
 class LogicNet(nn.Module):
 

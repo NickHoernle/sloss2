@@ -263,84 +263,85 @@ def main():
             elif args.generative_loss:
 
                 ixs = np.arange(len(y_l))
+                #
+                # # train logic net
+                # samples, targets = model_y.sample(len(y_l))
+                # log_prob = samples.log_softmax(dim=-1)
+                #
+                # true = cifar100_logic(log_prob).float()
+                # pred = logic_net(log_prob).squeeze()
+                #
+                # logic_loss = F.binary_cross_entropy_with_logits(pred, true)
+                # logic_losses += logic_loss.item()
+                #
+                # logic_opt.zero_grad()
+                # logic_loss.backward()
+                # logic_opt.step()
+                #
+                # # custom generator loss
+                log_preds, latent = model_y.train_generative_only(y_l)
+                # samples, targets = model_y.sample(len(y_l))
+                sloss = F.cross_entropy(log_preds, targets_l)
 
-                # train logic net
-                samples, targets = model_y.sample(len(y_l))
-                log_prob = samples.log_softmax(dim=-1)
-
-                true = cifar100_logic(log_prob).float()
-                pred = logic_net(log_prob).squeeze()
-
-                logic_loss = F.binary_cross_entropy_with_logits(pred, true)
-                logic_losses += logic_loss.item()
-
-                logic_opt.zero_grad()
-                logic_loss.backward()
-                logic_opt.step()
-
-                # custom generator loss
-                # log_preds, latent = model_y.train_generative_only(y_l)
-                samples, targets = model_y.sample(len(y_l))
-                sloss = F.cross_entropy(samples, targets)
-
-                sloss_weight = min([0.1*counter, args.sloss_weight])
-
-                # use logic here
-                logic_loss2 = 0
-                if counter > 10:
-                    log_prob = samples.log_softmax(dim=-1)
-                    true_logic = cifar100_logic(log_prob)
-                    pred = logic_net(log_prob).squeeze()
-
-                    logic_loss2_ = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
-                    logic_loss2 = logic_loss2_[~true_logic].sum() / len(pred)
-
-                loss2 = sloss_weight * (args.unl2_weight*logic_loss2 + sloss)
-
+                # sloss_weight = min([0.1*counter, args.sloss_weight])
+                #
+                # # use logic here
+                # logic_loss2 = 0
+                # if counter > 10:
+                #     log_prob = samples.log_softmax(dim=-1)
+                #     true_logic = cifar100_logic(log_prob)
+                #     pred = logic_net(log_prob).squeeze()
+                #
+                #     logic_loss2_ = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
+                #     logic_loss2 = logic_loss2_[~true_logic].sum() / len(pred)
+                #
+                # loss2 = sloss_weight * (args.unl2_weight*logic_loss2 + sloss)
+                #
                 opt_y.zero_grad()
-                loss2.backward()
+                sloss.backward()
                 opt_y.step()
 
                 loss = 0
                 log_preds, latent = model_y(y_l)
                 loss += F.cross_entropy(log_preds, targets_l)
 
-                (z, mu, logvar, cmu_, clv_) = latent
+                (z, mu, logvar) = latent
+                loss += -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean()
 
                 # encoder loss
-                cmu = cmu_[ixs, targets_l].detach()
-                clv = clv_[ixs, targets_l].detach()
-
-                kld = 0.5 * ((clv - logvar) + (mu - cmu).pow(2)/(clv.exp()) + logvar.exp()/(clv.exp()) - 1)
-
-                nll = kld.sum(dim=1).mean()
-                loss += nll
-
-                # unsupervised part
-                if counter > 20:
-                    y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
-                    y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
-
-                    log_preds_u, latent_u = model_y(y_u)
-                    log_preds_u2, latent_u2 = model_y(y_u2)
-
-                    # consistency regularisation
-                    log_predictions2 = torch.log_softmax(log_preds_u, dim=1).detach()
-                    log_predictions = torch.log_softmax(log_preds_u2, dim=1).detach()
-
-                    (z, mu, logvar, c_mu, c_lv) = latent_u
-                    c_mu, c_lv = c_mu.detach(), c_lv.detach()
-                    mu_expd, lv_expd = mu.unsqueeze(1).repeat(1, num_classes, 1), logvar.unsqueeze(1).repeat(1, num_classes, 1)
-                    KLD1 = (0.5 * ((c_lv - lv_expd) + (mu_expd - c_mu).pow(2)/(c_lv.exp()) + lv_expd.exp()/(c_lv.exp()) - 1)).sum(dim=-1)
-                    reconstruction = (log_predictions.exp()*KLD1).sum(dim=1).mean()
-
-                    (z2, mu2, logvar2, c_mu2, c_lv2) = latent_u2
-                    c_mu2, c_lv2 = c_mu2.detach(), c_lv2.detach()
-                    mu_expd2, lv_expd2 = mu2.unsqueeze(1).repeat(1, num_classes, 1), logvar2.unsqueeze(1).repeat(1, num_classes, 1)
-                    KLD2 = (0.5 * ((c_lv2 - lv_expd2) + (mu_expd2 - c_mu2).pow(2)/(c_lv2.exp()) + (lv_expd2-c_lv2).exp() - 1)).sum(dim=-1)
-                    reconstruction2 = (log_predictions2.exp()*KLD2).sum(dim=1).mean()
-
-                    loss += args.unl_weight*(reconstruction+reconstruction2)
+                # cmu = cmu_[ixs, targets_l].detach()
+                # clv = clv_[ixs, targets_l].detach()
+                #
+                # kld = 0.5 * ((clv - logvar) + (mu - cmu).pow(2)/(clv.exp()) + logvar.exp()/(clv.exp()) - 1)
+                #
+                # nll = kld.sum(dim=1).mean()
+                # loss += nll
+                #
+                # # unsupervised part
+                # if counter > 20:
+                #     y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
+                #     y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
+                #
+                #     log_preds_u, latent_u = model_y(y_u)
+                #     log_preds_u2, latent_u2 = model_y(y_u2)
+                #
+                #     # consistency regularisation
+                #     log_predictions2 = torch.log_softmax(log_preds_u, dim=1).detach()
+                #     log_predictions = torch.log_softmax(log_preds_u2, dim=1).detach()
+                #
+                #     (z, mu, logvar, c_mu, c_lv) = latent_u
+                #     c_mu, c_lv = c_mu.detach(), c_lv.detach()
+                #     mu_expd, lv_expd = mu.unsqueeze(1).repeat(1, num_classes, 1), logvar.unsqueeze(1).repeat(1, num_classes, 1)
+                #     KLD1 = (0.5 * ((c_lv - lv_expd) + (mu_expd - c_mu).pow(2)/(c_lv.exp()) + lv_expd.exp()/(c_lv.exp()) - 1)).sum(dim=-1)
+                #     reconstruction = (log_predictions.exp()*KLD1).sum(dim=1).mean()
+                #
+                #     (z2, mu2, logvar2, c_mu2, c_lv2) = latent_u2
+                #     c_mu2, c_lv2 = c_mu2.detach(), c_lv2.detach()
+                #     mu_expd2, lv_expd2 = mu2.unsqueeze(1).repeat(1, num_classes, 1), logvar2.unsqueeze(1).repeat(1, num_classes, 1)
+                #     KLD2 = (0.5 * ((c_lv2 - lv_expd2) + (mu_expd2 - c_mu2).pow(2)/(c_lv2.exp()) + (lv_expd2-c_lv2).exp() - 1)).sum(dim=-1)
+                #     reconstruction2 = (log_predictions2.exp()*KLD2).sum(dim=1).mean()
+                #
+                #     loss += args.unl_weight*(reconstruction+reconstruction2)
 
                 return loss, log_preds
 
