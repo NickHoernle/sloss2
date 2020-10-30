@@ -317,7 +317,7 @@ def main():
                 # cmu = cmu_[ixs, targets_l].detach()
                 # clv = clv_[ixs, targets_l].detach()
                 #
-                kld = 0.5 * ((logvarp - logvar) + (mu - mup).pow(2)/(sigmap) + logvar.exp()/(sigmap) - 1)
+                kld = 0.5 * ((logvarp - logvar) + (mu - mup).pow(2)/(sigmap) + logvar.exp()/(sigmap) - 1).sum(dim=1).mean()
                 loss += kld
                 # nll = kld.sum(dim=1).mean()
                 # loss += nll
