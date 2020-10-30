@@ -224,6 +224,11 @@ def main():
     #
     # print(f"{torch.cuda.is_available()}")
 
+    alpha = 1 / 10
+    mup = 0
+    sigmap = 1 / alpha * (1 - 2 / 10) + 1 / (10*alpha)
+    logvarp = np.log(sigmap)
+
     def compute_loss(sample):
 
         if not args.ssl:
@@ -312,8 +317,8 @@ def main():
                 # cmu = cmu_[ixs, targets_l].detach()
                 # clv = clv_[ixs, targets_l].detach()
                 #
-                # kld = 0.5 * ((clv - logvar) + (mu - cmu).pow(2)/(clv.exp()) + logvar.exp()/(clv.exp()) - 1)
-                #
+                kld = 0.5 * ((logvarp - logvar) + (mu - mup).pow(2)/(sigmap) + logvar.exp()/(sigmap) - 1)
+                loss += kld
                 # nll = kld.sum(dim=1).mean()
                 # loss += nll
                 #
