@@ -150,85 +150,59 @@ def set_class_mapping(classes):
 
 
 class DecoderModel(nn.Module):
-    def __init__(self, num_classes, device, z_dim=2):
+    def __init__(self, num_classes=10, zdim=2):
         super().__init__()
 
-        # local params
-        self.mu = nn.Sequential(nn.Linear(num_classes, 100), nn.LeakyReLU(.2), nn.Linear(100, z_dim))
-        self.logvar = nn.Sequential(nn.Linear(num_classes, 100), nn.LeakyReLU(.2), nn.Linear(100, z_dim))
+        self.mu = nn.Sequential(
+            nn.Linear(num_classes, 200),
+            nn.LeakyReLU(.2),
+            nn.Linear(200, 100),
+            nn.LeakyReLU(.2),
+            nn.Linear(100, zdim)
+        )
 
-        # global params
-        self.cluster_means = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
-        self.cluster_lvariances = nn.Parameter(torch.zeros(num_classes, z_dim), requires_grad=True)
+        self.logvar = nn.Sequential(
+            nn.Linear(num_classes, 200),
+            nn.LeakyReLU(.2),
+            nn.Linear(200, 100),
+            nn.LeakyReLU(.2),
+            nn.Linear(100, zdim)
+        )
 
-        self.net = nn.Sequential(nn.Linear(z_dim, 100), nn.LeakyReLU(.2), nn.Linear(100, num_classes))
+        self.net = nn.Sequential(
+            nn.Linear(zdim, 200),
+            nn.LeakyReLU(.2),
+            nn.Linear(200, 500),
+            nn.LeakyReLU(.2),
+            nn.Linear(500, 200),
+            nn.LeakyReLU(.2),
+            nn.Linear(200, 100),
+            nn.LeakyReLU(.2),
+            nn.Linear(100, num_classes)
+        )
 
         self.nc = num_classes
-        self.zdim = z_dim
-        self.device = device
-        self.apply(init_weights)
-
-    def get_global_params(self):
-        return [v for k, v in self.named_parameters() if
-                ("cluster_means" in k) or
-                ("cluster_lvariances" in k) or
-                ("net" in k)]
+        self.nz = zdim
 
     def get_local_params(self):
-        return [v for k, v in self.named_parameters() if ("mu" in k) or ("logvar" in k)]
+        return [p for k, p in self.named_parameters() if ("mu" in k) or ("logvar" in k)]
 
-    def reset_globals(self, num_classes, z_dim, device):
-        self.cluster_means.data = torch.randn(num_classes, z_dim).to(device)
-        self.cluster_lvariances.data = torch.randn(num_classes, z_dim).to(device)
+    def re_init_local(self):
+        self.mu.apply(init_weights)
+        self.logvar.apply(init_weights)
 
     def forward(self, x):
-        # encode
         mu = self.mu(x)
         logvar = self.logvar(x)
 
-        # resample
         z = reparameterise(mu, logvar)
 
-        # evaluate cluster params
-        cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
-        cluster_logvars = torch.zeros_like(cluster_mus)
-
-        # calculate log-prob
-        prediction = self.net(z)
-
-        return prediction, (z, mu, logvar, cluster_mus, cluster_logvars)
+        return self.net(z), (z, mu, logvar)
 
     def sample(self, num_samples):
-        cluster_mus = self.cluster_means.unsqueeze(0).repeat(num_samples, 1, 1)
-        cluster_logvars = torch.zeros_like(cluster_mus)
+        z = torch.randn(num_samples, self.nz)
+        return self.net(z)
 
-        z2 = reparameterise(cluster_mus, cluster_logvars)
-
-        log_probs = torch.stack([self.net(z2[:, i, :]) for i in range(self.nc)], dim=1)
-
-        fake_tgts = torch.ones_like(log_probs[:, :, 0]).long()
-        fake_tgts *= torch.arange(self.nc).to(self.device)
-        samps = torch.cat(log_probs.split(1, dim=1), dim=0).squeeze(1)
-        fke_tgts = torch.cat(fake_tgts.split(1, dim=1), dim=0).squeeze(1)
-
-        return samps, fke_tgts
-
-    def train_generative_only(self, x):
-        # encode
-        mu = self.mu(x)
-        logvar = self.logvar(x)
-
-        # resample
-        z = reparameterise(mu, logvar).detach()
-
-        # evaluate cluster params
-        cluster_mus = self.cluster_means.unsqueeze(0).repeat(len(x), 1, 1)
-        cluster_logvars = torch.zeros_like(cluster_mus)
-
-        # calculate log-prob
-        prediction = self.net(z)
-
-        return prediction, (z, mu, logvar, cluster_mus, cluster_logvars)
 
 class LogicNet(nn.Module):
 
