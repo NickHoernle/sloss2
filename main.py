@@ -358,7 +358,7 @@ def main():
 
                 if counter > 5:
                     loss += args.unl2_weight * weight * loss_[~true].sum() / len(loss_)
-                
+
                 return loss, recon
 
             return loss, y_l
@@ -457,10 +457,6 @@ def main():
         classacc.reset()
         meter_loss.reset()
         timer_train.reset()
-
-        if counter == 10:
-            model_y.apply(init_weights)
-            model_y.reset_globals(num_classes, z_dim, device)
 
         state['iterator'] = tqdm(train_loader, dynamic_ncols=True)
 
