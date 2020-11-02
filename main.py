@@ -332,7 +332,7 @@ def main():
                 # train logic loss to recognise true logic
                 samples = torch.softmax(model_y.sample(1000), dim=1)
                 pred = logic_net(samples).squeeze(1)
-                true = (samples > 0.95).any(dim=1).float()
+                true = (samples > 0.95).any(dim=1).float().to(device)
 
                 logic_loss += F.binary_cross_entropy_with_logits(pred, true)
 
@@ -350,7 +350,7 @@ def main():
 
                 samples = torch.softmax(model_y.sample(len(y_l)), dim=1)
                 pred = logic_net(samples).squeeze(1)
-                true = (samples > 0.95).any(dim=1)
+                true = (samples > 0.95).any(dim=1).to(device)
 
                 weight = np.min([1, counter/100])
                 loss_ = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
