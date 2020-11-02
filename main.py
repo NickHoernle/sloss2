@@ -352,11 +352,11 @@ def main():
                 pred = logic_net(samples).squeeze(1)
                 true = (samples > 0.95).any(dim=1).to(device)
 
-                weight = np.min([1, counter/100])
+                weight = np.min([1, np.max([0, (counter-5)/100])])
                 loss_ = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
                 loss = recon_loss + weight * KLD
 
-                if counter > 10:
+                if counter > 5:
                     loss += 0.1 * weight * loss_[~true].sum() / len(loss_)
 
                 return loss, recon
