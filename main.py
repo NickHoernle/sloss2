@@ -421,7 +421,7 @@ def main():
             model_y=model_y.state_dict(),
             logic_net=logic_net.state_dict(),
             logic_opt=logic_opt.state_dict(),
-            opt_y=opt_y.state_dict()
+            # opt_y=opt_y.state_dict()
         ),
                    os.path.join(args.save, 'model.pt7'))
         z = {**vars(args), **t}
