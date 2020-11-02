@@ -320,29 +320,29 @@ def main():
 
             elif args.generative_loss:
 
-                # model_y.eval()
-                # logic_net.train()
-                # tgt = idx_to_one_hot(targets_l, 10, device)
-                #
-                # # train logic to recognise truth
-                # pred = logic_net(tgt)
-                # true = torch.ones_like(pred)
-                # logic_loss = F.binary_cross_entropy_with_logits(pred, true)
-                #
-                # # train logic loss to recognise true logic
-                # samples = torch.softmax(model_y.sample(1000), dim=1)
-                # pred = logic_net(samples).squeeze(1)
-                # true = (samples > 0.95).any(dim=1).float().to(device)
-                #
-                # logic_loss += F.binary_cross_entropy_with_logits(pred, true)
-                #
-                # logic_opt.zero_grad()
-                # logic_loss.backward()
-                # clip_grad_norm_(logic_loss, 1)
-                # logic_opt.step()
-                #
-                # logic_net.eval()
-                # model_y.train()
+                model_y.eval()
+                logic_net.train()
+                tgt = idx_to_one_hot(targets_l, 10, device)
+
+                # train logic to recognise truth
+                pred = logic_net(tgt)
+                true = torch.ones_like(pred)
+                logic_loss = F.binary_cross_entropy_with_logits(pred, true)
+
+                # train logic loss to recognise true logic
+                samples = torch.softmax(model_y.sample(1000).detach(), dim=1)
+                pred = logic_net(samples).squeeze(1)
+                true = (samples > 0.95).any(dim=1).float().to(device)
+
+                logic_loss += F.binary_cross_entropy_with_logits(pred, true)
+
+                logic_opt.zero_grad()
+                logic_loss.backward()
+                clip_grad_norm_(logic_loss, 1)
+                logic_opt.step()
+
+                logic_net.eval()
+                model_y.train()
 
                 recon, (z, mu, logvar) = model_y(y_l)
                 recon_loss = F.cross_entropy(recon, targets_l)
