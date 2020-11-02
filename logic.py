@@ -150,7 +150,7 @@ def set_class_mapping(classes):
 
 
 class DecoderModel(nn.Module):
-    def __init__(self, num_classes=10, zdim=2):
+    def __init__(self, num_classes=10, zdim=2, device="cpu"):
         super().__init__()
 
         self.mu = nn.Sequential(
@@ -183,6 +183,7 @@ class DecoderModel(nn.Module):
 
         self.nc = num_classes
         self.nz = zdim
+        self.device = device
 
     def get_local_params(self):
         return [p for k, p in self.named_parameters() if ("mu" in k) or ("logvar" in k)]
@@ -200,7 +201,7 @@ class DecoderModel(nn.Module):
         return self.net(z), (z, mu, logvar)
 
     def sample(self, num_samples):
-        z = torch.randn(num_samples, self.nz)
+        z = torch.randn(num_samples, self.nz).to(self.device)
         return self.net(z)
 
 

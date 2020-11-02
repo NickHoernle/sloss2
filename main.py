@@ -217,7 +217,7 @@ def main():
     class_names = test_dataset.classes
 
     if args.generative_loss:
-        model_y = DecoderModel(num_classes, z_dim)
+        model_y = DecoderModel(num_classes, z_dim, device)
         model_y.to(device)
         model_y.apply(init_weights)
         model_y.train()
