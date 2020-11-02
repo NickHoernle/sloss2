@@ -154,17 +154,13 @@ class DecoderModel(nn.Module):
         super().__init__()
 
         self.mu = nn.Sequential(
-            nn.Linear(num_classes, 200),
-            nn.LeakyReLU(.2),
-            nn.Linear(200, 100),
+            nn.Linear(num_classes, 100),
             nn.LeakyReLU(.2),
             nn.Linear(100, zdim)
         )
 
         self.logvar = nn.Sequential(
-            nn.Linear(num_classes, 200),
-            nn.LeakyReLU(.2),
-            nn.Linear(200, 100),
+            nn.Linear(num_classes, 100),
             nn.LeakyReLU(.2),
             nn.Linear(100, zdim)
         )
@@ -172,9 +168,7 @@ class DecoderModel(nn.Module):
         self.net = nn.Sequential(
             nn.Linear(zdim, 200),
             nn.LeakyReLU(.2),
-            nn.Linear(200, 500),
-            nn.LeakyReLU(.2),
-            nn.Linear(500, 200),
+            nn.Linear(200, 200),
             nn.LeakyReLU(.2),
             nn.Linear(200, 100),
             nn.LeakyReLU(.2),
