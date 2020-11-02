@@ -390,7 +390,7 @@ def main():
 
             # logic
             log_prob = torch.log_softmax(y_full, dim=1)
-            true_logic_pred = cifar100_logic(log_prob)
+            true_logic_pred = (log_prob.exp() > 0.95).any(dim=1)
 
             # logic_in = torch.cat((log_prob, idx_to_one_hot(targets, num_classes, device)), dim=1)
             # pred = logic_net(logic_in).squeeze()
