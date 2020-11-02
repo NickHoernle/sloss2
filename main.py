@@ -221,8 +221,8 @@ def main():
         model_y.to(device)
         model_y.apply(init_weights)
         model_y.train()
-        opt_y = Adam(model_y.parameters(), 1e-2)
-        scheduler = StepLR(opt_y, step_size=5, gamma=0.9)
+        # opt_y = Adam(model_y.parameters(), 1e-2)
+        # scheduler = StepLR(opt_y, step_size=5, gamma=0.9)
 
         logic_net = LogicNet(num_classes)
         logic_net.to(device)
@@ -320,43 +320,43 @@ def main():
 
             elif args.generative_loss:
 
-                model_y.eval()
-                logic_net.train()
-                tgt = idx_to_one_hot(targets_l, 10, device)
-
-                # train logic to recognise truth
-                pred = logic_net(tgt)
-                true = torch.ones_like(pred)
-                logic_loss = F.binary_cross_entropy_with_logits(pred, true)
-
-                # train logic loss to recognise true logic
-                samples = torch.softmax(model_y.sample(1000), dim=1)
-                pred = logic_net(samples).squeeze(1)
-                true = (samples > 0.95).any(dim=1).float().to(device)
-
-                logic_loss += F.binary_cross_entropy_with_logits(pred, true)
-
-                logic_opt.zero_grad()
-                logic_loss.backward()
-                clip_grad_norm_(logic_loss, 1)
-                logic_opt.step()
-
-                logic_net.eval()
-                model_y.train()
+                # model_y.eval()
+                # logic_net.train()
+                # tgt = idx_to_one_hot(targets_l, 10, device)
+                #
+                # # train logic to recognise truth
+                # pred = logic_net(tgt)
+                # true = torch.ones_like(pred)
+                # logic_loss = F.binary_cross_entropy_with_logits(pred, true)
+                #
+                # # train logic loss to recognise true logic
+                # samples = torch.softmax(model_y.sample(1000), dim=1)
+                # pred = logic_net(samples).squeeze(1)
+                # true = (samples > 0.95).any(dim=1).float().to(device)
+                #
+                # logic_loss += F.binary_cross_entropy_with_logits(pred, true)
+                #
+                # logic_opt.zero_grad()
+                # logic_loss.backward()
+                # clip_grad_norm_(logic_loss, 1)
+                # logic_opt.step()
+                #
+                # logic_net.eval()
+                # model_y.train()
 
                 recon, (z, mu, logvar) = model_y(y_l)
                 recon_loss = F.cross_entropy(recon, targets_l)
                 KLD = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean())
 
-                samples = torch.softmax(model_y.sample(len(y_l)), dim=1)
-                pred = logic_net(samples).squeeze(1)
-                true = (samples > 0.95).any(dim=1).to(device)
-
                 weight = np.min([1., (counter+1)/100])
-                loss_ = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
-                loss = recon_loss + weight * KLD
+                loss = recon_loss + KLD
 
                 if counter > 5:
+                    samples = torch.softmax(model_y.sample(len(y_l)), dim=1)
+                    pred = logic_net(samples).squeeze(1)
+                    true = (samples > 0.95).any(dim=1).to(device)
+                    
+                    loss_ = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
                     loss += args.unl2_weight * weight * loss_[~true].sum() / len(loss_)
 
                 return loss, recon
@@ -486,7 +486,7 @@ def main():
         test_acc = classacc.value()[0]
         sc_acc = np.mean(superclassacc)
 
-        scheduler.step()
+        # scheduler.step()
         scheduler2.step()
 
         print(log({
