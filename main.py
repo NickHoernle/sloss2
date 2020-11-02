@@ -359,6 +359,15 @@ def main():
                     loss_ = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
                     loss += args.unl2_weight * weight * loss_[~true].sum() / len(loss_)
 
+                if counter > 10:
+                    y_u1 = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
+                    recon, (z, mu, logvar) = model_y(y_u1)
+
+                    log_pred = torch.log_softmax(recon, dim=1)
+                    entropy = (log_pred.exp()*log_pred).sum(dim=1).mean()
+                    KLD_u = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean())
+                    loss += args.unl_weight * (entropy + weight*KLD_u)
+
                 return loss, recon
 
             return loss, y_l
