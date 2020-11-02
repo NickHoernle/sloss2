@@ -369,12 +369,12 @@ def main():
                     KLD_u = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean())
                     loss += args.unl_weight * (entropy + weight*KLD_u)
 
-                    pred = log_pred.exp()
-                    logic_u_pred = logic_net(pred).squeeze(1)
-                    logic_u_true = (pred > 0.95).any(dim=1).to(device)
-
-                    loss_u = F.binary_cross_entropy_with_logits(logic_u_pred, torch.ones_like(logic_u_pred), reduction="none")
-                    loss += args.unl2_weight * weight * loss_u[~logic_u_true].sum() / len(loss_u)
+                    # pred = log_pred.exp()
+                    # logic_u_pred = logic_net(pred).squeeze(1)
+                    # logic_u_true = (pred > 0.95).any(dim=1).to(device)
+                    #
+                    # loss_u = F.binary_cross_entropy_with_logits(logic_u_pred, torch.ones_like(logic_u_pred), reduction="none")
+                    # loss += args.unl2_weight * weight * loss_u[~logic_u_true].sum() / len(loss_u)
 
                 return loss, recon
 
