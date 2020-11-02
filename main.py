@@ -357,8 +357,8 @@ def main():
                 loss = recon_loss + weight * KLD
 
                 if counter > 5:
-                    loss += 0.1 * weight * loss_[~true].sum() / len(loss_)
-
+                    loss += args.unl2_weight * weight * loss_[~true].sum() / len(loss_)
+                
                 return loss, recon
 
             return loss, y_l
