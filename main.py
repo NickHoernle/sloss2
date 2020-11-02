@@ -221,8 +221,8 @@ def main():
         model_y.to(device)
         model_y.apply(init_weights)
         model_y.train()
-        # opt_y = Adam(model_y.parameters(), 1e-2)
-        # scheduler = StepLR(opt_y, step_size=5, gamma=0.9)
+        opt_y = Adam(model_y.parameters(), 1e-2)
+        scheduler = StepLR(opt_y, step_size=5, gamma=0.9)
 
         logic_net = LogicNet(num_classes)
         logic_net.to(device)
@@ -349,13 +349,13 @@ def main():
                 KLD = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean())
 
                 weight = np.min([1., (counter+1)/100])
-                loss = recon_loss + KLD
+                loss = recon_loss + weight*KLD
 
                 if counter > 5:
                     samples = torch.softmax(model_y.sample(len(y_l)), dim=1)
                     pred = logic_net(samples).squeeze(1)
                     true = (samples > 0.95).any(dim=1).to(device)
-                    
+
                     loss_ = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
                     loss += args.unl2_weight * weight * loss_[~true].sum() / len(loss_)
 
