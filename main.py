@@ -369,13 +369,15 @@ def main():
                     y_u1 = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
                     recon, (z, mu, logvar) = model_y(y_u1)
 
+                    KLD_u = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean())
+
                     predict = torch.softmax(recon, dim=1)
 
                     pred = logic_net(predict).squeeze(1)
                     true = (predict > 0.95).any(dim=1).to(device)
 
                     loss_u = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
-                    loss += args.unl_weight * weight * loss_u.mean()
+                    loss += args.unl_weight * (weight * loss_u.mean() + KLD_u)
 
                     # entropy = -(log_pred.exp()*log_pred).sum(dim=1).mean()
                     # KLD_u = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean())
