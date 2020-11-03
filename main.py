@@ -375,7 +375,7 @@ def main():
                     true = (predict > 0.95).any(dim=1).to(device)
 
                     loss_u = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
-                    loss += args.unl_weight * weight * loss_u[~true].sum() / len(loss_u)
+                    loss += args.unl_weight * weight * loss_u.mean()
 
                     # entropy = -(log_pred.exp()*log_pred).sum(dim=1).mean()
                     # KLD_u = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean())
