@@ -178,9 +178,9 @@ class DecoderModel(nn.Module):
         )
 
         self.net = nn.Sequential(
-            nn.Linear(zdim, 200),
+            nn.Linear(zdim, 500),
             nn.LeakyReLU(.2),
-            nn.Linear(200, 500),
+            nn.Linear(500, 500),
             nn.LeakyReLU(.2),
             nn.Linear(500, 200),
             nn.LeakyReLU(.2),
@@ -215,6 +215,14 @@ class DecoderModel(nn.Module):
         z = reparameterise(mu, logvar)
 
         return self.net(z), (z, mu, logvar)
+
+    def test(self, x):
+        mu = self.mu(x)
+        logvar = self.logvar(x)
+
+        z = reparameterise(mu, logvar)
+
+        return self.net(mu), (z, mu, logvar)
 
     def sample(self, num_samples):
         z = torch.randn(num_samples, self.nz).to(self.device)

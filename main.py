@@ -369,11 +369,17 @@ def main():
                     y_u1 = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
                     recon, (z, mu, logvar) = model_y(y_u1)
 
-                    log_pred = torch.log_softmax(recon, dim=1)
+                    predict = torch.softmax(recon, dim=1)
 
-                    entropy = -(log_pred.exp()*log_pred).sum(dim=1).mean()
-                    KLD_u = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean())
-                    loss += args.unl_weight * (entropy + weight*KLD_u)
+                    pred = logic_net(predict).squeeze(1)
+                    true = (predict > 0.95).any(dim=1).to(device)
+
+                    loss_u = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
+                    loss += args.unl_weight * weight * loss_u[~true].sum() / len(loss_u)
+
+                    # entropy = -(log_pred.exp()*log_pred).sum(dim=1).mean()
+                    # KLD_u = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean())
+                    # loss += args.unl_weight * (entropy + weight*KLD_u)
 
                     # pred = log_pred.exp()
                     # logic_u_pred = logic_net(pred).squeeze(1)
@@ -393,7 +399,7 @@ def main():
         targets = cast(sample[1], 'long')
         y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
         if args.generative_loss:
-            y_full, latent = model_y(y)
+            y_full, latent = model_y.test(y)
             # if args.dataset == "cifar100":
             #     log_pred = torch.log_softmax(y_full, dim=-1)
             #     sc_pred = get_cifar100_pred(log_pred)
