@@ -165,6 +165,18 @@ class DecoderModel(nn.Module):
             nn.Linear(100, zdim)
         )
 
+        self.mu_oh = nn.Sequential(
+            nn.Linear(num_classes, 100),
+            nn.LeakyReLU(.2),
+            nn.Linear(100, zdim)
+        )
+
+        self.logvar_oh = nn.Sequential(
+            nn.Linear(num_classes, 100),
+            nn.LeakyReLU(.2),
+            nn.Linear(100, zdim)
+        )
+
         self.net = nn.Sequential(
             nn.Linear(zdim, 200),
             nn.LeakyReLU(.2),
@@ -187,6 +199,14 @@ class DecoderModel(nn.Module):
     def re_init_local(self):
         self.mu.apply(init_weights)
         self.logvar.apply(init_weights)
+
+    def forward_oh(self, x):
+        mu = self.mu_oh(x)
+        logvar = self.logvar_oh(x)
+
+        z = reparameterise(mu, logvar)
+
+        return self.net(z), (z, mu, logvar)
 
     def forward(self, x):
         mu = self.mu(x)
