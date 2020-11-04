@@ -321,7 +321,7 @@ def main():
 
             elif args.generative_loss:
 
-                one_hot = idx_to_one_hot(targets_l, 10).to(device)
+                one_hot = idx_to_one_hot(targets_l, 10, device)
 
                 samples = model_y.sample(1000)
                 probs = samples.softmax(dim=1)
