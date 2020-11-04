@@ -339,7 +339,7 @@ def main():
 
                 logic_net.eval()
 
-                (t_pred, oversample), (mu, logvar), z = targets_l(one_hot)
+                (t_pred, oversample), (mu, logvar), z = model_y(one_hot)
                 tgts = targets_l.unsqueeze(1).repeat(1, 5).view(-1)
                 loss = F.cross_entropy(oversample.view(-1, 10), tgts)
 
