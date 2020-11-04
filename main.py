@@ -373,7 +373,7 @@ def main():
         targets = cast(sample[1], 'long')
         y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
         if args.generative_loss:
-            y_full, latent = model_y.test(y)
+            y_full = model_y.test(y)
             # if args.dataset == "cifar100":
             #     log_pred = torch.log_softmax(y_full, dim=-1)
             #     sc_pred = get_cifar100_pred(log_pred)
