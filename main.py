@@ -25,7 +25,8 @@ from logic import (
     get_cifar100_pred,
     get_true_cifar100_sc,
     get_cifar100_unnormed_pred,
-    get_true_cifar100_from_one_hot
+    get_true_cifar100_from_one_hot,
+    sigma1
 )
 
 
@@ -246,7 +247,7 @@ def main():
 
     n_parameters = sum(p.numel() for p in params.values() if p.requires_grad)
     if args.generative_loss:
-        n_parameters += sum(p.numel() for p in model_y.get_local_params())
+        n_parameters += sum(p.numel() for p in model_y.parameters())
     print('\nTotal number of parameters:', n_parameters)
 
     meter_loss = tnt.meter.AverageValueMeter()
@@ -320,77 +321,48 @@ def main():
 
             elif args.generative_loss:
 
-                model_y.eval()
-                logic_net.train()
-                tgt = idx_to_one_hot(targets_l, 10, device)
+                one_hot = idx_to_one_hot(targets_l, 10).to(device)
 
-                # train logic to recognise truth
-                pred = logic_net(tgt)
-                true = torch.ones_like(pred)
-                logic_loss = F.binary_cross_entropy_with_logits(pred, true)
+                samples = model_y.sample(1000)
+                probs = samples.softmax(dim=1)
 
-                # train logic loss to recognise true logic
-                samples = torch.softmax(model_y.sample(1000).detach(), dim=1)
-                pred = logic_net(samples).squeeze(1)
-                true = (samples > 0.95).any(dim=1).float().to(device)
+                pred = logic_net(probs.detach()).squeeze(1)
+                true = (probs > 0.95).any(dim=1).float()
+                pred2 = logic_net(one_hot).squeeze(1)
 
-                logic_loss += F.binary_cross_entropy_with_logits(pred, true)
+                lloss = F.binary_cross_entropy_with_logits(pred, true)
+                lloss += F.binary_cross_entropy_with_logits(pred2, torch.ones_like(pred2))
 
                 logic_opt.zero_grad()
-                logic_loss.backward()
-                clip_grad_norm_(logic_loss, 1)
+                lloss.backward()
                 logic_opt.step()
 
                 logic_net.eval()
-                model_y.train()
 
-                # update one hot model
-                weight = np.min([1., (counter + 1) / 100])
-                recon_oh, (z, mu, logvar) = model_y.forward_oh(tgt)
-                recon_loss_oh = F.cross_entropy(recon_oh, targets_l)
-                KLD = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean())
-                loss = recon_loss_oh + weight * KLD
+                (t_pred, oversample), (mu, logvar), z = targets_l(one_hot)
+                tgts = targets_l.unsqueeze(1).repeat(1, 5).view(-1)
+                loss = F.cross_entropy(oversample.view(-1, 10), tgts)
 
-                recon, (z, mu, logvar) = model_y(y_l)
-                recon_loss = F.cross_entropy(recon, targets_l)
-                KLD = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean())
+                weight = np.min([counter / 100, 1])
 
-                loss += recon_loss + weight * KLD
+                KLD = 0.5 * (torch.sum(logvar.exp() / sigma1 + mu.pow(2) / sigma1 - 1 + (np.log(sigma1) - logvar), dim=-1)).mean()
+                loss += weight * KLD
 
-                if counter > 5:
-                    samples = torch.softmax(model_y.sample(1000), dim=1)
-                    pred = logic_net(samples).squeeze(1)
-                    true = (samples > 0.95).any(dim=1).to(device)
+                samples = model_y.sample(1000)
+                lprobs = samples.softmax(dim=1)
 
-                    loss_ = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
-                    loss += args.unl2_weight * weight * loss_[~true].sum() / len(loss_)
+                pred = logic_net(lprobs).squeeze(1)
+                true = (lprobs > 0.95).any(dim=1)
+                lloss = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
+                loss += weight * lloss[~true].sum() / len(true)
 
-                if counter > 10:
-                    y_u1 = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
-                    recon, (z, mu, logvar) = model_y(y_u1)
+                lprobs = oversample.view(-1, 10).softmax(dim=1)
+                pred = logic_net(lprobs).squeeze(1)
+                true = (lprobs > 0.95).any(dim=1)
+                lloss = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
+                loss += weight * (lloss[~true].sum() / len(true))
 
-                    KLD_u = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean())
-
-                    predict = torch.softmax(recon, dim=1)
-
-                    pred = logic_net(predict).squeeze(1)
-                    true = (predict > 0.95).any(dim=1).to(device)
-
-                    loss_u = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
-                    loss += args.unl_weight * (weight * loss_u.mean() + KLD_u)
-
-                    # entropy = -(log_pred.exp()*log_pred).sum(dim=1).mean()
-                    # KLD_u = (-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean())
-                    # loss += args.unl_weight * (entropy + weight*KLD_u)
-
-                    # pred = log_pred.exp()
-                    # logic_u_pred = logic_net(pred).squeeze(1)
-                    # logic_u_true = (pred > 0.95).any(dim=1).to(device)
-                    #
-                    # loss_u = F.binary_cross_entropy_with_logits(logic_u_pred, torch.ones_like(logic_u_pred), reduction="none")
-                    # loss += args.unl2_weight * weight * loss_u[~logic_u_true].sum() / len(loss_u)
-
-                return loss, recon
+                return loss, t_pred
 
             return loss, y_l
 

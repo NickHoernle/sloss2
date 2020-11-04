@@ -149,89 +149,70 @@ def set_class_mapping(classes):
     sc_map = np.argsort(sc_map_)
 
 
+alpha = 1/10
+nc = 10
+mu1 = np.log(alpha) - 1/nc*nc*np.log(alpha)
+sigma1 = 1./alpha*(1-2./nc) + 1/(nc**2)*nc/alpha
+inv_sigma1 = 1./sigma1
+log_det_sigma = nc*np.log(sigma1)
+
+
 class DecoderModel(nn.Module):
-    def __init__(self, num_classes=10, zdim=2, device="cpu"):
+    def __init__(self, num_classes=10, z_dim=2, device="cpu"):
         super().__init__()
 
-        self.mu = nn.Sequential(
+        self.muX = nn.Sequential(
+            nn.LeakyReLU(.2),
             nn.Linear(num_classes, 100),
             nn.LeakyReLU(.2),
-            nn.Linear(100, zdim)
+            nn.Linear(100, z_dim)
         )
 
-        self.logvar = nn.Sequential(
+        self.logvarX = nn.Sequential(
+            nn.LeakyReLU(.2),
             nn.Linear(num_classes, 100),
             nn.LeakyReLU(.2),
-            nn.Linear(100, zdim)
-        )
-
-        self.mu_oh = nn.Sequential(
-            nn.Linear(num_classes, 100),
-            nn.LeakyReLU(.2),
-            nn.Linear(100, zdim)
-        )
-
-        self.logvar_oh = nn.Sequential(
-            nn.Linear(num_classes, 100),
-            nn.LeakyReLU(.2),
-            nn.Linear(100, zdim)
+            nn.Linear(100, z_dim)
         )
 
         self.net = nn.Sequential(
-            nn.Linear(zdim, 500),
+            nn.Linear(z_dim, 200),
             nn.LeakyReLU(.2),
-            nn.Linear(500, 500),
+            nn.Linear(200, 200),
             nn.LeakyReLU(.2),
-            nn.Linear(500, 200),
+            nn.Linear(200, 200),
             nn.LeakyReLU(.2),
-            nn.Linear(200, 100),
+            nn.Linear(200, 50),
             nn.LeakyReLU(.2),
-            nn.Linear(100, num_classes)
+            nn.Linear(50, num_classes)
         )
 
         self.nc = num_classes
-        self.nz = zdim
+        self.z_dim = z_dim
         self.device = device
-
-    def get_local_params(self):
-        return [p for k, p in self.named_parameters() if ("mu" in k) or ("logvar" in k)]
-
-    def re_init_local(self):
-        self.mu.apply(init_weights)
-        self.logvar.apply(init_weights)
-
-    def forward_oh(self, x):
-        mu = self.mu_oh(x)
-        logvar = self.logvar_oh(x)
-
-        z = reparameterise(mu, logvar)
-
-        return self.net(z), (z, mu, logvar)
+        self.apply(init_weights)
 
     def forward(self, x):
-        mu = self.mu(x)
-        logvar = self.logvar(x)
-
-        z = reparameterise(mu, logvar)
-
-        return self.net(z), (z, mu, logvar)
+        mu = self.muX(x).unsqueeze(1).repeat(1, 5, 1)
+        lv = self.logvarX(x).unsqueeze(1).repeat(1, 5, 1)
+        z = reparameterise(mu, lv)
+        prob_trans = self.net(z)
+        return (prob_trans[:, 0, :], prob_trans), (mu, lv), z
 
     def test(self, x):
-        mu = self.mu(x)
-        logvar = self.logvar(x)
+        mu = self.muX(x)
+        prob_trans = self.net(mu)
+        return prob_trans
 
-        z = reparameterise(mu, logvar)
-
-        return self.net(mu), (z, mu, logvar)
-
-    def sample(self, num_samples):
-        z = torch.randn(num_samples, self.nz).to(self.device)
-        return self.net(z)
+    def sample(self, num_samps):
+        z = np.sqrt(sigma1) * torch.randn(num_samps, self.z_dim).to(self.device)
+        prob_trans = self.net(z)
+        return prob_trans
 
 
 class LogicNet(nn.Module):
 
-    def __init__(self, num_dim):
+    def __init__(self, num_dim=10):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(num_dim, 100),
@@ -246,6 +227,7 @@ class LogicNet(nn.Module):
             nn.LeakyReLU(),
             nn.Linear(25, 1)
         )
+        self.apply(init_weights)
 
     def forward(self, x):
         return self.net(x)
