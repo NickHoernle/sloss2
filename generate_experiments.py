@@ -20,7 +20,7 @@ experiment = "cifar10"
 dataset = [experiment]
 learning_rate = [.1, .05]
 unl_weight = [.1, .01]
-unl2_weight = [.1, .01]
+unl2_weight = [1e-2, 5e-3, 1e-3]
 sloss_weight = [1.]
 lr_decay_ratio = [.2]
 num_hidden = [10, 2]
@@ -65,7 +65,7 @@ for (lr, unl_, sloss_, unl2_, lr_decay_ratio_, num_hidden_, dataset_, rep) in se
     )
     print(expt_call, file=output_file)
 
-# baseline = f"{base_call} --lr 0.1 --sloss_weight 0 --unl_weight .1 --lr_decay_ratio 0.7 --dataset {experiment}"
-# print(baseline, file=output_file)
+baseline = f"{base_call} --lr 0.1 --sloss_weight 0 --unl_weight .1 --lr_decay_ratio 0.7 --dataset {experiment}"
+print(baseline, file=output_file)
 
 output_file.close()
