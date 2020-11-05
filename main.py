@@ -342,9 +342,10 @@ def main():
                 theta, kl_div, z_k, oversample = model_y(y_l)
                 recon = F.cross_entropy(theta, targets_l)
                 loss = recon
-                loss += kl_div
+                weight = np.min([1, counter/10])
+                loss += weight*kl_div
 
-                if counter > 5:
+                if counter > 10:
                     probs = oversample.softmax(dim=1)
                     l_p = logic_net(probs).squeeze(1)
                     l_t = (probs > .95).any(dim=1)
@@ -352,7 +353,7 @@ def main():
                     logic_loss_m = F.binary_cross_entropy_with_logits(l_p, torch.ones_like(l_p), reduction="none")
                     loss += args.unl2_weight*(logic_loss_m[~l_t].sum() / len(l_t))
 
-                if counter > 10:
+                if counter > 15:
                     theta_u, kl_div_u, z_k_u, oversample_u = model_y(y_u)
 
                     probs_u = oversample_u.softmax(dim=1)
