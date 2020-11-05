@@ -339,30 +339,20 @@ def main():
 
                 logic_net.eval()
 
-                (t_pred, oversample), (mu, logvar), z = model_y(one_hot)
-                tgts = targets_l.unsqueeze(1).repeat(1, 5).view(-1)
-                loss = F.cross_entropy(oversample.view(-1, 10), tgts)
+                theta, kl_div, z_k, oversample = model_y(y_l)
+                recon = F.cross_entropy(theta, targets_l)
+                loss = recon
+                loss += 0.1 * kl_div / len(targets_l)
 
-                weight = np.min([counter / 100, 1])
+                if counter > 1:
+                    probs = oversample.softmax(dim=1)
+                    l_p = logic_net(probs).squeeze(1)
+                    l_t = (probs > .95).any(dim=1)
 
-                KLD = 0.5 * (torch.sum(logvar.exp() / sigma1 + mu.pow(2) / sigma1 - 1 + (np.log(sigma1) - logvar), dim=-1)).mean()
-                loss += weight * KLD
+                    logic_loss_m = F.binary_cross_entropy_with_logits(l_p, torch.ones_like(l_p), reduction="none")
+                    loss += 0.1 * logic_loss_m[~l_t].sum() / len(l_t)
 
-                samples = model_y.sample(1000)
-                lprobs = samples.softmax(dim=1)
-
-                pred = logic_net(lprobs).squeeze(1)
-                true = (lprobs > 0.95).any(dim=1)
-                lloss = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
-                loss += weight * lloss[~true].sum() / len(true)
-
-                lprobs = oversample.view(-1, 10).softmax(dim=1)
-                pred = logic_net(lprobs).squeeze(1)
-                true = (lprobs > 0.95).any(dim=1)
-                lloss = F.binary_cross_entropy_with_logits(pred, torch.ones_like(pred), reduction="none")
-                loss += weight * (lloss[~true].sum() / len(true))
-
-                return loss, t_pred
+                return loss, theta
 
             return loss, y_l
 
@@ -373,7 +363,7 @@ def main():
         targets = cast(sample[1], 'long')
         y = data_parallel(model, inputs, params, sample[2], list(range(args.ngpu))).float()
         if args.generative_loss:
-            y_full = model_y.test(y)
+            y_full, kl_div, z_k, oversample = model_y(y)
             # if args.dataset == "cifar100":
             #     log_pred = torch.log_softmax(y_full, dim=-1)
             #     sc_pred = get_cifar100_pred(log_pred)

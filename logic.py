@@ -1,4 +1,5 @@
 from utils import *
+import torch.distributions as distrib
 
 superclass_mapping = {
     'beaver': 'aquatic mammals',
@@ -161,14 +162,18 @@ class DecoderModel(nn.Module):
     def __init__(self, num_classes=10, z_dim=2, device="cpu"):
         super().__init__()
 
-        self.muX = nn.Sequential(
+        self.nc = num_classes
+        self.device = device
+        self.z = z_dim
+
+        self.mu = nn.Sequential(
             nn.LeakyReLU(.2),
             nn.Linear(num_classes, 100),
             nn.LeakyReLU(.2),
             nn.Linear(100, z_dim)
         )
 
-        self.logvarX = nn.Sequential(
+        self.lv = nn.Sequential(
             nn.LeakyReLU(.2),
             nn.Linear(num_classes, 100),
             nn.LeakyReLU(.2),
@@ -176,38 +181,43 @@ class DecoderModel(nn.Module):
         )
 
         self.net = nn.Sequential(
-            nn.Linear(z_dim, 200),
+            nn.Linear(z_dim, 500),
             nn.LeakyReLU(.2),
-            nn.Linear(200, 200),
+            nn.Linear(500, 500),
             nn.LeakyReLU(.2),
-            nn.Linear(200, 200),
+            nn.Linear(500, 100),
             nn.LeakyReLU(.2),
-            nn.Linear(200, 50),
-            nn.LeakyReLU(.2),
-            nn.Linear(50, num_classes)
+            nn.Linear(100, num_classes)
         )
 
-        self.nc = num_classes
-        self.z_dim = z_dim
-        self.device = device
         self.apply(init_weights)
 
+    def encode(self, enc):
+        return self.mu(enc), self.lv(enc)
+
     def forward(self, x):
-        mu = self.muX(x).unsqueeze(1).repeat(1, 5, 1)
-        lv = self.logvarX(x).unsqueeze(1).repeat(1, 5, 1)
-        z = reparameterise(mu, lv)
-        prob_trans = self.net(z)
-        return (prob_trans[:, 0, :], prob_trans), (mu, lv), z
+        n_batch = x.size(0)
 
-    def test(self, x):
-        mu = self.muX(x)
-        prob_trans = self.net(mu)
-        return prob_trans
+        latent_params = self.encode(x)
+        mu, lv = latent_params
 
-    def sample(self, num_samps):
-        z = np.sqrt(sigma1) * torch.randn(num_samps, self.z_dim).to(self.device)
-        prob_trans = self.net(z)
-        return prob_trans
+        # Re-parametrize a Normal distribution
+        q = distrib.Normal(torch.zeros(mu.shape[1]), torch.ones(lv.shape[1]))
+        sigma = torch.exp(0.5 * lv)
+
+        # Obtain our first set of latent points
+        z_0 = (sigma * q.sample((n_batch,)).to(self.device)) + mu
+        z_k = (sigma.unsqueeze(1) * q.sample((n_batch, 10)).to(self.device)) + mu.unsqueeze(1)
+
+        kl_div = -0.5 * torch.mean(1 + lv - mu.pow(2) - lv.exp())
+
+        return self.net(z_0), kl_div, z_k, self.net(z_k.view(n_batch * 10, -1))
+
+    def sample(self, num_samples=1000):
+        q = distrib.Normal(torch.zeros(self.z), torch.ones(self.z))
+        sigma = np.exp(0.5 * 9)
+        z_0 = (sigma * q.sample((num_samples,)).to(self.device))
+        return self.net(z_0)
 
 
 class LogicNet(nn.Module):
