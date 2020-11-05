@@ -213,6 +213,11 @@ class DecoderModel(nn.Module):
 
         return self.net(z_0), kl_div, z_k, self.net(z_k.view(n_batch * 10, -1))
 
+    def test(self, x):
+        latent_params = self.encode(x)
+        mu, lv = latent_params
+        return self.net(mu)
+
     def sample(self, num_samples=1000):
         q = distrib.Normal(torch.zeros(self.z), torch.ones(self.z))
         sigma = np.exp(0.5 * 9)
