@@ -344,13 +344,14 @@ def main():
                 weight = np.min([1, counter/20])
                 loss += weight*kl_div
 
-                if counter > 10:
-                    probs = model_y.sample().softmax(dim=1)
-                    l_p = logic_net(probs).squeeze(1)
-                    l_t = (probs > .95).any(dim=1)
+                sloss = 1*(args.sloss_weight > 0 and counter > 40)
 
-                    logic_loss_m = F.binary_cross_entropy_with_logits(l_p, torch.ones_like(l_p), reduction="none")
-                    loss += args.sloss_weight*args.unl2_weight*(logic_loss_m[~l_t].sum() / len(l_t))
+                probs = model_y.sample().softmax(dim=1)
+                l_p = logic_net(probs).squeeze(1)
+                l_t = (probs > .95).any(dim=1)
+
+                logic_loss_m = F.binary_cross_entropy_with_logits(l_p, torch.ones_like(l_p), reduction="none")
+                loss += sloss*args.unl2_weight*(logic_loss_m[~l_t].sum() / len(l_t))
 
                 if counter > 20:
                     y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
@@ -363,7 +364,7 @@ def main():
                     l_t_u = (probs_u.exp() > .95).any(dim=1)
 
                     logic_loss_u = F.binary_cross_entropy_with_logits(l_p_u, torch.ones_like(l_p_u), reduction="none")
-                    unl_loss = args.sloss_weight*args.unl2_weight*(logic_loss_u[~l_t_u].sum() / len(l_t_u))
+                    unl_loss = sloss*args.unl2_weight*(logic_loss_u[~l_t_u].sum() / len(l_t_u))
                     unl_loss += kl_div_u
                     unl_loss += neg_ent
                     loss += args.unl_weight * unl_loss

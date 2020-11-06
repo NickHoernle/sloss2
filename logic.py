@@ -207,7 +207,7 @@ class DecoderModel(nn.Module):
 
         # Obtain our first set of latent points
         z_0 = (sigma * q.sample((n_batch,)).to(self.device)) + mu
-        z_k = (sigma.unsqueeze(1) * q.sample((n_batch, 10)).to(self.device)) + mu.unsqueeze(1)
+        z_k = (sigma.unsqueeze(1) * q.sample((n_batch, self.z)).to(self.device)) + mu.unsqueeze(1)
 
         kl_div = -0.5 * torch.mean(1 + lv - mu.pow(2) - lv.exp())
 
