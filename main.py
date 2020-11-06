@@ -338,7 +338,7 @@ def main():
 
                 logic_net.eval()
 
-                theta, kl_div, z_k, oversample = model_y(y_l)
+                theta, (kl_div, ml, ll), z_k, oversample = model_y(y_l)
                 recon = F.cross_entropy(theta, targets_l)
                 loss = recon
                 weight = np.min([1, counter/20])
@@ -356,10 +356,19 @@ def main():
 
                 if counter > 20:
                     y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
-                    theta_u, kl_div_u, z_k_u, oversample_u = model_y(y_u)
+                    theta_u, (kl_div_u, mu1, lu1), z_k_u, oversample_u = model_y(y_u)
+
+                    y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
+                    theta_u2, (kl_div_u2, mu2, lu2), z_k_u2, oversample_u2 = model_y(y_u2)
+
+                    consis1 = 0.5*(lu2-lu1 + (lu1.exp()+(mu1-mu2).pow(2))/(lu2.exp()) - 1).mean()
+                    consis2 = 0.5 * (lu1 - lu2 + (lu2.exp() + (mu2 - mu1).pow(2)) / (lu1.exp()) - 1).mean()
 
                     probs_u = oversample_u.log_softmax(dim=1)
                     neg_ent = -(probs_u.exp()*probs_u).sum(dim=1).mean()
+
+                    probs_u2 = oversample_u2.log_softmax(dim=1)
+                    neg_ent2 = -(probs_u2.exp() * probs_u2).sum(dim=1).mean()
 
                     l_p_u = logic_net(probs_u.exp()).squeeze(1)
                     l_t_u = (probs_u.exp() > .95).any(dim=1)
@@ -367,7 +376,7 @@ def main():
                     logic_loss_u = F.binary_cross_entropy_with_logits(l_p_u, torch.ones_like(l_p_u), reduction="none")
                     unl_loss = sloss*args.unl2_weight*(logic_loss_u[~l_t_u].sum() / len(l_t_u))
                     unl_loss += kl_div_u
-                    unl_loss += neg_ent
+                    unl_loss += neg_ent + neg_ent2 + consis1 + consis2
                     loss += args.unl_weight * unl_loss
 
                 return loss, theta

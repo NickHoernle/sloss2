@@ -211,7 +211,7 @@ class DecoderModel(nn.Module):
 
         kl_div = -0.5 * torch.mean(1 + lv - mu.pow(2) - lv.exp())
 
-        return self.net(z_0), kl_div, z_k, self.net(z_k.view(-1, self.z))
+        return self.net(z_0), (kl_div, mu, lv), z_k, self.net(z_k.view(-1, self.z))
 
     def test(self, x):
         latent_params = self.encode(x)
