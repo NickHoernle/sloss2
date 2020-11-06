@@ -278,8 +278,7 @@ def main():
         optimizer.load_state_dict(state_dict['optimizer'])
 
         model_y.load_state_dict(state_dict['model_y'])
-        # logic_net.load_state_dict(state_dict['logic_net'])
-
+        logic_net.load_state_dict(state_dict['logic_net'])
     # warmup and initialise the decoder model
     # warmup_decoder_model(model_y, logic_net, opt_y, logic_opt, scheduler, scheduler2, device=device)
 
@@ -346,7 +345,7 @@ def main():
                 loss += weight*kl_div
 
                 if counter > 10:
-                    probs = oversample.softmax(dim=1)
+                    probs = model_y.sample().softmax(dim=1)
                     l_p = logic_net(probs).squeeze(1)
                     l_t = (probs > .95).any(dim=1)
 

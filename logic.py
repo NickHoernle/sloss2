@@ -211,7 +211,7 @@ class DecoderModel(nn.Module):
 
         kl_div = -0.5 * torch.mean(1 + lv - mu.pow(2) - lv.exp())
 
-        return self.net(z_0), kl_div, z_k, self.net(z_k.view(n_batch * 10, -1))
+        return self.net(z_0), kl_div, z_k, self.net(z_k.view(-1, self.nc))
 
     def test(self, x):
         latent_params = self.encode(x)
@@ -220,7 +220,7 @@ class DecoderModel(nn.Module):
 
     def sample(self, num_samples=1000):
         q = distrib.Normal(torch.zeros(self.z), torch.ones(self.z))
-        sigma = np.exp(0.5 * 9)
+        sigma = 1.
         z_0 = (sigma * q.sample((num_samples,)).to(self.device))
         return self.net(z_0)
 
@@ -232,15 +232,13 @@ class LogicNet(nn.Module):
         self.net = nn.Sequential(
             nn.Linear(num_dim, 100),
             nn.LeakyReLU(),
-            nn.Linear(100, 100),
+            nn.Linear(100, 500),
             nn.LeakyReLU(),
-            nn.Linear(100, 100),
+            nn.Linear(500, 500),
             nn.LeakyReLU(),
-            nn.Linear(100, 100),
+            nn.Linear(500, 100),
             nn.LeakyReLU(),
-            nn.Linear(100, 25),
-            nn.LeakyReLU(),
-            nn.Linear(25, 1)
+            nn.Linear(100, 1)
         )
         self.apply(init_weights)
 
