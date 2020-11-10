@@ -197,10 +197,8 @@ class DecoderModel(nn.Module):
 
         self.apply(init_weights)
 
-        self.apply(init_weights)
-
     def local_parameters(self):
-        return [p for k, p in self.named_parameters() if ("local_mu" in k) or ("local_lv" in k)]
+        return [p for k, p in self.named_parameters() if ("local_mu" in k) or ("local_lv" in k) or k == "global_lvs"]
 
     def global_parameters(self):
         return [p for k, p in self.named_parameters() if k == "global_mus" or k == "global_lvs"]
