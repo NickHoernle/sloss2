@@ -181,15 +181,15 @@ class DecoderModel(nn.Module):
             nn.Linear(100, z_dim)
         )
 
-        # self.net = nn.Sequential(
-        #     nn.Linear(z_dim, 100),
-        #     nn.LeakyReLU(.2),
-        #     nn.Linear(100, 250),
-        #     nn.LeakyReLU(.2),
-        #     nn.Linear(250, 100),
-        #     nn.LeakyReLU(.2),
-        #     nn.Linear(100, num_classes)
-        # )
+        self.net = nn.Sequential(
+            nn.Linear(z_dim, 100),
+            nn.LeakyReLU(.2),
+            nn.Linear(100, 250),
+            nn.LeakyReLU(.2),
+            nn.Linear(250, 100),
+            nn.LeakyReLU(.2),
+            nn.Linear(100, num_classes)
+        )
 
         # shared parameters
         self.global_mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
@@ -198,7 +198,7 @@ class DecoderModel(nn.Module):
         self.apply(init_weights)
 
     def local_parameters(self):
-        return [p for k, p in self.named_parameters() if ("local_mu" in k) or ("local_lv" in k) or k == "global_lvs"]
+        return [p for k, p in self.named_parameters() if ("local_mu" in k) or ("local_lv" in k) or ("net" in k)]
 
     def global_parameters(self):
         return [p for k, p in self.named_parameters() if k == "global_mus" or k == "global_lvs"]
@@ -222,10 +222,10 @@ class DecoderModel(nn.Module):
         # Obtain our first set of latent points
         z_0 = (sigma * q.sample((n_batch,)).to(self.device)) + mu
 
-        z = z_0.unsqueeze(1).repeat(1, self.nc, 1)
-        probs = log_normal(z, mu2, lv2)
+        # z = z_0.unsqueeze(1).repeat(1, self.nc, 1)
+        # probs = log_normal(z, mu2, lv2)
         # probs = -(z - mu2).pow(2).sum(dim=-1)
-        # probs = self.net(z_0)
+        probs = self.net(z_0)
 
         mu1 = mu.unsqueeze(1).repeat(1, self.nc, 1)
         lv1 = lv.unsqueeze(1).repeat(1, self.nc, 1)
@@ -235,15 +235,15 @@ class DecoderModel(nn.Module):
         return probs, (kl_div, mu, lv), z_0
 
     def test(self, x):
-        g_mus = self.global_mus.unsqueeze(0).repeat(len(x), 1, 1)
-        g_lv = torch.ones_like(g_mus) * self.global_lvs
+        # g_mus = self.global_mus.unsqueeze(0).repeat(len(x), 1, 1)
+        # g_lv = torch.ones_like(g_mus) * self.global_lvs
 
         latent_params = self.encode(x)
         mu, lv = latent_params
 
-        z_ = mu.unsqueeze(1).repeat(1, self.nc, 1)
-        probs = log_normal(z_, g_mus, g_lv)
-        # probs = self.net(mu)
+        # z_ = mu.unsqueeze(1).repeat(1, self.nc, 1)
+        # probs = log_normal(z_, g_mus, g_lv)
+        probs = self.net(mu)
 
         return probs
 

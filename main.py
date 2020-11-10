@@ -118,9 +118,6 @@ def init_decoder_model(net, opt, scheduler, num_iter=2500, device="cpu"):
     (prob, z, targets), (mus, lv) = net.sample()
     print((prob.softmax(dim=1).argmax(dim=1) == targets).detach().cpu().numpy().mean())
 
-    net.global_lvs.data = torch.ones(1).to(device)
-
-
 def main():
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
