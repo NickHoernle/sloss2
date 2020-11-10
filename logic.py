@@ -216,6 +216,7 @@ class DecoderModel(nn.Module):
 
         z = z_0.unsqueeze(1).repeat(1, self.nc, 1)
         probs = log_normal(z, mu2, lv2)
+        # probs = -(z - mu2).pow(2).sum(dim=-1)
 
         mu1 = mu.unsqueeze(1).repeat(1, self.nc, 1)
         lv1 = lv.unsqueeze(1).repeat(1, self.nc, 1)

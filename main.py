@@ -314,13 +314,21 @@ def main():
                 # logic_loss_m = F.binary_cross_entropy_with_logits(l_p, torch.ones_like(l_p), reduction="none")
                 # loss += sloss*args.unl2_weight*(logic_loss_m[~l_t].sum() / len(l_t))
                 #
-                # if counter > -1:
-                #     y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
-                #     theta_u, (kl_div_u, mu1, lu1), z_k_u, oversample_u = model_y(y_u)
-                #
-                #     y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
-                #     theta_u2, (kl_div_u2, mu2, lu2), z_k_u2, oversample_u2 = model_y(y_u2)
-                #
+                if counter > 20:
+                    y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
+                    theta_u, (kl_div_u, mu1, lu1), z_k_u = model_y(y_u)
+
+                    y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
+                    theta_u2, (kl_div_u2, mu2, lu2), z_k_u2 = model_y(y_u2)
+
+                    log_pred1 = theta_u.log_softmax(dim=1)
+                    log_pred2 = theta_u2.log_softmax(dim=1)
+
+                    unl_loss = (log_pred2.exp()*(-log_pred1+kl_div_u)).sum(dim=1).mean()
+                    unl_loss += (log_pred1.exp() * (-log_pred2 + kl_div_u2)).sum(dim=1).mean()
+
+                    loss += args.unl_weight * unl_loss
+
                 #     consis1 = 0.5*(lu2-lu1 + (lu1.exp()+(mu1-mu2).pow(2))/(lu2.exp()) - 1).mean()
                 #     consis2 = 0.5 * (lu1 - lu2 + (lu2.exp() + (mu2 - mu1).pow(2)) / (lu1.exp()) - 1).mean()
                 #
