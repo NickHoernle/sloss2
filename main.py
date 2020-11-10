@@ -324,7 +324,7 @@ def main():
                     log_pred1 = theta_u.log_softmax(dim=1)
                     log_pred2 = theta_u2.log_softmax(dim=1)
 
-                    unl_loss = (log_pred2.exp()*(-log_pred1+kl_div_u)).sum(dim=1).mean()
+                    unl_loss = (log_pred2.exp() * (-log_pred1 + kl_div_u)).sum(dim=1).mean()
                     unl_loss += (log_pred1.exp() * (-log_pred2 + kl_div_u2)).sum(dim=1).mean()
 
                     loss += args.unl_weight * unl_loss
