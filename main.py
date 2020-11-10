@@ -299,7 +299,7 @@ def main():
                 theta, (kl_div, ml, ll), z_k = model_y(y_l)
                 recon = F.cross_entropy(theta, targets_l)
                 loss = recon
-                loss += kl_div[np.arange(len(targets_l)), targets_l].mean()
+                loss += weight*kl_div[np.arange(len(targets_l)), targets_l].mean()
                 # weight = np.min([1, counter/20])
                 # loss += weight*kl_div
                 #
