@@ -116,7 +116,7 @@ def init_decoder_model(net, opt, scheduler, num_iter=2500, device="cpu"):
         losses.append(loss.item())
 
     (prob, z, targets), (mus, lv) = net.sample()
-    print((prob.softmax(dim=1).argmax(dim=1) == targets).detach().numpy().mean())
+    print((prob.softmax(dim=1).argmax(dim=1) == targets).detach().cpu().numpy().mean())
 
 
 def main():
