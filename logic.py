@@ -166,6 +166,7 @@ class DecoderModel(nn.Module):
         self.device = device
         self.z = z_dim
 
+        # local parameters
         self.mu = nn.Sequential(
             nn.LeakyReLU(.2),
             nn.Linear(num_classes, 100),
@@ -180,23 +181,28 @@ class DecoderModel(nn.Module):
             nn.Linear(100, z_dim)
         )
 
-        self.net = nn.Sequential(
-            nn.Linear(z_dim, 500),
-            nn.LeakyReLU(.2),
-            nn.Linear(500, 500),
-            nn.LeakyReLU(.2),
-            nn.Linear(500, 100),
-            nn.LeakyReLU(.2),
-            nn.Linear(100, num_classes)
-        )
+        # shared parameters
+        self.global_mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
+        self.global_lvs = nn.Parameter(torch.ones(1), requires_grad=True)
 
         self.apply(init_weights)
+
+        self.apply(init_weights)
+
+    def local_parameters(self):
+        return [p for k, p in self.named_parameters() if k == "mu" or k == "lv"]
+
+    def global_parameters(self):
+        return [p for k, p in self.named_parameters() if k == "global_mus" or k == "global_lvs"]
 
     def encode(self, enc):
         return self.mu(enc), self.lv(enc)
 
     def forward(self, x):
         n_batch = x.size(0)
+
+        mu2 = self.global_mus.unsqueeze(0).repeat(len(x), 1, 1)
+        lv2 = torch.ones_like(mu2) * self.global_lvs
 
         latent_params = self.encode(x)
         mu, lv = latent_params
@@ -207,22 +213,39 @@ class DecoderModel(nn.Module):
 
         # Obtain our first set of latent points
         z_0 = (sigma * q.sample((n_batch,)).to(self.device)) + mu
-        z_k = (sigma.unsqueeze(1) * q.sample((n_batch, 10)).to(self.device)) + mu.unsqueeze(1)
 
-        kl_div = -0.5 * torch.mean(1 + lv - mu.pow(2) - lv.exp())
+        z = z_0.unsqueeze(1).repeat(1, self.nc, 1)
+        probs = log_normal(z, mu2, lv2)
 
-        return self.net(z_0), (kl_div, mu, lv), z_k, self.net(z_k.view(-1, self.z))
+        mu1 = mu.unsqueeze(1).repeat(1, self.nc, 1)
+        lv1 = lv.unsqueeze(1).repeat(1, self.nc, 1)
+
+        kl_div = 0.5*((lv2-lv1) + (lv1.exp() + (mu1-mu2).pow(2))/(lv2.exp()) - 1).sum(dim=-1)
+
+        return probs, (kl_div, mu, lv), z_0
 
     def test(self, x):
+        g_mus = self.global_mus.unsqueeze(0).repeat(len(x), 1, 1)
+        g_lv = torch.ones_like(g_mus) * self.global_lvs
+
         latent_params = self.encode(x)
         mu, lv = latent_params
-        return self.net(mu)
+
+        z_ = mu.unsqueeze(1).repeat(1, self.nc, 1)
+        probs = log_normal(z_, g_mus, g_lv)
+
+        return probs
 
     def sample(self, num_samples=1000):
-        q = distrib.Normal(torch.zeros(self.z), torch.ones(self.z))
-        sigma = 1.
-        z_0 = (sigma * q.sample((num_samples,)).to(self.device))
-        return self.net(z_0)
+        mus = self.global_mus.unsqueeze(0).repeat(num_samples, 1, 1)
+        lv = torch.ones_like(mus) * self.global_lvs
+
+        targets = torch.arange(self.nc).repeat(num_samples // self.nc)
+        z = reparameterise(mus, lv)[np.arange(num_samples), targets]
+
+        z_ = z.unsqueeze(1).repeat(1, self.nc, 1)
+        probs = log_normal(z_, mus, lv)
+        return (probs, z, targets), (self.global_mus, self.global_lvs)
 
 
 class LogicNet(nn.Module):
