@@ -240,7 +240,7 @@ class DecoderModel(nn.Module):
         mus = self.global_mus.unsqueeze(0).repeat(num_samples, 1, 1)
         lv = torch.ones_like(mus) * self.global_lvs
 
-        targets = torch.arange(self.nc).repeat(num_samples // self.nc)
+        targets = torch.arange(self.nc).repeat(num_samples // self.nc).to(self.device)
         z = reparameterise(mus, lv)[np.arange(num_samples), targets]
 
         z_ = z.unsqueeze(1).repeat(1, self.nc, 1)
