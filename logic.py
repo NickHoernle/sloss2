@@ -206,7 +206,7 @@ class DecoderModel(nn.Module):
         return [p for k, p in self.named_parameters() if k == "global_mus" or k == "global_lvs"]
 
     def encode(self, enc):
-        return self.mu(enc), self.lv(enc)
+        return self.local_mu(enc), self.local_lv(enc)
 
     def forward(self, x):
         n_batch = x.size(0)
