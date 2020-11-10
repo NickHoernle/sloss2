@@ -224,10 +224,10 @@ class DecoderModel(nn.Module):
         # Obtain our first set of latent points
         z_0 = (sigma * q.sample((n_batch,)).to(self.device)) + mu
 
-        z = z_0.unsqueeze(1).repeat(1, self.nc, 1)
+        # z = z_0.unsqueeze(1).repeat(1, self.nc, 1)
         # probs = log_normal(z, mu2, lv2)
         # probs = -(z - mu2).pow(2).sum(dim=-1)
-        probs = self.net(z)
+        probs = self.net(z_0)
 
         mu1 = mu.unsqueeze(1).repeat(1, self.nc, 1)
         lv1 = lv.unsqueeze(1).repeat(1, self.nc, 1)
@@ -243,9 +243,9 @@ class DecoderModel(nn.Module):
         latent_params = self.encode(x)
         mu, lv = latent_params
 
-        z_ = mu.unsqueeze(1).repeat(1, self.nc, 1)
+        # z_ = mu.unsqueeze(1).repeat(1, self.nc, 1)
         # probs = log_normal(z_, g_mus, g_lv)
-        probs = self.net(z_)
+        probs = self.net(mu)
 
         return probs
 
