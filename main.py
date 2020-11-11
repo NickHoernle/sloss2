@@ -280,12 +280,14 @@ def main():
                 weight = np.min([1, counter / 20])
 
                 theta, (kl_div, ml, ll), z_k = model_y(y_l)
+                y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
+                theta_u, (kl_div_u, mu1, lu1), z_k_u = model_y(y_u)
 
                 ###################################################
                 # logic part
                 one_hot = idx_to_one_hot(targets_l, 10, device)
 
-                probs = theta.detach().softmax(dim=1)
+                probs = theta_u.detach().softmax(dim=1)
                 pred = logic_net(probs).squeeze(1)
                 true = (probs > 0.95).any(dim=1).float()
                 pred2 = logic_net(one_hot).squeeze(1)
@@ -312,9 +314,6 @@ def main():
                 # loss += sloss*args.unl2_weight*(logic_loss_m[~l_t].sum() / len(l_t))
 
                 if counter > 20:
-                    y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
-                    theta_u, (kl_div_u, mu1, lu1), z_k_u = model_y(y_u)
-
                     y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
                     theta_u2, (kl_div_u2, mu2, lu2), z_k_u2 = model_y(y_u2)
 
