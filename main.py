@@ -328,8 +328,7 @@ def main():
 
                     probs = theta_u.softmax(dim=1)
                     l_p = logic_net(probs).squeeze(1)
-                    targs = targets_l.unsqueeze(1).repeat(1, 10).view(-1)
-                    l_t = (probs[np.arange(len(probs)), targs] > .95)
+                    l_t = (probs > .95)
                     logic_loss_m = F.binary_cross_entropy_with_logits(l_p, torch.ones_like(l_p), reduction="none")
                     loss += args.sloss_weight * logic_loss_m[~l_t].sum()/len(l_t)
 
