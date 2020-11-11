@@ -285,10 +285,8 @@ def main():
                 # logic part
                 one_hot = idx_to_one_hot(targets_l, 10, device)
 
-                samples = model_y.sample(1000)
-                probs = samples.softmax(dim=1)
-
-                pred = logic_net(probs.detach()).squeeze(1)
+                probs = theta.detach().softmax(dim=1)
+                pred = logic_net(probs).squeeze(1)
                 true = (probs > 0.95).any(dim=1).float()
                 pred2 = logic_net(one_hot).squeeze(1)
 
