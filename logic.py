@@ -231,7 +231,7 @@ class DecoderModel(nn.Module):
         # lv1 = lv.unsqueeze(1).repeat(1, self.nc, 1)
 
         # kl_div = 0.5*((lv2-lv1) + (lv1.exp() + (mu1-mu2).pow(2))/(lv2.exp()) - 1).sum(dim=-1)
-        kl_div = 0.5 * (np.log(9) - lv + (lv.exp() + mu.pow(2)) / 9 - 1).sum()
+        kl_div = 0.5 * (np.log(9) - lv + (lv.exp() + mu.pow(2)) / 9 - 1)
 
         return probs, (kl_div, mu, lv), z_0
 

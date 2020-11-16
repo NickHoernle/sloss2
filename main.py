@@ -316,7 +316,7 @@ def main():
                 # recon and KLD
                 recon = F.cross_entropy(theta, targets_l)
                 loss = recon
-                loss += weight*kl_div/(len(targets_l)*z_dim)
+                loss += weight*kl_div.mean()
 
                 ###################################################
                 # logic for model_y

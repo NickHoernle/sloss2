@@ -12,7 +12,7 @@ SCRATCH_HOME = f'{SCRATCH_DISK}/{USER}'
 DATA_HOME = f'{SCRATCH_HOME}/vaelib'
 base_call = (f"python main.py --save {DATA_HOME}/logs/resnet_$RANDOM$RANDOM "
              f"--depth 28 --width 2 --ngpu 1 --dataroot {DATA_HOME}/data "
-             f"--num_labelled 4000 --cuda --ssl --generative_loss --epoch_step [20,40,80,120,160]")
+             f"--num_labelled 4000 --cuda --ssl --generative_loss --epoch_step [40,80,120,160]")
 
 repeats = 1
 
@@ -20,7 +20,7 @@ experiment = "cifar10"
 dataset = [experiment]
 learning_rate = [.1, .05]
 unl_weight = [.1]
-unl2_weight = [.1]
+unl2_weight = [.1, .01]
 sloss_weight = [.1]
 lr_decay_ratio = [.2]
 num_hidden = [10]
@@ -65,7 +65,7 @@ for (lr, unl_, sloss_, unl2_, lr_decay_ratio_, num_hidden_, dataset_, rep) in se
     )
     print(expt_call, file=output_file)
 
-baseline = f"{base_call} --lr 0.1 --sloss_weight 0 --unl_weight .1 --lr_decay_ratio 0.7 --dataset {experiment}"
+baseline = f"{base_call} --lr 0.1 --sloss_weight 0 --unl2_weight 0 --unl_weight .1 --lr_decay_ratio 0.7 --dataset {experiment}"
 print(baseline, file=output_file)
 
 output_file.close()
