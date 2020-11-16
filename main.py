@@ -26,7 +26,9 @@ from logic import (
     get_true_cifar100_sc,
     get_cifar100_unnormed_pred,
     get_true_cifar100_from_one_hot,
-    sigma1
+    sigma1,
+    examples,
+    calc_logic_loss
 )
 
 
@@ -178,8 +180,8 @@ def main():
         model_y.to(device)
         model_y.apply(init_weights)
         model_y.train()
-        opt_y = Adam(model_y.global_parameters(), 1e-1)
-        scheduler = StepLR(opt_y, step_size=100, gamma=0.9)
+        # opt_y = Adam(model_y.global_parameters(), 1e-1)
+        # scheduler = StepLR(opt_y, step_size=100, gamma=0.9)
 
         logic_net = LogicNet(num_classes)
         logic_net.to(device)
@@ -237,7 +239,7 @@ def main():
         logic_net.load_state_dict(state_dict['logic_net'])
 
     # warmup and initialise the decoder model
-    init_decoder_model(model_y, opt_y, scheduler, device=device)
+    # init_decoder_model(model_y, opt_y, scheduler, device=device)
 
     def compute_loss(sample):
 
@@ -278,8 +280,8 @@ def main():
             elif args.generative_loss:
 
                 weight = np.min([1, counter / 20])
-
                 theta, (kl_div, ml, ll), z_k = model_y(y_l)
+
                 y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
                 theta_u, (kl_div_u, mu1, lu1), z_k_u = model_y(y_u)
 
@@ -288,15 +290,13 @@ def main():
                 one_hot = idx_to_one_hot(targets_l, 10, device)
 
                 probs = theta_u.detach().softmax(dim=1)
-                pred = logic_net(probs).squeeze(1)
-                true = (probs > 0.95).any(dim=1).float()
-                pred2 = logic_net(one_hot).squeeze(1)
-
-                lloss = F.binary_cross_entropy_with_logits(pred, true)
-                lloss += F.binary_cross_entropy_with_logits(pred2, torch.ones_like(pred2))
+                logic_pred, true_logic = calc_logic_loss(probs, logic_net)
+                logic_loss = F.binary_cross_entropy_with_logits(logic_pred, true_logic.float())
+                logic_pred, true_logic = calc_logic_loss(examples, logic_net)
+                logic_loss += F.binary_cross_entropy_with_logits(logic_pred, torch.ones_like(logic_pred))
 
                 logic_opt.zero_grad()
-                lloss.backward()
+                logic_loss.backward()
                 logic_opt.step()
 
                 logic_net.eval()
@@ -305,52 +305,36 @@ def main():
                 # recon and KLD
                 recon = F.cross_entropy(theta, targets_l)
                 loss = recon
-                loss += weight*kl_div[np.arange(len(targets_l)), targets_l].mean()
+                loss += weight*kl_div/(len(targets_l)*z_dim)
 
                 ###################################################
                 # logic for model_y
-                # import pdb
-                # pdb.set_trace()
-                # loss += sloss*args.unl2_weight*(logic_loss_m[~l_t].sum() / len(l_t))
+                probs = theta.softmax(dim=1)
+                logic_pred, true_logic = calc_logic_loss(probs, logic_net)
+                logic_loss_ = F.binary_cross_entropy_with_logits(logic_pred, torch.ones_like(logic_pred),
+                                                                 reduction="none")
+                loss += weight * logic_loss_.mean()
 
-                if counter > 20:
-                    y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
-                    theta_u2, (kl_div_u2, mu2, lu2), z_k_u2 = model_y(y_u2)
+                if counter < 2:
+                    loss *= 0
 
-                    log_pred1 = theta_u.log_softmax(dim=1)
-                    log_pred2 = theta_u2.log_softmax(dim=1)
-
-                    unl_loss = (log_pred2.exp() * (-log_pred1 + kl_div_u)).sum(dim=1).mean()
-                    unl_loss += (log_pred1.exp() * (-log_pred2 + kl_div_u2)).sum(dim=1).mean()
-
-                    loss += args.unl_weight * unl_loss
-
-                    probs = theta_u.softmax(dim=1)
-                    l_p = logic_net(probs).squeeze(1)
-                    l_t = (probs > .95).any(dim=1)
-                    logic_loss_m = F.binary_cross_entropy_with_logits(l_p, torch.ones_like(l_p), reduction="none")
-                    loss += args.sloss_weight * logic_loss_m[~l_t].sum()/len(l_t)
-
-                #     consis1 = 0.5*(lu2-lu1 + (lu1.exp()+(mu1-mu2).pow(2))/(lu2.exp()) - 1).mean()
-                #     consis2 = 0.5 * (lu1 - lu2 + (lu2.exp() + (mu2 - mu1).pow(2)) / (lu1.exp()) - 1).mean()
+                # if counter > 20:
+                #     y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
+                #     theta_u2, (kl_div_u2, mu2, lu2), z_k_u2 = model_y(y_u2)
                 #
-                #     probs_u = oversample_u.log_softmax(dim=1)
-                #     neg_ent = -(probs_u.exp()*probs_u).sum(dim=1).mean()
+                #     log_pred1 = theta_u.log_softmax(dim=1)
+                #     log_pred2 = theta_u2.log_softmax(dim=1)
                 #
-                #     probs_u2 = oversample_u2.log_softmax(dim=1)
-                #     neg_ent2 = -(probs_u2.exp() * probs_u2).sum(dim=1).mean()
+                #     unl_loss = (log_pred2.exp() * (-log_pred1 + kl_div_u)).sum(dim=1).mean()
+                #     unl_loss += (log_pred1.exp() * (-log_pred2 + kl_div_u2)).sum(dim=1).mean()
                 #
-                #     l_p_u = logic_net(probs_u.exp()).squeeze(1)
-                #     l_t_u = (probs_u.exp() > .95).any(dim=1)
-                #
-                #     logic_loss_u = F.binary_cross_entropy_with_logits(l_p_u, torch.ones_like(l_p_u), reduction="none")
-                #     unl_loss = sloss*args.unl2_weight*(logic_loss_u[~l_t_u].sum() / len(l_t_u))
-                #     unl_loss += kl_div_u
-                #     unl_loss += neg_ent + neg_ent2 + consis1 + consis2
                 #     loss += args.unl_weight * unl_loss
                 #
-                #     import pdb
-                #     pdb.set_trace()
+                #     probs = theta_u.softmax(dim=1)
+                #     l_p = logic_net(probs).squeeze(1)
+                #     l_t = (probs > .95).any(dim=1)
+                #     logic_loss_m = F.binary_cross_entropy_with_logits(l_p, torch.ones_like(l_p), reduction="none")
+                #     loss += args.sloss_weight * logic_loss_m[~l_t].sum()/len(l_t)
 
                 return loss, theta
 
@@ -374,7 +358,8 @@ def main():
 
             # logic
             log_prob = torch.log_softmax(y_full, dim=1)
-            true_logic_pred = (log_prob.exp() > 0.95).any(dim=1)
+            _, true_logic_pred = calc_logic_loss(log_prob.exp(), logic_net)
+            # true_logic_pred = (log_prob.exp() > 0.95).any(dim=1)
 
             # logic_in = torch.cat((log_prob, idx_to_one_hot(targets, num_classes, device)), dim=1)
             # pred = logic_net(logic_in).squeeze()

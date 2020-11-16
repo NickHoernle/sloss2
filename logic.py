@@ -192,16 +192,16 @@ class DecoderModel(nn.Module):
         )
 
         # shared parameters
-        self.global_mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
-        self.global_lvs = nn.Parameter(torch.ones(1), requires_grad=True)
+        # self.global_mus = nn.Parameter(torch.randn(num_classes, z_dim), requires_grad=True)
+        # self.global_lvs = nn.Parameter(torch.ones(1), requires_grad=True)
 
         self.apply(init_weights)
 
     def local_parameters(self):
         return [p for k, p in self.named_parameters() if ("local_mu" in k) or ("local_lv" in k) or ("net" in k)]
 
-    def global_parameters(self):
-        return [p for k, p in self.named_parameters() if k == "global_mus" or k == "global_lvs"]
+    # def global_parameters(self):
+    #     return [p for k, p in self.named_parameters() if k == "global_mus" or k == "global_lvs"]
 
     def encode(self, enc):
         return self.local_mu(enc), self.local_lv(enc)
@@ -209,8 +209,8 @@ class DecoderModel(nn.Module):
     def forward(self, x):
         n_batch = x.size(0)
 
-        mu2 = self.global_mus.unsqueeze(0).repeat(len(x), 1, 1)
-        lv2 = torch.ones_like(mu2) * self.global_lvs
+        # mu2 = self.global_mus.unsqueeze(0).repeat(len(x), 1, 1)
+        # lv2 = torch.ones_like(mu2) * self.global_lvs
 
         latent_params = self.encode(x)
         mu, lv = latent_params
@@ -227,10 +227,11 @@ class DecoderModel(nn.Module):
         # probs = -(z - mu2).pow(2).sum(dim=-1)
         probs = self.net(z_0)
 
-        mu1 = mu.unsqueeze(1).repeat(1, self.nc, 1)
-        lv1 = lv.unsqueeze(1).repeat(1, self.nc, 1)
+        # mu1 = mu.unsqueeze(1).repeat(1, self.nc, 1)
+        # lv1 = lv.unsqueeze(1).repeat(1, self.nc, 1)
 
-        kl_div = 0.5*((lv2-lv1) + (lv1.exp() + (mu1-mu2).pow(2))/(lv2.exp()) - 1).sum(dim=-1)
+        # kl_div = 0.5*((lv2-lv1) + (lv1.exp() + (mu1-mu2).pow(2))/(lv2.exp()) - 1).sum(dim=-1)
+        kl_div = 0.5 * (np.log(9) - lv + (lv.exp() + mu.pow(2)) / 9 - 1).sum()
 
         return probs, (kl_div, mu, lv), z_0
 
@@ -247,16 +248,16 @@ class DecoderModel(nn.Module):
 
         return probs
 
-    def sample(self, num_samples=1000):
-        mus = self.global_mus.unsqueeze(0).repeat(num_samples, 1, 1)
-        lv = torch.ones_like(mus) * self.global_lvs
-
-        targets = torch.arange(self.nc).repeat(num_samples // self.nc).to(self.device)
-        z = reparameterise(mus, lv)[np.arange(num_samples), targets]
-
-        z_ = z.unsqueeze(1).repeat(1, self.nc, 1)
-        probs = log_normal(z_, mus, lv)
-        return (probs, z, targets), (self.global_mus, self.global_lvs)
+    # def sample(self, num_samples=1000):
+    #     mus = self.global_mus.unsqueeze(0).repeat(num_samples, 1, 1)
+    #     lv = torch.ones_like(mus) * self.global_lvs
+    #
+    #     targets = torch.arange(self.nc).repeat(num_samples // self.nc).to(self.device)
+    #     z = reparameterise(mus, lv)[np.arange(num_samples), targets]
+    #
+    #     z_ = z.unsqueeze(1).repeat(1, self.nc, 1)
+    #     probs = log_normal(z_, mus, lv)
+    #     return (probs, z, targets), (self.global_mus, self.global_lvs)
 
 
 class LogicNet(nn.Module):
@@ -311,22 +312,30 @@ def cifar100_logic(log_prob):
 
     return terms
 
-# def cifar100_logic_val(log_prob, labels):
-#
-#     mapping = {
-#         0: 1,
-#         1: 9,
-#         2: 0,
-#         3: 5,
-#         4: 5,
-#         5: 3,
-#         6: 6,
-#         7: 4,
-#         8: 8,
-#         9: 1,
-#     }
-#
-#     labels_ = labels.cpu().detach().numpy()
-#     labels2 = np.stack((labels_, [mapping[l] for l in labels_]), axis=1)
-#     pred = torch.argmax(log_prob, dim=1).cpu().detach().numpy()
-#     return (pred.reshape(-1,1) == labels2).any(axis=1)
+
+# Step 3: use logic to train encoders to map to this space. (Sampling from the posterior will ensure the
+# learnt encodings are robust to the geometry that is defined on the space.)
+def calc_logic_loss(probs, logic_net):
+    # airplane
+    pred = logic_net(probs).squeeze(1)
+    true = (((probs[:, 0] + probs[:, 2] > .95)) |
+            ((probs[:, 1] + probs[:, 9] > .95)) |
+            ((probs[:, 3] + probs[:, 5] > .95)) |
+            ((probs[:, 4] + probs[:, 7] > .95)) |
+            ((probs[:, 8] + probs[:, 0] > .95)) |
+            (probs[:, 6] > .95))
+
+    return pred, true
+
+
+examples = torch.eye(10) * .6
+examples[0, 2] = .4
+examples[1, 9] = .4
+examples[2, 0] = .4
+examples[3, 5] = .4
+examples[4, 7] = .4
+examples[5, 3] = .4
+examples[6, 6] = 1.
+examples[7, 4] = .4
+examples[8, 0] = .4
+examples[9, 1] = .4
