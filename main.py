@@ -327,14 +327,14 @@ def main():
                 loss += weight * args.unl2_weight * logic_loss_[~true_logic].sum()/len(true_logic)
 
                 if counter > 20:
-                    # y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
-                    # theta_u2, (kl_div_u2, mu2, lu2), z_k_u2 = model_y(y_u2)
+                    y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
+                    theta_u2, (kl_div_u2, mu2, lu2), z_k_u2 = model_y(y_u2)
 
                     log_pred1 = theta_u.log_softmax(dim=1)
-                    # log_pred2 = theta_u2.log_softmax(dim=1)
+                    log_pred2 = theta_u2.log_softmax(dim=1)
 
-                    unl_loss = (log_pred1.exp() * (-log_pred1 + kl_div_u/z_dim)).sum(dim=1).mean()
-                    # unl_loss += (log_pred1.exp() * (-log_pred2 + kl_div_u2)).sum(dim=1).mean()
+                    unl_loss = (log_pred2.exp() * (-log_pred1 + kl_div_u/z_dim)).sum(dim=1).mean()
+                    unl_loss += (log_pred1.exp() * (-log_pred2 + kl_div_u2/z_dim)).sum(dim=1).mean()
 
                     loss += args.unl_weight * unl_loss
 
@@ -343,6 +343,8 @@ def main():
                     logic_loss_ = F.binary_cross_entropy_with_logits(logic_pred_u, torch.ones_like(logic_pred_u),
                                                                                  reduction="none")
                     loss += weight * args.unl2_weight * logic_loss_[~true_logic_u].sum()/len(true_logic_u)
+
+                    # TODO: can also min KL between mu1, lu1, and mu2, lu2
 
                 return loss, theta
 
