@@ -327,15 +327,3 @@ def calc_logic_loss(probs, logic_net):
 
     return pred, true
 
-
-examples = torch.eye(10) * .6
-examples[0, 2] = .4
-examples[1, 9] = .4
-examples[2, 0] = .4
-examples[3, 5] = .4
-examples[4, 7] = .4
-examples[5, 3] = .4
-examples[6, 6] = 1.
-examples[7, 4] = .4
-examples[8, 0] = .4
-examples[9, 1] = .4

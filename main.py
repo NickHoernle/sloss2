@@ -27,7 +27,6 @@ from logic import (
     get_cifar100_unnormed_pred,
     get_true_cifar100_from_one_hot,
     sigma1,
-    examples,
     calc_logic_loss
 )
 
@@ -120,6 +119,18 @@ def init_decoder_model(net, opt, scheduler, num_iter=2500, device="cpu"):
     (prob, z, targets), (mus, lv) = net.sample()
     print((prob.softmax(dim=1).argmax(dim=1) == targets).detach().cpu().numpy().mean())
 
+examples_ = torch.eye(10) * .6
+examples_[0, 2] = .4
+examples_[1, 9] = .4
+examples_[2, 0] = .4
+examples_[3, 5] = .4
+examples_[4, 7] = .4
+examples_[5, 3] = .4
+examples_[6, 6] = 1.
+examples_[7, 4] = .4
+examples_[8, 0] = .4
+examples_[9, 1] = .4
+
 def main():
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
@@ -170,6 +181,7 @@ def main():
         worker_init_fn=_init_fn
     )
 
+    examples = examples_.to(device)
     z_dim = args.num_hidden
     model, params = resnet(args.depth, args.width, num_classes, image_shape[0])
 
@@ -199,7 +211,6 @@ def main():
     optimizer = create_optimizer(args, args.lr)
 
     epoch = 0
-
     # print('\nParameters:')
     # print_tensor_dict(params)
 
