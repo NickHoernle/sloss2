@@ -324,7 +324,7 @@ def main():
                 logic_pred, true_logic = calc_logic_loss(probs, logic_net)
                 logic_loss_ = F.binary_cross_entropy_with_logits(logic_pred, torch.ones_like(logic_pred),
                                                                  reduction="none")
-                loss += weight * args.unl2_weight * logic_loss_.mean()
+                loss += weight * args.unl2_weight * logic_loss_[~true_logic].sum()/len(true_logic)
 
                 # if counter > 20:
                 #     y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
