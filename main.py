@@ -290,7 +290,7 @@ def main():
 
             elif args.generative_loss:
 
-                weight = np.min([1, np.max([0, counter / 20])])
+                weight = np.min([1., np.max([0.0, counter / 20.0])])
                 theta, (kl_div, ml, ll), z_k = model_y(y_l)
 
                 y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
