@@ -290,7 +290,7 @@ def main():
 
             elif args.generative_loss:
 
-                weight = np.min([1, counter / 20])
+                weight = np.min([1, np.max([0, counter / 20])])
                 theta, (kl_div, ml, ll), z_k = model_y(y_l)
 
                 y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
@@ -325,9 +325,6 @@ def main():
                 logic_loss_ = F.binary_cross_entropy_with_logits(logic_pred, torch.ones_like(logic_pred),
                                                                  reduction="none")
                 loss += weight * logic_loss_.mean()
-
-                if counter < 2:
-                    loss *= 0
 
                 # if counter > 20:
                 #     y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
