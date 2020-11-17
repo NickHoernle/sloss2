@@ -77,6 +77,8 @@ parser.add_argument("--num_labelled", type=int, default=4000,
                     help="Number of labelled data points")
 parser.add_argument("--semantic_loss", action="store_true",
                     help="Add the semantic loss")
+parser.add_argument("--minent", action="store_true",
+                    help="Add the min ent loss")
 parser.add_argument("--generative_loss", action="store_true",
                     help="Add the generative loss")
 parser.add_argument("--unl_weight", type=float, default=0.1,
@@ -288,6 +290,13 @@ def main():
                     semantic_loss = args.unl_weight * torch.mean(sem_loss)
                     loss += semantic_loss
 
+            elif args.minent:
+                y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
+                labels_pred = F.log_softmax(y_u, dim=1)
+                if counter >= 10:
+                    semantic_loss = args.unl_weight * (-labels_pred.exp()*labels_pred).sum(dim=1).mean()
+                    loss += semantic_loss
+
             elif args.generative_loss:
 
                 weight = np.min([1., np.max([0.0, counter / 20.0])])
@@ -298,8 +307,6 @@ def main():
 
                 ###################################################
                 # logic part
-                one_hot = idx_to_one_hot(targets_l, 10, device)
-
                 probs = theta_u.detach().softmax(dim=1)
                 logic_pred, true_logic = calc_logic_loss(probs, logic_net)
                 logic_loss = F.binary_cross_entropy_with_logits(logic_pred, true_logic.float())
@@ -336,15 +343,17 @@ def main():
                     unl_loss = (log_pred2.exp() * (-log_pred1 + kl_div_u/z_dim)).sum(dim=1).mean()
                     unl_loss += (log_pred1.exp() * (-log_pred2 + kl_div_u2/z_dim)).sum(dim=1).mean()
 
+                    kld1 = 0.5 * ((lu1 - lu2) + (lu1.exp() + (mu1 - mu2).pow(2)) / (lu2.exp()) - 1).mean()
+                    kld2 = 0.5 * ((lu2 - lu1) + (lu2.exp() + (mu2 - mu1).pow(2)) / (lu1.exp()) - 1).mean()
+
+                    unl_loss += kld1 + kld2
+
                     loss += args.unl_weight * unl_loss
 
                     probs = theta_u.softmax(dim=1)
                     logic_pred_u, true_logic_u = calc_logic_loss(probs, logic_net)
-                    logic_loss_ = F.binary_cross_entropy_with_logits(logic_pred_u, torch.ones_like(logic_pred_u),
-                                                                                 reduction="none")
+                    logic_loss_ = F.binary_cross_entropy_with_logits(logic_pred_u, torch.ones_like(logic_pred_u), reduction="none")
                     loss += weight * args.unl2_weight * logic_loss_[~true_logic_u].sum()/len(true_logic_u)
-
-                    # TODO: can also min KL between mu1, lu1, and mu2, lu2
 
                 return loss, theta
 
@@ -394,8 +403,8 @@ def main():
             #     plt.imshow(img_vec)
             #     plt.show()
             #
-            # import pdb
-            # pdb.set_trace()
+            import pdb
+            pdb.set_trace()
 
             return recon_loss.mean(), y_full
 
@@ -453,8 +462,8 @@ def main():
             lr = state['optimizer'].param_groups[0]['lr']
             state['optimizer'] = create_optimizer(args, lr * args.lr_decay_ratio)
 
-        # with torch.no_grad():
-        #     engine.test(compute_loss_test, test_loader)
+        with torch.no_grad():
+            engine.test(compute_loss_test, test_loader)
 
     def on_end_epoch(state):
         global superclassacc, logic_losses
