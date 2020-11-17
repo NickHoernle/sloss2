@@ -403,9 +403,6 @@ def main():
             #     plt.imshow(img_vec)
             #     plt.show()
             #
-            import pdb
-            pdb.set_trace()
-
             return recon_loss.mean(), y_full
 
         return F.cross_entropy(y, targets), y
@@ -462,8 +459,8 @@ def main():
             lr = state['optimizer'].param_groups[0]['lr']
             state['optimizer'] = create_optimizer(args, lr * args.lr_decay_ratio)
 
-        with torch.no_grad():
-            engine.test(compute_loss_test, test_loader)
+        # with torch.no_grad():
+        #     engine.test(compute_loss_test, test_loader)
 
     def on_end_epoch(state):
         global superclassacc, logic_losses
