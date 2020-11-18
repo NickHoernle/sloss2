@@ -28,6 +28,7 @@ class Joint(data.Dataset):
         u_samp, u_label = self.dataset2[index]
         return ((self.transform(l_samp), l_label),
                 (self.transform(u_samp), u_label),
+                (self.transform(u_samp), u_label),
                 (self.transform(u_samp), u_label))
 
     def __len__(self):
