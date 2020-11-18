@@ -325,7 +325,7 @@ def main():
                 # recon and KLD
                 recon = F.cross_entropy(theta, targets_l.repeat(10))
                 loss = recon
-                loss += weight*kl_div.mean()
+                loss += weight*kl_div.mean()/z_dim
 
                 ###################################################
                 # logic for model_y
@@ -335,14 +335,14 @@ def main():
                                                                  reduction="none")
                 loss += weight * args.unl2_weight * logic_loss_[~true_logic].sum()/len(true_logic)
 
-                if counter > 20:
+                if counter > -1:
                     # y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
                     # theta_u2, (kl_div_u2, mu2, lu2), z_k_u2 = model_y(y_u2)
 
-                    log_pred1 = theta_u.log_softmax(dim=1)
+                    log_pred1 = theta_u_.log_softmax(dim=1)
                     # log_pred2 = theta_u2.log_softmax(dim=1)
 
-                    unl_loss = (log_pred1.exp() * (-log_pred1 + kl_div_u/z_dim)).sum(dim=1).mean()
+                    unl_loss = (log_pred1.exp() * (-log_pred1)).sum(dim=-1).mean() + (kl_div_u).mean()/z_dim
                     # unl_loss += (log_pred1.exp() * (-log_pred2 + kl_div_u2/z_dim)).sum(dim=1).mean()
 
                     loss += args.unl_weight * unl_loss
