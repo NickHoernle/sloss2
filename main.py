@@ -271,6 +271,7 @@ def main():
             u1 = sample[1]
             u2 = sample[2]
             u3 = sample[3]
+            n = 3
 
             inputs_l = cast(l[0], args.dtype)
             targets_l = cast(l[1], 'long')
@@ -278,11 +279,11 @@ def main():
             inputs_u2 = cast(u2[0], args.dtype)
             inputs_u3 = cast(u3[0], args.dtype)
 
-            y_l = data_parallel(model, inputs_l, params, sample[3], list(range(args.ngpu))).float()
+            y_l = data_parallel(model, inputs_l, params, sample[n+1], list(range(args.ngpu))).float()
             loss = F.cross_entropy(y_l, targets_l)
 
             if args.semantic_loss:
-                y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
+                y_u = data_parallel(model, inputs_u, params, sample[n+1], list(range(args.ngpu))).float()
                 labels_pred = F.softmax(y_u, dim=1)
                 all_labels = torch.eye(num_classes).to(device)
                 part1 = torch.stack([labels_pred ** all_labels[i] for i in range(all_labels.shape[0])])
@@ -293,7 +294,7 @@ def main():
                     loss += semantic_loss
 
             elif args.minent:
-                y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
+                y_u = data_parallel(model, inputs_u, params, sample[n+1], list(range(args.ngpu))).float()
                 labels_pred = F.log_softmax(y_u, dim=1)
                 if counter >= 10:
                     semantic_loss = args.unl_weight * (-labels_pred.exp()*labels_pred).sum(dim=1).mean()
@@ -305,7 +306,7 @@ def main():
                 theta_, (kl_div, ml, ll), z_k = model_y(y_l, num_samps=10)
                 theta = torch.cat(torch.split(theta_, 1, dim=1), dim=0).squeeze(1)
 
-                y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
+                y_u = data_parallel(model, inputs_u, params, sample[n+1], list(range(args.ngpu))).float()
                 theta_u_, (kl_div_u, mu1, lu1), z_k_u = model_y(y_u, num_samps=10)
                 theta_u = torch.cat(torch.split(theta_u_, 1, dim=1), dim=0).squeeze(1)
 
@@ -338,7 +339,7 @@ def main():
                 loss += weight * args.unl2_weight * logic_loss_[~true_logic].sum()/len(true_logic)
 
                 if counter > 20:
-                    y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
+                    y_u2 = data_parallel(model, inputs_u2, params, sample[n+1], list(range(args.ngpu))).float()
                     theta_u2_, (kl_div_u2, mu2, lu2), z_k_u2 = model_y(y_u2, num_samps=10)
                     theta_u2 = torch.cat(torch.split(theta_u2_, 1, dim=1), dim=0).squeeze(1)
 
