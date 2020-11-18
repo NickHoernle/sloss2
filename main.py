@@ -335,17 +335,17 @@ def main():
                                                                  reduction="none")
                 loss += weight * args.unl2_weight * logic_loss_[~true_logic].sum()/len(true_logic)
 
-                if counter > -1:
-                    # y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
-                    # theta_u2, (kl_div_u2, mu2, lu2), z_k_u2 = model_y(y_u2)
+                if counter > 20:
+                    y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
+                    theta_u2, (kl_div_u2, mu2, lu2), z_k_u2 = model_y(y_u2, num_samps=10)
 
-                    log_pred1 = theta_u_.log_softmax(dim=1)
+                    log_pred1 = theta_u.log_softmax(dim=1)
                     # log_pred2 = theta_u2.log_softmax(dim=1)
 
                     unl_loss = (log_pred1.exp() * (-log_pred1)).sum(dim=-1).mean() + (kl_div_u).mean()/z_dim
                     # unl_loss += (log_pred1.exp() * (-log_pred2 + kl_div_u2/z_dim)).sum(dim=1).mean()
-
-                    loss += args.unl_weight * unl_loss
+                    consis_reg = (z_k_u2-z_k_u).pow(2).sum(dim=-1).mean()
+                    loss += args.unl_weight * (unl_loss * consis_reg)
 
                     probs = theta_u.softmax(dim=1)
                     logic_pred_u, true_logic_u = calc_logic_loss(probs, logic_net)
