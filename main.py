@@ -305,7 +305,7 @@ def main():
 
                 y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
                 theta_u_, (kl_div_u, mu1, lu1), z_k_u = model_y(y_u, num_samps=10)
-                theta_u = torch.cat(torch.split(theta_u_, 1, dim=0), dim=1).squeeze(1)
+                theta_u = torch.cat(torch.split(theta_u_, 1, dim=1), dim=0).squeeze(1)
 
                 ###################################################
                 # logic part
