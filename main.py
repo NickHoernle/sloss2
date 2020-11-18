@@ -352,7 +352,7 @@ def main():
                     logic_loss_ = F.binary_cross_entropy_with_logits(logic_pred_u, torch.ones_like(logic_pred_u), reduction="none")
                     loss += weight * args.unl2_weight * logic_loss_[~true_logic_u].sum()/len(true_logic_u)
 
-                return loss, theta
+                return loss, theta[::10, :]
 
             return loss, y_l
 
