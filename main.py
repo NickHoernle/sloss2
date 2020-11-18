@@ -345,7 +345,7 @@ def main():
                     unl_loss = (log_pred1.exp() * (-log_pred1)).sum(dim=-1).mean() + (kl_div_u).mean()/z_dim
                     # unl_loss += (log_pred1.exp() * (-log_pred2 + kl_div_u2/z_dim)).sum(dim=1).mean()
                     consis_reg = (z_k_u2-z_k_u).pow(2).sum(dim=-1).mean()
-                    loss += args.unl_weight * (unl_loss * consis_reg)
+                    loss += args.unl_weight * (unl_loss + consis_reg)
 
                     probs = theta_u.softmax(dim=1)
                     logic_pred_u, true_logic_u = calc_logic_loss(probs, logic_net)
