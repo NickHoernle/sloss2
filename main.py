@@ -200,8 +200,8 @@ def main():
         logic_net = LogicNet(num_classes)
         logic_net.to(device)
         logic_net.apply(init_weights)
-        logic_opt = Adam(logic_net.parameters(), lr=1e-3)
-        scheduler2 = StepLR(logic_opt, step_size=40, gamma=0.2)
+        logic_opt = Adam(logic_net.parameters(), lr=1e-2)
+        scheduler2 = StepLR(logic_opt, step_size=10, gamma=0.5)
 
     def create_optimizer(args, lr):
         print('creating optimizer with lr = ', lr)
@@ -300,10 +300,12 @@ def main():
             elif args.generative_loss:
 
                 weight = np.min([1., np.max([0.0, counter / 20.0])])
-                theta, (kl_div, ml, ll), z_k = model_y(y_l)
+                theta_, (kl_div, ml, ll), z_k = model_y(y_l, num_samps=10)
+                theta = torch.cat(torch.split(theta_, 1, dim=1), dim=0).squeeze(1)
 
                 y_u = data_parallel(model, inputs_u, params, sample[3], list(range(args.ngpu))).float()
-                theta_u, (kl_div_u, mu1, lu1), z_k_u = model_y(y_u)
+                theta_u_, (kl_div_u, mu1, lu1), z_k_u = model_y(y_u, num_samps=10)
+                theta_u = torch.cat(torch.split(theta_u_, 1, dim=0), dim=1).squeeze(1)
 
                 ###################################################
                 # logic part
@@ -321,7 +323,7 @@ def main():
 
                 ###################################################
                 # recon and KLD
-                recon = F.cross_entropy(theta, targets_l)
+                recon = F.cross_entropy(theta, targets_l.repeat(10))
                 loss = recon
                 loss += weight*kl_div.mean()
 
@@ -334,19 +336,14 @@ def main():
                 loss += weight * args.unl2_weight * logic_loss_[~true_logic].sum()/len(true_logic)
 
                 if counter > 20:
-                    y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
-                    theta_u2, (kl_div_u2, mu2, lu2), z_k_u2 = model_y(y_u2)
+                    # y_u2 = data_parallel(model, inputs_u2, params, sample[3], list(range(args.ngpu))).float()
+                    # theta_u2, (kl_div_u2, mu2, lu2), z_k_u2 = model_y(y_u2)
 
                     log_pred1 = theta_u.log_softmax(dim=1)
-                    log_pred2 = theta_u2.log_softmax(dim=1)
+                    # log_pred2 = theta_u2.log_softmax(dim=1)
 
-                    unl_loss = (log_pred2.exp() * (-log_pred1 + kl_div_u/z_dim)).sum(dim=1).mean()
-                    unl_loss += (log_pred1.exp() * (-log_pred2 + kl_div_u2/z_dim)).sum(dim=1).mean()
-
-                    kld1 = 0.5 * ((lu1 - lu2) + (lu1.exp() + (mu1 - mu2).pow(2)) / (lu2.exp()) - 1).mean()
-                    kld2 = 0.5 * ((lu2 - lu1) + (lu2.exp() + (mu2 - mu1).pow(2)) / (lu1.exp()) - 1).mean()
-
-                    unl_loss += kld1 + kld2
+                    unl_loss = (log_pred1.exp() * (-log_pred1 + kl_div_u/z_dim)).sum(dim=1).mean()
+                    # unl_loss += (log_pred1.exp() * (-log_pred2 + kl_div_u2/z_dim)).sum(dim=1).mean()
 
                     loss += args.unl_weight * unl_loss
 

@@ -206,7 +206,7 @@ class DecoderModel(nn.Module):
     def encode(self, enc):
         return self.local_mu(enc), self.local_lv(enc)
 
-    def forward(self, x):
+    def forward(self, x, num_samps=1):
         n_batch = x.size(0)
 
         # mu2 = self.global_mus.unsqueeze(0).repeat(len(x), 1, 1)
@@ -220,7 +220,10 @@ class DecoderModel(nn.Module):
         sigma = torch.exp(0.5 * lv)
 
         # Obtain our first set of latent points
-        z_0 = (sigma * q.sample((n_batch,)).to(self.device)) + mu
+        if num_samps == 1:
+            z_0 = (sigma * q.sample((n_batch,)).to(self.device)) + mu
+        else:
+            z_0 = (sigma.unsqueeze(1) * q.sample((n_batch, num_samps)).to(self.device)) + mu.unsqueeze(1)
 
         # z = z_0.unsqueeze(1).repeat(1, self.nc, 1)
         # probs = log_normal(z, mu2, lv2)
