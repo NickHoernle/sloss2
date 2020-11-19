@@ -343,7 +343,7 @@ def main():
                     theta_u2_, (kl_div_u2, mu2, lu2), z_k_u2 = model_y(y_u2, num_samps=10)
                     theta_u2 = torch.cat(torch.split(theta_u2_, 1, dim=1), dim=0).squeeze(1)
 
-                    y_u3 = data_parallel(model, inputs_u3, params, sample[3], list(range(args.ngpu))).float()
+                    y_u3 = data_parallel(model, inputs_u3, params, sample[n+1], list(range(args.ngpu))).float()
                     theta_u3_, (kl_div_u3, mu3, lu3), z_k_u3 = model_y(y_u3, num_samps=10)
                     theta_u3 = torch.cat(torch.split(theta_u3_, 1, dim=1), dim=0).squeeze(1)
 
