@@ -301,17 +301,17 @@ def get_cifar100_pred(samples):
 
 
 def cifar100_logic(log_prob):
-
-    terms = ((log_prob[:, (0, 1)].exp().sum(dim=1) > .95) |
-             (log_prob[:, (1, 9)].exp().sum(dim=1) > .95) |
-             (log_prob[:, (2, 0)].exp().sum(dim=1) > .95) |
-             (log_prob[:, (3, 5)].exp().sum(dim=1) > .95) |
-             (log_prob[:, (4, 5)].exp().sum(dim=1) > .95) |
-             (log_prob[:, (5, 3)].exp().sum(dim=1) > .95) |
-             (log_prob[:, 6].exp() > .95) |
-             (log_prob[:, (7, 4)].exp().sum(dim=1) > .95) |
-             (log_prob[:, 8].exp() > .95) |
-             (log_prob[:, (9, 1)].exp().sum(dim=1) > .95))
+    thresh = .99
+    terms = ((log_prob[:, (0, 1)].exp().sum(dim=1) > thresh) |
+             (log_prob[:, (1, 9)].exp().sum(dim=1) > thresh) |
+             (log_prob[:, (2, 0)].exp().sum(dim=1) > thresh) |
+             (log_prob[:, (3, 5)].exp().sum(dim=1) > thresh) |
+             (log_prob[:, (4, 5)].exp().sum(dim=1) > thresh) |
+             (log_prob[:, (5, 3)].exp().sum(dim=1) > thresh) |
+             (log_prob[:, 6].exp() > thresh) |
+             (log_prob[:, (7, 4)].exp().sum(dim=1) > thresh) |
+             (log_prob[:, 8].exp() > thresh) |
+             (log_prob[:, (9, 1)].exp().sum(dim=1) > thresh))
 
     return terms
 
