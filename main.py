@@ -347,10 +347,12 @@ def main():
                     theta_u3_, (kl_div_u3, mu3, lu3), z_k_u3 = model_y(y_u3, num_samps=10)
                     theta_u3 = torch.cat(torch.split(theta_u3_, 1, dim=1), dim=0).squeeze(1)
 
+                    mean_pred = (theta_u + theta_u2 + theta_u3).softmax(dim=1)
                     log_pred1 = theta_u.log_softmax(dim=1)
                     log_pred2 = theta_u2.log_softmax(dim=1)
                     log_pred3 = theta_u3.log_softmax(dim=1)
-                    mean_pred = torch.stack([log_pred1.exp(), log_pred2.exp(), log_pred3.exp()], dim=1).mean(dim=1)
+                    # most_confident = torch.argmax()
+                    # mean_pred = torch.stack([log_pred1.exp(), log_pred2.exp(), log_pred3.exp()], dim=1).mean(dim=1)
 
                     unl_loss = (mean_pred * (-log_pred1)).sum(dim=-1).mean() + (kl_div_u).mean()/z_dim
                     unl_loss += (mean_pred * (-log_pred2)).sum(dim=-1).mean() + (kl_div_u2).mean()/z_dim
