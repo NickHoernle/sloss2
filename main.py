@@ -347,7 +347,7 @@ def main():
                     # theta_u3_, (kl_div_u3, mu3, lu3), z_k_u3 = model_y(y_u3, num_samps=10)
                     # theta_u3 = torch.cat(torch.split(theta_u3_, 1, dim=1), dim=0).squeeze(1)
 
-                    mean_pred = (theta_u + theta_u2 + theta_u3).softmax(dim=1)
+                    mean_pred = (theta_u + theta_u2).softmax(dim=1)
                     log_pred1 = theta_u.log_softmax(dim=1)
                     log_pred2 = theta_u2.log_softmax(dim=1)
                     # log_pred3 = theta_u3.log_softmax(dim=1)
@@ -371,7 +371,7 @@ def main():
                                                                      reduction="none")
                     loss += weight * args.unl2_weight * logic_loss_[~true_logic_u].sum() / len(true_logic_u)
 
-                return loss, theta[::10, :]
+                return loss, theta_u[::10, :]
 
             return loss, y_l
 
@@ -454,7 +454,7 @@ def main():
             if not args.ssl or not state['train']:
                 classacc.add(state['output'].data, state['sample'][1])
             else:
-                classacc.add(state['output'].data, state['sample'][0][1])
+                classacc.add(state['output'].data, state['sample'][1][1])
         meter_loss.add(loss)
 
         if state['train']:
