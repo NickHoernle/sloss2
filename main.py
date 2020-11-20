@@ -362,7 +362,7 @@ def main():
                     # unl_loss += (mean_pred * (-log_pred2)).sum(dim=-1).mean() + (kl_div_u2).mean()/z_dim
                     # unl_loss += (mean_pred * (-log_pred3)).sum(dim=-1).mean() + (kl_div_u3).mean() / z_dim
                     # consis_reg = (z_k_u2-z_k_u).pow(2).sum(dim=-1).mean()
-                    loss += args.unl_weight * unl_loss
+                    loss += args.unl_weight * unl_loss + kl_div_u.mean()/z_dim
 
                     probs = theta_u.softmax(dim=1)
                     logic_pred_u, true_logic_u = calc_logic_loss(probs, logic_net)
@@ -373,7 +373,7 @@ def main():
                     # logic_pred_u, true_logic_u = calc_logic_loss(probs, logic_net)
                     # logic_loss_ = F.binary_cross_entropy_with_logits(logic_pred_u, torch.ones_like(logic_pred_u),
                     #                                                  reduction="none")
-                    loss += weight * args.unl2_weight * logic_loss_[~true_logic_u].sum() / len(true_logic_u)
+                    # loss += weight * args.unl2_weight * logic_loss_[~true_logic_u].sum() / len(true_logic_u)
 
                 return loss, theta_u[::10, :]
 
